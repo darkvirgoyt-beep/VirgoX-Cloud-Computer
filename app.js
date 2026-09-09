@@ -8,9 +8,9 @@
 
   // Default Configuration
   const DEFAULT_CONFIG = {
-    desktopUrl: 'https://tennessee-departmental-concepts-modelling.trycloudflare.com',
-    terminalUrl: 'https://jason-hosted-robot-families.trycloudflare.com',
-    bridgeUrl: 'https://adware-expo-bigger-gary.trycloudflare.com',
+    desktopUrl: 'https://laboratory-margin-seats-pierre.trycloudflare.com',
+    terminalUrl: 'https://superb-welding-retro-cohen.trycloudflare.com',
+    bridgeUrl: 'https://instrument-fame-reduces-parent.trycloudflare.com',
     sensitivity: 1.5,
     crosshairEnabled: false,
     ecoMode: true
