@@ -49,7 +49,7 @@ else
         DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             wget curl unzip zip jq android-tools-adb android-tools-fastboot \
             android-sdk-libsparse-utils e2fsprogs p7zip-full geany xfce4-taskmanager \
-            wmctrl xdotool scrot git python3-pip wine wine64 winetricks blender && \
+            wmctrl xdotool scrot git python3-pip wine wine64 winetricks blender rclone && \
         wget -q -O /tmp/google-chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
         apt-get install -y /tmp/google-chrome.deb && \
         rm -f /tmp/google-chrome.deb
