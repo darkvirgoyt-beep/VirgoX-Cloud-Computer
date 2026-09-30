@@ -169,34 +169,23 @@
 
   // Initialize
   function init() {
-    setupUserProfile();
-    loadConfig();
-    setupFrames();
-    setupTabs();
-    setupEcoMode();
-    setupHandMode();
-    setupKeyboard();
-    setupOrientation();
-    setupResolution();
-    setupTouchpad();
-    setupZoom();
-    setupCrosshair();
-    setupQuickKeys();
-    setupSettingsModal();
-    setupOsSwitcher();
-    setupTabsModal();
-    setupDesktopRefresh();
-    setupDesktopTrackpadOverlay();
-    setupVirtualPcKeyboard();
-    setupExternalMouseCapture();
-    setupCopilot();
-    setupFullscreen();
-    checkConnectionStatus();
-    setupSecurityGate();
-    setupInstalledAppsDrawer();
-    setupNetworkControl();
-    setupExternalKeyboard();
-    setupBackupAndPrivacy();
+    const tasks = [
+      setupUserProfile, loadConfig, setupFrames, setupTabs,
+      setupEcoMode, setupHandMode, setupKeyboard, setupOrientation,
+      setupResolution, setupTouchpad, setupZoom, setupCrosshair,
+      setupQuickKeys, setupSettingsModal, setupOsSwitcher, setupTabsModal,
+      setupDesktopRefresh, setupDesktopTrackpadOverlay, setupVirtualPcKeyboard,
+      setupExternalMouseCapture, setupCopilot, setupFullscreen,
+      checkConnectionStatus, setupSecurityGate, setupInstalledAppsDrawer,
+      setupNetworkControl, setupExternalKeyboard, setupBackupAndPrivacy
+    ];
+    tasks.forEach(fn => {
+      try {
+        if (typeof fn === 'function') fn();
+      } catch (err) {
+        console.warn('Init task warning:', fn.name, err);
+      }
+    });
   }
 
   // Frame Security Controllers: STRICT zero-trust isolation
@@ -207,11 +196,11 @@
   function loadFrames() {
     if (sessionStorage.getItem('virgox_authenticated') !== 'true') return;
     const activeUrl = getActiveDesktopUrl();
-    if (activeUrl && (!desktopFrame.src || desktopFrame.src === 'about:blank' || desktopFrame.src !== activeUrl)) {
+    if (activeUrl && desktopFrame && (!desktopFrame.src || desktopFrame.src === 'about:blank' || desktopFrame.src !== activeUrl)) {
       desktopFrame.src = activeUrl;
-      linkPhone2.href = activeUrl;
+      if (linkPhone2) linkPhone2.href = activeUrl;
     }
-    if (state.config.terminalUrl) {
+    if (state.config.terminalUrl && linkPhone1) {
       linkPhone1.href = state.config.terminalUrl;
     }
   }
@@ -3735,6 +3724,10 @@
     window.loadBackupAndPrivacy();
   }
 
-  window.addEventListener('DOMContentLoaded', init);
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 
 })();

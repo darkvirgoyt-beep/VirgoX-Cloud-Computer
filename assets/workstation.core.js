@@ -26,6 +26,11 @@
     if (!app) return;
     app.innerHTML = WORKSTATION_TEMPLATE;
     document.body.classList.add('virgox-authorized');
+    const curtain = document.getElementById('security-curtain');
+    if (curtain) {
+      curtain.style.display = 'none';
+      curtain.remove();
+    }
 
     // 3. SECURELY LAUNCH APPLICATION CONTROLLER
     const script = document.createElement('script');
