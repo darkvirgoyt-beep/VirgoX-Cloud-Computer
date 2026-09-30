@@ -3168,9 +3168,15 @@ html, body, .viewport-container, .screen-wrapper, .screen-touchpad-overlay {
    🪟 WINDOWS 11 PRO — OFFICIAL DESKTOP EXPERIENCE
    ============================================================================== */
 .native-cyber-desktop.os-win11 {
-  background: #060913 url('assets/win11_bloom_dark.jpg') no-repeat center center !important;
+  background: #0d1527 url('assets/win11_flow.jpg') no-repeat center center !important;
   background-size: cover !important;
   font-family: 'Segoe UI Variable Text', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.native-cyber-desktop.os-win11 .desktop-icon .icon-label {
+  color: #ffffff !important;
+  font-weight: 600;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 8px rgba(0, 0, 0, 0.85);
 }
 
 .native-cyber-desktop.os-win11 .cyber-desktop-workspace {

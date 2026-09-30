@@ -948,6 +948,16 @@
 
   const PRINCE_PFP_URL = 'https://avatars.githubusercontent.com/u/263169230?v=4';
 
+  function escapeHtml(str) {
+    if (!str && str !== 0) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   let highestZ = 600;
   const openWindows = {};
 
@@ -1341,7 +1351,11 @@
       </div>
       <div class="win11-context-item" onclick="openAppWindow('settings')">
         <span>🎨</span>
-        <span>Personalize</span>
+        <span>Personalize (Wallpapers)</span>
+      </div>
+      <div class="win11-context-item" onclick="cycleDesktopWallpaper(); document.getElementById('win11-desktop-ctx')?.remove();">
+        <span>🖼️</span>
+        <span>Next Wallpaper (Calm Flow / Bloom / Sunrise)</span>
       </div>
       <div class="win11-context-sep"></div>
       <div class="win11-context-item" onclick="state.config.osMode = state.config.osMode === 'windows' ? 'linux' : 'windows'; saveConfig(); applyDesktopOsTheme(); document.getElementById('win11-desktop-ctx')?.remove();">
@@ -1887,26 +1901,35 @@
     const maxBtn = win.querySelector('.win-btn.max');
     const closeBtn = win.querySelector('.win-btn.close');
 
-    minBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      win.classList.add('minimized');
-      updateTaskbarChips();
-    });
+    if (minBtn) {
+      minBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        win.classList.add('minimized');
+        updateTaskbarChips();
+      });
+    }
 
-    maxBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      win.classList.toggle('maximized');
-    });
+    if (maxBtn) {
+      maxBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        win.classList.toggle('maximized');
+      });
+    }
 
-    closeBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      win.remove();
-      delete openWindows[appId];
-      updateTaskbarChips();
-    });
+    if (closeBtn) {
+      closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        win.remove();
+        delete openWindows[appId];
+        updateTaskbarChips();
+      });
+    }
 
     // Make Draggable (Touch & Mouse)
-    setupWindowDrag(win, win.querySelector('.cyber-window-titlebar'));
+    const titlebar = win.querySelector('.cyber-window-titlebar');
+    if (titlebar) {
+      setupWindowDrag(win, titlebar);
+    }
 
     // Post-attach initializers
     if (appId === 'chrome' || appId === 'google_chrome') initChromeActions(win);
@@ -1960,6 +1983,7 @@
   }
 
   function setupWindowDrag(win, handle) {
+    if (!win || !handle) return;
     let isDragging = false;
     let startX = 0, startY = 0;
     let initialLeft = 0, initialTop = 0;
@@ -2612,6 +2636,33 @@ server.py   s.json      style.css      scripts/  desktop-shortcuts/\n`;
               ${isWin ? '🐧 Switch to Ubuntu Linux' : '🪟 Switch to Windows 11'}
             </button>
           </div>
+
+          <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:12px; margin-top:12px;">
+            <div style="font-weight:700; color:#38bdf8; margin-bottom:8px;">🎨 Personalization — Wallpaper (Eye-Friendly)</div>
+            <div style="font-size:0.75rem; color:#94a3b8; margin-bottom:10px;">Select official soothing Windows 11 wallpaper to avoid eye strain:</div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(110px, 1fr)); gap:10px;">
+              <button class="cyber-btn xs ${state.config.wallpaper === 'flow' || !state.config.wallpaper ? 'neon-green' : ''}" style="height:auto; padding:8px 4px; display:flex; flex-direction:column; align-items:center; gap:4px;" onclick="setDesktopWallpaper('flow'); this.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('neon-green')); this.classList.add('neon-green');">
+                <span style="font-size:1.2rem;">🌊</span>
+                <span style="font-weight:700;">Flow (Calm)</span>
+                <span style="font-size:0.62rem; color:#94a3b8;">Blue Silk Waves</span>
+              </button>
+              <button class="cyber-btn xs ${state.config.wallpaper === 'bloom_light' ? 'neon-green' : ''}" style="height:auto; padding:8px 4px; display:flex; flex-direction:column; align-items:center; gap:4px;" onclick="setDesktopWallpaper('bloom_light'); this.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('neon-green')); this.classList.add('neon-green');">
+                <span style="font-size:1.2rem;">🌸</span>
+                <span style="font-weight:700;">Light Bloom</span>
+                <span style="font-size:0.62rem; color:#94a3b8;">Clean & Serene</span>
+              </button>
+              <button class="cyber-btn xs ${state.config.wallpaper === 'sunrise' ? 'neon-green' : ''}" style="height:auto; padding:8px 4px; display:flex; flex-direction:column; align-items:center; gap:4px;" onclick="setDesktopWallpaper('sunrise'); this.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('neon-green')); this.classList.add('neon-green');">
+                <span style="font-size:1.2rem;">🌅</span>
+                <span style="font-weight:700;">Sunrise</span>
+                <span style="font-size:0.62rem; color:#94a3b8;">Pastel Glow</span>
+              </button>
+              <button class="cyber-btn xs ${state.config.wallpaper === 'bloom_dark' ? 'neon-green' : ''}" style="height:auto; padding:8px 4px; display:flex; flex-direction:column; align-items:center; gap:4px;" onclick="setDesktopWallpaper('bloom_dark'); this.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('neon-green')); this.classList.add('neon-green');">
+                <span style="font-size:1.2rem;">🌌</span>
+                <span style="font-weight:700;">Dark Bloom</span>
+                <span style="font-size:0.62rem; color:#94a3b8;">Midnight Blue</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     `;
@@ -2952,10 +3003,11 @@ if __name__ == '__main__':
 
   function initBlenderActions(win) {
     const canvas = win.querySelector('#blender-3d-canvas');
-    if (!canvas) return;
+    if (!canvas || !canvas.getContext) return;
 
     let animId = null;
     const ctx = canvas.getContext('2d');
+    if (!ctx) return;
     let angleX = 0.5;
     let angleY = 0.5;
     let isDragging = false;
@@ -3533,6 +3585,34 @@ if __name__ == '__main__':
     }
   }
 
+  const WIN11_WALLPAPERS = {
+    flow: { name: 'Windows 11 Flow (Calm Silk Waves)', file: 'assets/win11_flow.jpg', bg: '#0d1527' },
+    bloom_light: { name: 'Windows 11 Light Bloom (Clean Soft)', file: 'assets/win11_bloom_light.jpg', bg: '#d8e5f7' },
+    sunrise: { name: 'Windows 11 Sunrise (Warm Pastel)', file: 'assets/win11_sunrise.jpg', bg: '#1c1824' },
+    bloom_dark: { name: 'Windows 11 Dark Bloom (Midnight)', file: 'assets/win11_bloom_dark.jpg', bg: '#060913' }
+  };
+
+  function setDesktopWallpaper(id) {
+    if (!WIN11_WALLPAPERS[id]) id = 'flow';
+    state.config.wallpaper = id;
+    saveConfig();
+    const nativeDesk = document.getElementById('native-cyber-desktop');
+    if (nativeDesk && state.config.osMode === 'windows') {
+      nativeDesk.style.setProperty('background-image', `url("${WIN11_WALLPAPERS[id].file}")`, 'important');
+      nativeDesk.style.setProperty('background-color', WIN11_WALLPAPERS[id].bg, 'important');
+    }
+  }
+
+  function cycleDesktopWallpaper() {
+    const keys = Object.keys(WIN11_WALLPAPERS);
+    const cur = state.config.wallpaper || 'flow';
+    const nextIdx = (keys.indexOf(cur) + 1) % keys.length;
+    setDesktopWallpaper(keys[nextIdx]);
+  }
+
+  window.setDesktopWallpaper = setDesktopWallpaper;
+  window.cycleDesktopWallpaper = cycleDesktopWallpaper;
+
   function applyDesktopOsTheme() {
     const isWin = state.config.osMode === 'windows';
     const nativeDesk = document.getElementById('native-cyber-desktop');
@@ -3546,6 +3626,10 @@ if __name__ == '__main__':
 
     if (isWin) {
       nativeDesk.classList.add('os-win11');
+      const wallKey = state.config.wallpaper || 'flow';
+      const wallObj = WIN11_WALLPAPERS[wallKey] || WIN11_WALLPAPERS.flow;
+      nativeDesk.style.setProperty('background-image', `url("${wallObj.file}")`, 'important');
+      nativeDesk.style.setProperty('background-color', wallObj.bg, 'important');
 
       if (watermark) {
         watermark.innerHTML = `🪟 WINDOWS 11 PRO<br><span style="font-size:0.95rem; opacity:0.85;">OFFICIAL EDITION • 64 GB RAM • 120 FPS</span>`;
@@ -3765,6 +3849,8 @@ if __name__ == '__main__':
     } else {
       // Return to Linux
       nativeDesk.classList.remove('os-win11');
+      nativeDesk.style.removeProperty('background-image');
+      nativeDesk.style.removeProperty('background-color');
       if (watermark) {
         watermark.innerHTML = `VIRGOX CYBER OS<br><span style="font-size:1.05rem; opacity:0.85;">64 GB VIRTUAL RAM • 120 FPS</span>`;
       }
