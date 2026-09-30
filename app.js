@@ -3528,6 +3528,11 @@ print("All systems operational.")
 
     if (!overlay) return;
 
+    // Apply the OFF state on load. Without this the transparent overlay ships at its
+    // CSS default (full-size, z-index 100, pointer-events auto) and stacks over the
+    // native desktop at z-index 10, eating every click on icons, taskbar and windows.
+    updateTrackpadUI();
+
     let touchStartX = 0;
     let touchStartY = 0;
     let lastTouchX = 0;
