@@ -2618,6 +2618,80 @@ html, body, .viewport-container, .screen-wrapper, .screen-touchpad-overlay {
   color: #fff;
 }
 
+/* Frame-Blocked Panel — shown when a site refuses to be embedded (X-Frame-Options
+   / frame-ancestors). Fluent dialog styling, centred over the dead frame. */
+.webview-blocked {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(32, 32, 32, 0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  z-index: 5;
+  overflow: auto;
+}
+
+.webview-blocked[hidden] {
+  display: none;
+}
+
+.webview-blocked-card {
+  max-width: 420px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.webview-blocked-glyph {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e8e8ea;
+  font-size: 1.4rem;
+}
+
+.webview-blocked h4 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  font-family: 'Segoe UI Variable Text', 'Segoe UI', sans-serif;
+}
+
+.webview-blocked p {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.68);
+  font-family: 'Segoe UI Variable Text', 'Segoe UI', sans-serif;
+}
+
+.webview-blocked code {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  background: rgba(255, 255, 255, 0.10);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: #cbd5e1;
+}
+
+.webview-blocked-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
 /* Window Body — transparent so the Mica titlebar/body tint reads as one surface. */
 .cyber-window-body {
   flex: 1;

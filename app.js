@@ -184,6 +184,43 @@
     return String(value).replace(/[&<>"']/g, ch => HTML_ESCAPES[ch]);
   }
 
+  // Large sites (Google, most banks, anything behind a CDN) send
+  // X-Frame-Options: DENY or a frame-ancestors CSP, so they refuse to render
+  // inside our iframe and the user just sees a blank rectangle. We cannot read
+  // those headers cross-origin, but we can test the document itself: if reading
+  // contentWindow.location throws, the frame was blocked.
+  // Resolves 'ok' | 'blocked' | 'unknown'.
+  function detectFramed(url, timeoutMs) {
+    return new Promise(resolve => {
+      if (!url || !/^https?:/i.test(url)) return resolve('unknown');
+      let settled = false;
+      const probe = document.createElement('iframe');
+      const done = verdict => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        try { probe.remove(); } catch (e) {}
+        resolve(verdict);
+      };
+      const timer = setTimeout(() => done('unknown'), timeoutMs || 3500);
+      probe.setAttribute('aria-hidden', 'true');
+      probe.style.cssText = 'position:absolute;left:-9999px;top:0;width:2px;height:2px;border:0;visibility:hidden;';
+      probe.onload = () => {
+        let framed = false;
+        try {
+          // Cross-origin documents throw on href access. Same-origin does not.
+          framed = !!probe.contentWindow && !!probe.contentWindow.location.href;
+        } catch (e) {
+          framed = false;
+        }
+        done(framed ? 'ok' : 'blocked');
+      };
+      probe.onerror = () => done('blocked');
+      probe.src = url;
+      document.body.appendChild(probe);
+    });
+  }
+
   // Initialize
   function init() {
     const tasks = [
@@ -995,7 +1032,18 @@
 
         <!-- Web View Area -->
         <div style="flex:1; position:relative; background:#202124; overflow:hidden;">
-          <iframe id="chrome-frame-inner" src="https://wikipedia.org" style="width:100%; height:100%; border:none;" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
+          <iframe id="chrome-frame-inner" src="about:blank" style="width:100%; height:100%; border:none;" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
+          <div class="webview-blocked" id="chrome-frame-blocked" hidden>
+            <div class="webview-blocked-card">
+              <div class="webview-blocked-glyph">&#8856;</div>
+              <h4>This site won&rsquo;t load inside the app</h4>
+              <p>Google and most large sites send an <code>X-Frame-Options: DENY</code> header that blocks embedded pages. Your PC is fine &mdash; the site is refusing to be framed. Open it in a real tab.</p>
+              <div class="webview-blocked-actions">
+                <button class="cyber-btn sm neon-cyan" id="chrome-btn-blocked-open">Open in real tab &#8599;</button>
+                <button class="cyber-btn sm" id="chrome-btn-blocked-dismiss">Back to page</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     `;
@@ -1011,6 +1059,31 @@
     const homeBtn = win.querySelector('#chrome-nav-home');
     const openTabBtn = win.querySelector('#chrome-btn-open-tab');
     const tabTitle = win.querySelector('#chrome-tab-title');
+    const blockedPanel = win.querySelector('#chrome-frame-blocked');
+    const blockedOpen = win.querySelector('#chrome-btn-blocked-open');
+    const blockedDismiss = win.querySelector('#chrome-btn-blocked-dismiss');
+
+    function showBlocked(target) {
+      if (!blockedPanel) return;
+      blockedPanel.hidden = false;
+      if (blockedOpen) blockedOpen.dataset.url = target;
+    }
+
+    function hideBlocked() {
+      if (blockedPanel) blockedPanel.hidden = true;
+    }
+
+    if (blockedOpen) {
+      blockedOpen.addEventListener('click', () => {
+        const url = blockedOpen.dataset.url;
+        if (url) window.open(url, '_blank', 'noopener');
+      });
+    }
+    if (blockedDismiss) {
+      blockedDismiss.addEventListener('click', hideBlocked);
+    }
+
+    let probeToken = 0;
 
     function navigate(rawUrl) {
       if (!rawUrl || !iframe) return;
@@ -1019,7 +1092,7 @@
         if (target.includes('.') && !target.includes(' ')) {
           target = 'https://' + target;
         } else {
-          target = 'https://duckduckgo.com/?q=' + encodeURIComponent(target);
+          target = 'https://www.google.com/search?q=' + encodeURIComponent(target);
         }
       }
       if (input) input.value = target;
@@ -1031,7 +1104,14 @@
           tabTitle.textContent = target;
         }
       }
+      hideBlocked();
       iframe.src = target;
+
+      const token = ++probeToken;
+      detectFramed(target).then(verdict => {
+        if (token !== probeToken) return;
+        if (verdict === 'blocked') showBlocked(target);
+      });
     }
 
     if (goBtn && input) {
@@ -1050,7 +1130,7 @@
     }
 
     if (homeBtn) {
-      homeBtn.addEventListener('click', () => navigate('https://wikipedia.org'));
+      homeBtn.addEventListener('click', () => navigate('https://www.google.com'));
     }
 
     if (backBtn && iframe) {
@@ -2295,7 +2375,7 @@ server.py   s.json      style.css      scripts/  desktop-shortcuts/\n`;
           <button class="cyber-btn xs" id="browser-btn-home" title="Home (DuckDuckGo)">🏠</button>
           <div class="browser-omnibox">
             <span style="color:var(--neon-cyan); font-size:0.85rem; margin-right:4px;">🔒</span>
-            <input type="text" id="browser-url-input" value="https://wikipedia.org" placeholder="Search the web or enter URL (e.g. google.com, youtube.com)" autocomplete="off" spellcheck="false" />
+            <input type="text" id="browser-url-input" value="https://www.google.com" placeholder="Search Google or enter URL (e.g. google.com, youtube.com)" autocomplete="off" spellcheck="false" />
           </div>
           <button class="cyber-btn xs neon-cyan" id="browser-btn-go">GO ↵</button>
           <button class="cyber-btn xs neon-purple" id="browser-btn-open-tab" title="Open current URL in full Chrome tab (bypasses CSP restrictions)">🌐 Open Tab ↗</button>
@@ -2313,15 +2393,20 @@ server.py   s.json      style.css      scripts/  desktop-shortcuts/\n`;
           <button class="browser-bookmark-pill" data-url="https://news.ycombinator.com">📰 Hacker News</button>
         </div>
 
-        <!-- CSP Helper Notice -->
-        <div class="browser-csp-notice">
-          <span>💡 <strong>Tip:</strong> Sites with strict embedding protection (Google, YouTube) block inside frames. Click <strong>"🌐 Open Tab ↗"</strong> to browse them directly!</span>
-          <button class="cyber-btn xs" onclick="this.parentElement.style.display='none';">✕</button>
-        </div>
-
         <!-- Browser Frame Canvas -->
         <div style="flex:1; position:relative; background:#fff; overflow:hidden;">
-          <iframe id="browser-frame-inner" src="https://wikipedia.org" style="width:100%; height:100%; border:none;" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
+          <iframe id="browser-frame-inner" src="about:blank" style="width:100%; height:100%; border:none;" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
+          <div class="webview-blocked" id="browser-frame-blocked" hidden>
+            <div class="webview-blocked-card">
+              <div class="webview-blocked-glyph">&#8856;</div>
+              <h4>This site won&rsquo;t load inside the app</h4>
+              <p>Google and most large sites send an <code>X-Frame-Options: DENY</code> header that blocks embedded pages. Your PC is fine &mdash; the site is refusing to be framed. Open it in a real tab.</p>
+              <div class="webview-blocked-actions">
+                <button class="cyber-btn sm neon-cyan" id="browser-btn-blocked-open">Open in real tab &#8599;</button>
+                <button class="cyber-btn sm" id="browser-btn-blocked-dismiss">Back to page</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     `;
@@ -2336,24 +2421,53 @@ server.py   s.json      style.css      scripts/  desktop-shortcuts/\n`;
     const btnBack = win.querySelector('#browser-btn-back');
     const btnFwd = win.querySelector('#browser-btn-fwd');
     const btnOpenTab = win.querySelector('#browser-btn-open-tab');
+    const blockedPanel = win.querySelector('#browser-frame-blocked');
+    const blockedOpen = win.querySelector('#browser-btn-blocked-open');
+    const blockedDismiss = win.querySelector('#browser-btn-blocked-dismiss');
     if (!input || !frame) return;
+
+    function hideBlocked() {
+      if (blockedPanel) blockedPanel.hidden = true;
+    }
+
+    if (blockedOpen) {
+      blockedOpen.addEventListener('click', () => {
+        const url = blockedOpen.dataset.url;
+        if (url) window.open(url, '_blank', 'noopener');
+      });
+    }
+    if (blockedDismiss) blockedDismiss.addEventListener('click', hideBlocked);
 
     function resolveUrl(raw) {
       let val = (raw || '').trim();
-      if (!val) return 'https://duckduckgo.com';
+      if (!val) return 'https://www.google.com';
       if (val.startsWith('http://') || val.startsWith('https://')) return val;
       if (val.includes('.') && !val.includes(' ')) return 'https://' + val;
-      return `https://duckduckgo.com/?q=${encodeURIComponent(val)}`;
+      return `https://www.google.com/search?q=${encodeURIComponent(val)}`;
     }
+
+    let probeToken = 0;
 
     function navigate(url) {
       const resolved = resolveUrl(url);
       input.value = resolved;
+      hideBlocked();
       try {
         frame.src = resolved;
       } catch (e) {
         window.open(resolved, '_blank');
+        return;
       }
+      const token = ++probeToken;
+      detectFramed(resolved).then(verdict => {
+        if (token !== probeToken) return;
+        if (verdict === 'blocked') {
+          if (blockedPanel) {
+            blockedPanel.hidden = false;
+            if (blockedOpen) blockedOpen.dataset.url = resolved;
+          }
+        }
+      });
     }
 
     if (btnGo) btnGo.addEventListener('click', () => navigate(input.value));
@@ -2367,7 +2481,7 @@ server.py   s.json      style.css      scripts/  desktop-shortcuts/\n`;
       setTimeout(() => { frame.src = cur; }, 50);
     });
 
-    if (btnHome) btnHome.addEventListener('click', () => navigate('https://duckduckgo.com'));
+    if (btnHome) btnHome.addEventListener('click', () => navigate('https://www.google.com'));
     if (btnBack) btnBack.addEventListener('click', () => {
       try { frame.contentWindow.history.back(); } catch (e) {}
     });
