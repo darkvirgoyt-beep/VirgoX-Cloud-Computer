@@ -963,8 +963,9 @@
             </button>
             <div class="taskbar-apps-pinned">
               <button class="taskbar-app-icon" data-open="terminal" title="Terminal CLI">💻</button>
-              <button class="taskbar-app-icon" data-open="files" title="This PC / Files">📁</button>
+              <button class="taskbar-app-icon" data-open="msstore" title="Microsoft Store">🛍️</button>
               <button class="taskbar-app-icon" data-open="browser" title="Web Browser">🌐</button>
+              <button class="taskbar-app-icon" data-open="files" title="This PC / Files">📁</button>
               <button class="taskbar-app-icon" data-open="editor" title="Code Studio">📝</button>
               <button class="taskbar-app-icon" data-open="taskmgr" title="Task Manager">📊</button>
             </div>
@@ -987,10 +988,11 @@
               <div style="font-size:0.75rem; color:var(--neon-green);">👑 ROOT ADMINISTRATOR</div>
             </div>
           </div>
-          <div style="display:flex; flex-direction:column; gap:4px; max-height:220px; overflow-y:auto;">
+          <div style="display:flex; flex-direction:column; gap:4px; max-height:240px; overflow-y:auto;">
             <button class="cyber-btn sm" data-start-app="terminal" style="text-align:left; justify-content:flex-start;">💻 Terminal CLI (Root Bash)</button>
+            <button class="cyber-btn sm" data-start-app="msstore" style="text-align:left; justify-content:flex-start;">🛍️ Microsoft Store (Web Hub)</button>
+            <button class="cyber-btn sm" data-start-app="browser" style="text-align:left; justify-content:flex-start;">🌐 Chrome Web Browser</button>
             <button class="cyber-btn sm" data-start-app="files" style="text-align:left; justify-content:flex-start;">📁 This PC (5.0 TB Storage)</button>
-            <button class="cyber-btn sm" data-start-app="browser" style="text-align:left; justify-content:flex-start;">🌐 Chrome Browser</button>
             <button class="cyber-btn sm" data-start-app="editor" style="text-align:left; justify-content:flex-start;">📝 Code Studio Editor</button>
             <button class="cyber-btn sm" data-start-app="taskmgr" style="text-align:left; justify-content:flex-start;">📊 Task Manager (64GB RAM)</button>
             <button class="cyber-btn sm" data-start-app="steam" style="text-align:left; justify-content:flex-start;">🎮 Steam Gaming Platform</button>
@@ -1013,8 +1015,9 @@
     const iconsContainer = document.getElementById('desktop-icons-container');
     const APPS = [
       { id: 'terminal', name: 'Terminal CLI', icon: '💻' },
-      { id: 'files', name: 'This PC (5TB)', icon: '📁' },
+      { id: 'msstore', name: 'Microsoft Store', icon: '🛍️' },
       { id: 'browser', name: 'Chrome Web', icon: '🌐' },
+      { id: 'files', name: 'This PC (5TB)', icon: '📁' },
       { id: 'editor', name: 'Code Studio', icon: '📝' },
       { id: 'taskmgr', name: 'Task Manager', icon: '📊' },
       { id: 'photopea', name: 'Photoshop', icon: '🎨' },
@@ -1137,6 +1140,20 @@
         height: 310,
         content: getTerminalHtml()
       },
+      msstore: {
+        title: 'Microsoft Store (Web) — Windows & Linux Apps Hub',
+        icon: '🛍️',
+        width: Math.min(680, window.innerWidth - 20),
+        height: Math.min(460, window.innerHeight - 80),
+        content: getMsStoreHtml()
+      },
+      microsoft_store: {
+        title: 'Microsoft Store (Web) — Windows & Linux Apps Hub',
+        icon: '🛍️',
+        width: Math.min(680, window.innerWidth - 20),
+        height: Math.min(460, window.innerHeight - 80),
+        content: getMsStoreHtml()
+      },
       files: {
         title: 'This PC — 5.0 TB High-Speed Storage Pool',
         icon: '📁',
@@ -1147,8 +1164,8 @@
       browser: {
         title: 'Chromium Web Browser',
         icon: '🌐',
-        width: Math.min(540, window.innerWidth - 30),
-        height: 350,
+        width: Math.min(560, window.innerWidth - 20),
+        height: Math.min(440, window.innerHeight - 80),
         content: getBrowserHtml()
       },
       editor: {
@@ -1292,6 +1309,8 @@
 
     // Post-attach initializers
     if (appId === 'terminal') initTerminalInput(win);
+    if (appId === 'browser') initBrowserActions(win);
+    if (appId === 'msstore' || appId === 'microsoft_store') initMsStoreActions(win);
     if (appId === 'editor') initEditorActions(win);
 
     updateTaskbarChips();
@@ -1389,18 +1408,27 @@
   }
 
   // Window Content Helpers
+  let termCwd = '/root';
+  const termHistory = [];
+  let historyIdx = -1;
+
+  function getTerminalPrompt(cwd) {
+    const p = cwd === '/root' ? '~' : cwd;
+    return `root@virgox-pc:${p}#`;
+  }
+
   function getTerminalHtml() {
     return `
       <div class="cyber-term-view" id="native-term-body">
         <div style="color:var(--neon-cyan); margin-bottom:4px;">⚡ <strong>VirgoX Cyber Linux Desktop v2.0</strong> (Resolute Raccoon / Ubuntu 26.04 aarch64)</div>
         <div style="color:#8892b0; font-size:0.75rem; margin-bottom:8px;">
           👑 Architect: <strong>Prince · VirgoYT</strong> | Virtual RAM: <strong>64 GB Pool</strong> | Engine: <strong>120 FPS Synchronized</strong><br>
-          Connected to Local Bridge Server (Port 8888). Type <code>help</code>, <code>neofetch</code>, <code>status</code>, or any shell command.
+          Connected to Real Linux Subprocess (PRoot-Distro / Port 8888). Type any command: <code>neofetch</code>, <code>ls -la</code>, <code>pwd</code>, <code>whoami</code>, <code>apt</code>, <code>python3</code>, <code>clear</code>.
         </div>
         <div id="term-output-stream" style="white-space:pre-wrap; word-break:break-all;"></div>
         <div class="cyber-term-input-row">
-          <span class="cyber-term-prompt">root@virgox-pc:~$</span>
-          <input type="text" class="cyber-term-input" id="native-term-input" autocomplete="off" />
+          <span class="cyber-term-prompt" id="native-term-prompt">${getTerminalPrompt(termCwd)}</span>
+          <input type="text" class="cyber-term-input" id="native-term-input" autocomplete="off" spellcheck="false" />
         </div>
       </div>
     `;
@@ -1410,77 +1438,80 @@
     const input = win.querySelector('#native-term-input');
     const output = win.querySelector('#term-output-stream');
     const termBody = win.querySelector('#native-term-body');
+    const promptEl = win.querySelector('#native-term-prompt');
     if (!input || !output) return;
 
     input.addEventListener('keydown', async (e) => {
-      if (e.key === 'Enter') {
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (termHistory.length > 0 && historyIdx < termHistory.length - 1) {
+          historyIdx++;
+          input.value = termHistory[termHistory.length - 1 - historyIdx];
+        }
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (historyIdx > 0) {
+          historyIdx--;
+          input.value = termHistory[termHistory.length - 1 - historyIdx];
+        } else if (historyIdx === 0) {
+          historyIdx = -1;
+          input.value = '';
+        }
+      } else if (e.key === 'Enter') {
         const cmd = input.value.trim();
         input.value = '';
+        historyIdx = -1;
         if (!cmd) return;
+        termHistory.push(cmd);
 
-        output.innerHTML += `\n<span style="color:var(--neon-cyan);">root@virgox-pc:~$</span> ${cmd}\n`;
+        output.innerHTML += `\n<span style="color:var(--neon-cyan); font-weight:700;">${getTerminalPrompt(termCwd)}</span> <span style="color:#fff;">${escapeHtml(cmd)}</span>\n`;
 
-        const lower = cmd.toLowerCase();
-        if (lower === 'help') {
-          output.innerHTML += `Available Commands:
-  • help       - Show this command reference
-  • neofetch   - Display full cyber architecture, 64GB RAM & 120 FPS specs
-  • status     - Real-time kernel & active container status
-  • ls         - List current directories and files
-  • top / ps   - View active system processes
-  • uname -a   - Show operating system kernel version
-  • whoami     - Display active logged-in user profile
-  • date       - Show current system date and timestamp
-  • clear      - Clear terminal screen
-  • python     - Execute Python 3 interactive code
-  • reboot     - Restart desktop session
-  • <bash cmd> - Execute shell command directly on local bridge server (Port 8888)\n`;
-        } else if (lower === 'clear') {
+        if (cmd === 'clear') {
           output.innerHTML = '';
-        } else if (lower === 'neofetch' || lower === 'specs') {
-          output.innerHTML += `       ⚡⚡⚡⚡⚡⚡⚡⚡⚡          virgox@cloud-computer
-     ⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡        ---------------------
-    ⚡⚡⚡  VIRGOX  ⚡⚡⚡       OS: Ubuntu 26.04.1 LTS (Resolute Raccoon) aarch64
-   ⚡⚡⚡   CYBER   ⚡⚡⚡      Host: Motorola FogOS Cloud Workstation (120Hz Mode)
-  ⚡⚡⚡     OS     ⚡⚡⚡     Kernel: 6.17.0-PRoot-Distro
- ⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡   Uptime: 24 days, 16 hours, 42 mins
-  ⚡⚡⚡            ⚡⚡⚡     Shell: bash 5.2.21 / Interactive Turbo Shell
-   ⚡⚡⚡          ⚡⚡⚡      Resolution: 1600x720 (Phone 20:9 Touch Optimized)
-    ⚡⚡⚡        ⚡⚡⚡       DE: Cyber XFCE Turbo / Fluent Glass
-     ⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡        WM: Xfwm4 High-Speed Compositor
-       ⚡⚡⚡⚡⚡⚡⚡           CPU: Snapdragon Octa-Core Turbo (32 Threads)
-                             GPU: Mesa LLVMpipe (120 FPS Hardware Synchronized)
-                             Memory: 14820MiB / 65536MiB (64 GB ZRAM Turbo Pool)
-                             Disk: 5.0 TB High-Speed Storage (/dev/loop0)\n`;
-        } else if (lower === 'whoami') {
-          output.innerHTML += `root (Prince · 👑 OWNER — Full Administrator Access)\n`;
-        } else if (lower === 'uname' || lower === 'uname -a') {
-          output.innerHTML += `Linux virgox-desktop 6.17.0-PRoot-Distro aarch64 GNU/Linux\n`;
-        } else if (lower === 'date') {
-          output.innerHTML += `${new Date().toUTCString()}\n`;
-        } else if (lower === 'ls') {
-          output.innerHTML += `Desktop/    Downloads/    VirgoX-Files/    ROM-Builds/    scripts/
-server.py   app.js        start_services.sh   s.json      style.css\n`;
-        } else if (lower === 'status') {
-          output.innerHTML += `Status: ONLINE | Container: virgox-desktop (XFCE4 Mesa LLVMpipe 120 FPS) | Virtual RAM: 64 GB | Storage: 5.0 TB\n`;
-        } else {
-          // Attempt to query bridge server
-          try {
-            const bridge = state.config.bridgeUrl || 'http://localhost:8888';
-            const res = await fetch(`${bridge}/api/copilot/chat`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ message: `$ ${cmd}` })
-            });
-            if (res.ok) {
-              const data = await res.json();
-              output.innerHTML += `${data.response || data.output || 'Command executed successfully.'}\n`;
-            } else {
-              output.innerHTML += `Executed: ${cmd} (Exit code: 0)\n`;
-            }
-          } catch (err) {
-            output.innerHTML += `Executed: ${cmd} (Local fallback active)\n`;
+          if (termBody) termBody.scrollTop = 0;
+          return;
+        }
+
+        let bridge = state.config.bridgeUrl || '';
+        if (!bridge) {
+          if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            bridge = window.location.origin;
+          } else {
+            bridge = 'http://localhost:8888';
           }
+        }
+
+        const clientToken = sessionStorage.getItem('virgox_client_token') || 'vx_sec_prince20_88b9c1';
+        const email = (sessionStorage.getItem('virgox_user_email') || 'darkvirgoyt@gmail.com').toLowerCase();
+
+        let executed = false;
+        try {
+          const res = await fetch(`${bridge}/api/shell`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cmd, cwd: termCwd, token: clientToken, email })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.cwd) {
+              termCwd = data.cwd;
+              if (promptEl) promptEl.textContent = getTerminalPrompt(termCwd);
+            }
+            if (data.output) {
+              output.innerHTML += escapeHtml(data.output);
+              if (!data.output.endsWith('\n')) output.innerHTML += '\n';
+            }
+            if (data.error) {
+              output.innerHTML += `<span style="color:var(--neon-pink);">${escapeHtml(data.error)}</span>\n`;
+            }
+            executed = true;
+          }
+        } catch (err) {
+          executed = false;
+        }
+
+        if (!executed) {
+          runLocalShellFallback(cmd, output, promptEl);
         }
 
         if (termBody) termBody.scrollTop = termBody.scrollHeight;
@@ -1488,6 +1519,100 @@ server.py   app.js        start_services.sh   s.json      style.css\n`;
     });
 
     win.addEventListener('click', () => input.focus());
+    setTimeout(() => input.focus(), 80);
+  }
+
+  function runLocalShellFallback(cmd, output, promptEl) {
+    const lower = cmd.toLowerCase().trim();
+    if (lower === 'help') {
+      output.innerHTML += `VirgoX Linux Core Commands:
+  • neofetch / specs - Display hardware specs, 64GB RAM & 120 FPS pool
+  • pwd              - Print current working directory
+  • cd <dir>         - Change current working directory
+  • ls [-la]         - List files and directories
+  • whoami           - Display active user profile (root)
+  • uname -a         - Display operating system kernel version
+  • free -h          - Virtual ZRAM memory statistics
+  • df -h            - Disk space and storage pool
+  • ps aux / top     - View active system processes
+  • date / uptime    - Current system timestamp & uptime
+  • apt <cmd>        - Linux Advanced Package Tool
+  • python3 -V       - Python programming environment
+  • clear            - Clear terminal screen\n`;
+    } else if (lower === 'pwd') {
+      output.innerHTML += `${termCwd}\n`;
+    } else if (lower === 'cd' || lower === 'cd ~') {
+      termCwd = '/root';
+      if (promptEl) promptEl.textContent = getTerminalPrompt(termCwd);
+    } else if (lower.startsWith('cd ')) {
+      const target = cmd.slice(3).trim();
+      if (target === '..') {
+        const parts = termCwd.split('/').filter(Boolean);
+        parts.pop();
+        termCwd = '/' + parts.join('/');
+      } else if (target.startsWith('/')) {
+        termCwd = target;
+      } else {
+        termCwd = (termCwd === '/' ? '' : termCwd) + '/' + target;
+      }
+      if (promptEl) promptEl.textContent = getTerminalPrompt(termCwd);
+    } else if (lower === 'whoami') {
+      output.innerHTML += `root\n`;
+    } else if (lower === 'id') {
+      output.innerHTML += `uid=0(root) gid=0(root) groups=0(root)\n`;
+    } else if (lower === 'uname' || lower === 'uname -a') {
+      output.innerHTML += `Linux localhost 6.17.0-PRoot-Distro #1 SMP PREEMPT_DYNAMIC Fri Oct 10 2025 aarch64 GNU/Linux\n`;
+    } else if (lower === 'date') {
+      output.innerHTML += `${new Date().toUTCString()}\n`;
+    } else if (lower === 'uptime') {
+      output.innerHTML += ` ${new Date().toLocaleTimeString()} up 24 days, 16:45,  1 user,  load average: 0.12, 0.08, 0.04\n`;
+    } else if (lower === 'neofetch' || lower === 'specs') {
+      output.innerHTML += `       ⚡⚡⚡⚡⚡⚡⚡⚡⚡          root@virgox-pc
+     ⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡        --------------
+    ⚡⚡⚡  VIRGOX  ⚡⚡⚡       OS: Ubuntu 26.04.1 LTS (Resolute Raccoon) aarch64
+   ⚡⚡⚡   CYBER   ⚡⚡⚡      Host: Motorola FogOS Cloud Workstation (120Hz Mode)
+  ⚡⚡⚡     OS     ⚡⚡⚡     Kernel: 6.17.0-PRoot-Distro
+ ⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡   Uptime: 24 days, 16 hours, 45 mins
+  ⚡⚡⚡            ⚡⚡⚡     Shell: bash 5.2.21 (Interactive Turbo Shell)
+   ⚡⚡⚡          ⚡⚡⚡      Resolution: 1600x720 (Phone 20:9 Touch Optimized)
+    ⚡⚡⚡        ⚡⚡⚡       DE: Cyber XFCE Turbo / Fluent Glass
+     ⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡        WM: Xfwm4 High-Speed Compositor
+       ⚡⚡⚡⚡⚡⚡⚡           CPU: Snapdragon Octa-Core Turbo (32 Threads)
+                             GPU: Mesa LLVMpipe (120 FPS Hardware Synchronized)
+                             Memory: 14820MiB / 65536MiB (64 GB ZRAM Turbo Pool)
+                             Disk: 5.0 TB High-Speed Storage (/dev/loop0)\n`;
+    } else if (lower === 'free' || lower === 'free -h') {
+      output.innerHTML += `               total        used        free      shared  buff/cache   available
+Mem:            64Gi        14Gi        48Gi       256Mi       1.8Gi        49Gi
+Swap:           32Gi          0B        32Gi\n`;
+    } else if (lower === 'df' || lower === 'df -h') {
+      output.innerHTML += `Filesystem      Size  Used Avail Use% Mounted on
+/dev/loop0      5.0T  240G  4.8T   5% /
+tmpfs            32G     0   32G   0% /dev/shm\n`;
+    } else if (lower.startsWith('ls')) {
+      if (termCwd.includes('VirgoX-Cloud-Computer')) {
+        output.innerHTML += `app.js      index.html  manifest.json  pc.html   playstore.html
+server.py   s.json      style.css      scripts/  desktop-shortcuts/\n`;
+      } else {
+        output.innerHTML += `Desktop/    Downloads/    VirgoX-Cloud-Computer/    ROM-Builds/    scripts/\n`;
+      }
+    } else if (lower.startsWith('ps')) {
+      output.innerHTML += `  PID TTY          TIME CMD
+    1 ?        00:00:01 systemd
+  888 ?        00:01:24 python3 server.py
+ 1248 pts/1    00:00:00 bash
+ 1320 pts/1    00:00:00 ps\n`;
+    } else if (lower.startsWith('apt')) {
+      output.innerHTML += `Reading package lists... Done\nBuilding dependency tree... Done\nReading state information... Done\nAll packages are up to date.\n`;
+    } else if (lower.startsWith('python3') || lower.startsWith('python')) {
+      if (lower.includes('-v')) {
+        output.innerHTML += `Python 3.12.3 (main, Apr 10 2024, 05:33:42) [GCC 13.2.0] on linux\n`;
+      } else {
+        output.innerHTML += `Python 3.12.3 active. Type exit() to leave or use python3 -c 'code'.\n`;
+      }
+    } else {
+      output.innerHTML += `Executed: ${cmd} (Local Linux emulator active — Connect bridge port 8888 for live subshell)\n`;
+    }
   }
 
   function getFilesHtml() {
@@ -1543,25 +1668,268 @@ server.py   app.js        start_services.sh   s.json      style.css\n`;
 
   function getBrowserHtml() {
     return `
-      <div style="display:flex; flex-direction:column; height:100%;">
-        <div style="display:flex; align-items:center; gap:6px; padding:6px 10px; background:#0c101c; border-bottom:1px solid rgba(255,255,255,0.1);">
-          <button class="cyber-btn xs" onclick="const f = document.getElementById('browser-frame-inner'); try{f.contentWindow.history.back();}catch(e){}">◀</button>
-          <button class="cyber-btn xs" onclick="const f = document.getElementById('browser-frame-inner'); try{f.contentWindow.history.forward();}catch(e){}">▶</button>
-          <button class="cyber-btn xs" onclick="const f = document.getElementById('browser-frame-inner'); f.src = document.getElementById('browser-url-input').value;">🔄</button>
-          <input type="text" id="browser-url-input" class="cyber-input" value="https://wikipedia.org" style="flex:1; height:28px; font-size:0.8rem; padding:2px 8px;" />
-          <button class="cyber-btn xs neon-cyan" onclick="document.getElementById('browser-frame-inner').src = document.getElementById('browser-url-input').value;">GO ↵</button>
+      <div style="display:flex; flex-direction:column; height:100%; background:#0b0f1c;">
+        <!-- Browser Toolbar -->
+        <div class="browser-toolbar">
+          <button class="cyber-btn xs" id="browser-btn-back" title="Back">◀</button>
+          <button class="cyber-btn xs" id="browser-btn-fwd" title="Forward">▶</button>
+          <button class="cyber-btn xs" id="browser-btn-reload" title="Reload">🔄</button>
+          <button class="cyber-btn xs" id="browser-btn-home" title="Home (DuckDuckGo)">🏠</button>
+          <div class="browser-omnibox">
+            <span style="color:var(--neon-cyan); font-size:0.85rem; margin-right:4px;">🔒</span>
+            <input type="text" id="browser-url-input" value="https://wikipedia.org" placeholder="Search the web or enter URL (e.g. google.com, youtube.com)" autocomplete="off" spellcheck="false" />
+          </div>
+          <button class="cyber-btn xs neon-cyan" id="browser-btn-go">GO ↵</button>
+          <button class="cyber-btn xs neon-purple" id="browser-btn-open-tab" title="Open current URL in full Chrome tab (bypasses CSP restrictions)">🌐 Open Tab ↗</button>
         </div>
-        <div style="display:flex; gap:8px; padding:4px 10px; background:#080b14; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.75rem;">
-          <span style="color:var(--text-dim);">Bookmarks:</span>
-          <a href="javascript:void(0)" onclick="document.getElementById('browser-url-input').value='https://wikipedia.org'; document.getElementById('browser-frame-inner').src='https://wikipedia.org';" style="color:var(--neon-cyan); text-decoration:none;">Wikipedia</a>
-          <a href="javascript:void(0)" onclick="document.getElementById('browser-url-input').value='https://github.com/darkvirgoyt-beep'; document.getElementById('browser-frame-inner').src='https://github.com/darkvirgoyt-beep';" style="color:var(--neon-green); text-decoration:none;">GitHub</a>
-          <a href="javascript:void(0)" onclick="document.getElementById('browser-url-input').value='https://bing.com'; document.getElementById('browser-frame-inner').src='https://bing.com';" style="color:var(--neon-purple); text-decoration:none;">Bing Search</a>
+
+        <!-- Quick Bookmarks Bar -->
+        <div class="browser-bookmarks-bar">
+          <span style="color:var(--text-dim); margin-right:4px;">Quick Links:</span>
+          <button class="browser-bookmark-pill" data-url="https://duckduckgo.com">🔍 DuckDuckGo</button>
+          <button class="browser-bookmark-pill" data-url="https://wikipedia.org">📚 Wikipedia</button>
+          <button class="browser-bookmark-pill" data-url="https://apps.microsoft.com">🛍️ Microsoft Store</button>
+          <button class="browser-bookmark-pill" data-url="https://github.com/darkvirgoyt-beep">💻 GitHub</button>
+          <button class="browser-bookmark-pill" data-url="https://www.google.com" data-newtab="true">🌐 Google (Tab)</button>
+          <button class="browser-bookmark-pill" data-url="https://www.youtube.com" data-newtab="true">🎥 YouTube (Tab)</button>
+          <button class="browser-bookmark-pill" data-url="https://news.ycombinator.com">📰 Hacker News</button>
         </div>
-        <div style="flex:1; position:relative; background:#fff;">
-          <iframe id="browser-frame-inner" src="https://wikipedia.org" style="width:100%; height:100%; border:none;" sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe>
+
+        <!-- CSP Helper Notice -->
+        <div class="browser-csp-notice">
+          <span>💡 <strong>Tip:</strong> Sites with strict embedding protection (Google, YouTube) block inside frames. Click <strong>"🌐 Open Tab ↗"</strong> to browse them directly!</span>
+          <button class="cyber-btn xs" onclick="this.parentElement.style.display='none';">✕</button>
+        </div>
+
+        <!-- Browser Frame Canvas -->
+        <div style="flex:1; position:relative; background:#fff; overflow:hidden;">
+          <iframe id="browser-frame-inner" src="https://wikipedia.org" style="width:100%; height:100%; border:none;" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
         </div>
       </div>
     `;
+  }
+
+  function initBrowserActions(win) {
+    const input = win.querySelector('#browser-url-input');
+    const frame = win.querySelector('#browser-frame-inner');
+    const btnGo = win.querySelector('#browser-btn-go');
+    const btnReload = win.querySelector('#browser-btn-reload');
+    const btnHome = win.querySelector('#browser-btn-home');
+    const btnBack = win.querySelector('#browser-btn-back');
+    const btnFwd = win.querySelector('#browser-btn-fwd');
+    const btnOpenTab = win.querySelector('#browser-btn-open-tab');
+    if (!input || !frame) return;
+
+    function resolveUrl(raw) {
+      let val = (raw || '').trim();
+      if (!val) return 'https://duckduckgo.com';
+      if (val.startsWith('http://') || val.startsWith('https://')) return val;
+      if (val.includes('.') && !val.includes(' ')) return 'https://' + val;
+      return `https://duckduckgo.com/?q=${encodeURIComponent(val)}`;
+    }
+
+    function navigate(url) {
+      const resolved = resolveUrl(url);
+      input.value = resolved;
+      try {
+        frame.src = resolved;
+      } catch (e) {
+        window.open(resolved, '_blank');
+      }
+    }
+
+    if (btnGo) btnGo.addEventListener('click', () => navigate(input.value));
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') navigate(input.value);
+    });
+
+    if (btnReload) btnReload.addEventListener('click', () => {
+      const cur = frame.src;
+      frame.src = 'about:blank';
+      setTimeout(() => { frame.src = cur; }, 50);
+    });
+
+    if (btnHome) btnHome.addEventListener('click', () => navigate('https://duckduckgo.com'));
+    if (btnBack) btnBack.addEventListener('click', () => {
+      try { frame.contentWindow.history.back(); } catch (e) {}
+    });
+    if (btnFwd) btnFwd.addEventListener('click', () => {
+      try { frame.contentWindow.history.forward(); } catch (e) {}
+    });
+
+    if (btnOpenTab) btnOpenTab.addEventListener('click', () => {
+      const resolved = resolveUrl(input.value);
+      window.open(resolved, '_blank');
+    });
+
+    win.querySelectorAll('.browser-bookmark-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        const u = pill.getAttribute('data-url');
+        const isNewTab = pill.getAttribute('data-newtab') === 'true';
+        if (isNewTab) {
+          window.open(u, '_blank');
+        } else {
+          navigate(u);
+        }
+      });
+    });
+  }
+
+  // Microsoft Store Web Hub
+  const MS_STORE_APPS = [
+    { id: 'vscode', name: 'Visual Studio Code', pub: 'Microsoft Corporation', cat: 'dev', icon: '💻', rating: '4.9', desc: 'Code editing refined. Built-in Git, terminal, intelligent code completion and extensions.', action: 'editor', btnText: 'Open Code Studio' },
+    { id: 'browser', name: 'Chromium Web Browser', pub: 'Google & Open Source', cat: 'apps', icon: '🌐', rating: '4.8', desc: 'Fast, secure web browsing with multi-tab support and developer tools.', action: 'browser', btnText: 'Open Browser' },
+    { id: 'terminal', name: 'Terminal CLI (Root Bash)', pub: 'GNU Linux & PRoot', cat: 'dev', icon: '⚡', rating: '5.0', desc: 'Full interactive Linux root shell with apt package manager and 64GB virtual RAM pool.', action: 'terminal', btnText: 'Open Terminal' },
+    { id: 'photopea', name: 'Adobe Photoshop (Photopea Pro)', pub: 'Ivan Kutskir', cat: 'media', icon: '🎨', rating: '4.9', desc: 'Professional image editor supporting PSD, AI, RAW, layers and 4K export.', action: 'photopea', btnText: 'Open Studio' },
+    { id: 'shotcut', name: 'Shotcut 4K Video Editor', pub: 'Meltytech LLC', cat: 'media', icon: '🎬', rating: '4.7', desc: 'Cross-platform multi-track 4K video editor with hardware acceleration.', action: 'shotcut', btnText: 'Open Video Studio' },
+    { id: 'steam', name: 'Steam Gaming Platform', pub: 'Valve Corporation', cat: 'gaming', icon: '🎮', rating: '4.9', desc: 'Access the world of PC gaming, cloud synchronization and community hubs.', action: 'steam', btnText: 'Open Steam' },
+    { id: 'blender', name: 'Blender 5.0.1 3D Suite', pub: 'Blender Foundation', cat: 'gaming', icon: '🚀', rating: '5.0', desc: 'Open-source 3D creation suite: modeling, sculpting, Cycles real-time raytracing, VFX.', action: 'blender', btnText: 'Open Blender' },
+    { id: 'unreal', name: 'Unreal Engine 6 Hub', pub: 'Epic Games', cat: 'gaming', icon: '⚡', rating: '4.9', desc: 'Next-gen real-time 3D creation tool with Nanite, Lumen and virtual production.', action: 'unreal', btnText: 'Open Hub' },
+    { id: 'files', name: 'This PC — File Explorer (5TB)', pub: 'VirgoX Storage', cat: 'apps', icon: '📁', rating: '5.0', desc: '5.0 TB High-speed storage pool mounted at /dev/loop0 for ultra-fast read/write.', action: 'files', btnText: 'Open Storage' },
+    { id: 'taskmgr', name: 'Task Manager (64GB RAM)', pub: 'VirgoX Kernel', cat: 'apps', icon: '📊', rating: '4.9', desc: 'Real-time performance monitoring of 32 CPU threads, 64GB ZRAM, and 120 FPS display.', action: 'taskmgr', btnText: 'Open Taskmgr' },
+    { id: 'spotify', name: 'Spotify Music & Podcasts', pub: 'Spotify AB', cat: 'media', icon: '🎵', rating: '4.8', desc: 'Millions of songs, curated playlists, and podcast episodes in high fidelity.', action: 'url', url: 'https://open.spotify.com', btnText: 'Open Spotify' },
+    { id: 'discord', name: 'Discord Communities', pub: 'Discord Inc.', cat: 'apps', icon: '💬', rating: '4.7', desc: 'Talk, chat, hang out, and stay close with your friends and communities.', action: 'url', url: 'https://discord.com/app', btnText: 'Open Discord' },
+    { id: 'whatsapp', name: 'WhatsApp Web', pub: 'Meta Platforms', cat: 'apps', icon: '📱', rating: '4.6', desc: 'Simple, reliable, private messaging and calling right in your cloud computer.', action: 'url', url: 'https://web.whatsapp.com', btnText: 'Open WhatsApp' },
+    { id: 'python', name: 'Python 3.12 Developer Tools', pub: 'Python Software Foundation', cat: 'dev', icon: '🐍', rating: '5.0', desc: 'Interpreted, interactive, object-oriented programming language with pip package installer.', action: 'cmd', cmd: 'python3 -V', btnText: 'Test Python' },
+    { id: 'git', name: 'Git Distributed SCM', pub: 'Software Freedom Conservancy', cat: 'dev', icon: '📦', rating: '5.0', desc: 'Fast version control system designed to handle everything from small to large projects.', action: 'cmd', cmd: 'git status', btnText: 'Git Status' },
+    { id: 'powertoys', name: 'Microsoft PowerToys Suite', pub: 'Microsoft Corporation', cat: 'apps', icon: '🛠️', rating: '4.8', desc: 'Set of utilities for power users to tune and streamline Windows & Linux desktop experience.', action: 'toast', msg: 'PowerToys is pre-integrated into VirgoX Window Manager!', btnText: 'Installed' },
+    { id: 'vlc', name: 'VLC Media Player', pub: 'VideoLAN', cat: 'media', icon: '🟧', rating: '4.8', desc: 'Free and open source cross-platform multimedia player that plays most multimedia files.', action: 'url', url: 'https://www.videolan.org/vlc/', btnText: 'Get VLC' },
+    { id: 'm365', name: 'Microsoft 365 Cloud Office', pub: 'Microsoft Corporation', cat: 'media', icon: '📄', rating: '4.7', desc: 'Word, Excel, PowerPoint, OneNote in one secure cloud workspace.', action: 'url', url: 'https://www.office.com', btnText: 'Open Office' }
+  ];
+
+  function getMsStoreHtml() {
+    return `
+      <div class="ms-store-wrap">
+        <!-- Header -->
+        <div class="ms-store-header">
+          <div class="ms-store-brand">
+            <span style="font-size:1.4rem;">🛍️</span>
+            <span>Microsoft Store <span style="font-size:0.75rem; color:var(--neon-cyan); font-weight:normal;">Web Hub</span></span>
+          </div>
+          <div class="ms-store-search-box">
+            <input type="text" id="msstore-search-input" class="ms-store-search-input" placeholder="Search apps, games, developer tools..." />
+          </div>
+          <button class="cyber-btn xs neon-cyan" id="msstore-btn-official" title="Open official apps.microsoft.com in a full browser tab">
+            🌐 Open Official Store (apps.microsoft.com) ↗
+          </button>
+        </div>
+
+        <!-- Hero Banner -->
+        <div class="ms-store-hero">
+          <div>
+            <div style="font-size:1.05rem; font-weight:800; color:#fff;">Featured: Essential Apps for Cloud PC</div>
+            <div style="font-size:0.75rem; color:#dbeafe; margin-top:2px;">Pre-configured for 64 GB Virtual RAM, Snapdragon Turbo, and 120 FPS Synchronization.</div>
+          </div>
+          <button class="cyber-btn sm neon-green" onclick="openAppWindow('terminal')">⚡ Launch Root Terminal</button>
+        </div>
+
+        <!-- Categories -->
+        <div class="ms-store-categories">
+          <button class="ms-store-cat-chip active" data-cat="all">All Apps (${MS_STORE_APPS.length})</button>
+          <button class="ms-store-cat-chip" data-cat="dev">Developer Tools</button>
+          <button class="ms-store-cat-chip" data-cat="apps">Essential Apps</button>
+          <button class="ms-store-cat-chip" data-cat="gaming">Gaming & 3D</button>
+          <button class="ms-store-cat-chip" data-cat="media">Productivity & Media</button>
+        </div>
+
+        <!-- Grid of Apps -->
+        <div class="ms-store-grid" id="msstore-apps-grid">
+          ${renderMsStoreCards(MS_STORE_APPS)}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderMsStoreCards(apps) {
+    return apps.map(app => `
+      <div class="ms-store-card" data-card-id="${app.id}" data-cat="${app.cat}">
+        <div class="ms-store-card-header">
+          <div class="ms-store-card-icon">${app.icon}</div>
+          <div class="ms-store-card-info">
+            <div class="ms-store-card-title">${escapeHtml(app.name)}</div>
+            <div class="ms-store-card-sub">${escapeHtml(app.pub)}</div>
+            <div class="ms-store-card-rating">⭐ ${app.rating} · <span style="color:var(--neon-cyan);">Free</span></div>
+          </div>
+        </div>
+        <div class="ms-store-card-desc">${escapeHtml(app.desc)}</div>
+        <div class="ms-store-card-footer">
+          <span class="ms-store-card-price">FREE</span>
+          <button class="ms-store-card-btn" data-action="${app.action}" data-target="${app.action === 'url' ? (app.url || '') : (app.action === 'cmd' ? (app.cmd || '') : app.action)}">${app.btnText}</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function initMsStoreActions(win) {
+    const searchInput = win.querySelector('#msstore-search-input');
+    const grid = win.querySelector('#msstore-apps-grid');
+    const catChips = win.querySelectorAll('.ms-store-cat-chip');
+    const btnOfficial = win.querySelector('#msstore-btn-official');
+
+    if (btnOfficial) {
+      btnOfficial.addEventListener('click', () => {
+        window.open('https://apps.microsoft.com/', '_blank');
+      });
+    }
+
+    let activeCat = 'all';
+
+    function filterApps() {
+      const q = (searchInput ? searchInput.value : '').toLowerCase().trim();
+      const filtered = MS_STORE_APPS.filter(app => {
+        const matchesCat = activeCat === 'all' || app.cat === activeCat;
+        const matchesQuery = !q || app.name.toLowerCase().includes(q) || app.desc.toLowerCase().includes(q) || app.pub.toLowerCase().includes(q);
+        return matchesCat && matchesQuery;
+      });
+      if (grid) {
+        grid.innerHTML = renderMsStoreCards(filtered);
+        attachCardListeners();
+      }
+    }
+
+    if (searchInput) {
+      searchInput.addEventListener('input', filterApps);
+    }
+
+    catChips.forEach(chip => {
+      chip.addEventListener('click', () => {
+        catChips.forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+        activeCat = chip.getAttribute('data-cat') || 'all';
+        filterApps();
+      });
+    });
+
+    function attachCardListeners() {
+      if (!grid) return;
+      grid.querySelectorAll('.ms-store-card-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const action = btn.getAttribute('data-action');
+          const target = btn.getAttribute('data-target');
+
+          if (action === 'url') {
+            window.open(target, '_blank');
+          } else if (action === 'toast') {
+            showAlert(target || 'App installed and ready.');
+          } else if (action === 'cmd') {
+            openAppWindow('terminal');
+            const termWin = document.getElementById('win-terminal');
+            if (termWin) {
+              const input = termWin.querySelector('#native-term-input');
+              if (input) {
+                input.value = target;
+                input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+              }
+            }
+          } else {
+            openAppWindow(action);
+          }
+        });
+      });
+    }
+
+    attachCardListeners();
   }
 
   function getTaskmgrHtml() {

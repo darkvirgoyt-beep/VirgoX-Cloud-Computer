@@ -2829,4 +2829,304 @@ html, body, .viewport-container, .screen-wrapper, .screen-touchpad-overlay {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Microsoft Store Web Hub Styles */
+.ms-store-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #090d19;
+  color: #fff;
+  font-family: var(--font-body);
+  overflow: hidden;
+}
+
+.ms-store-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: linear-gradient(90deg, #10182c, #0c1222);
+  border-bottom: 1px solid rgba(0, 229, 255, 0.2);
+  flex-wrap: wrap;
+}
+
+.ms-store-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.5px;
+}
+
+.ms-store-search-box {
+  flex: 1;
+  min-width: 180px;
+  position: relative;
+}
+
+.ms-store-search-input {
+  width: 100%;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #fff;
+  padding: 0 10px;
+  font-size: 0.8rem;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.ms-store-search-input:focus {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.3);
+}
+
+.ms-store-hero {
+  padding: 14px 18px;
+  background: linear-gradient(135deg, rgba(0, 120, 215, 0.25), rgba(189, 0, 255, 0.2));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ms-store-categories {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #060912;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.ms-store-cat-chip {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #ccc;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ms-store-cat-chip.active, .ms-store-cat-chip:hover {
+  background: rgba(0, 229, 255, 0.2);
+  border-color: var(--neon-cyan);
+  color: #fff;
+}
+
+.ms-store-grid {
+  flex: 1;
+  padding: 14px;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.ms-store-card {
+  background: rgba(18, 24, 40, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.ms-store-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(0, 229, 255, 0.4);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5), 0 0 12px rgba(0, 229, 255, 0.2);
+}
+
+.ms-store-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.ms-store-card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ms-store-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.ms-store-card-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ms-store-card-sub {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ms-store-card-rating {
+  font-size: 0.7rem;
+  color: #f59e0b;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.ms-store-card-desc {
+  font-size: 0.72rem;
+  color: #aaa;
+  line-height: 1.35;
+  flex: 1;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ms-store-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.ms-store-card-price {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--neon-green);
+}
+
+.ms-store-card-btn {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border: 1px solid var(--neon-cyan);
+  background: rgba(0, 229, 255, 0.15);
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ms-store-card-btn:hover {
+  background: var(--neon-cyan);
+  color: #000;
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.5);
+}
+
+/* Enhanced Web Browser UI */
+.browser-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #0b0f1c;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-wrap: wrap;
+}
+
+.browser-omnibox {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 0 8px;
+  height: 30px;
+  min-width: 200px;
+}
+
+.browser-omnibox:focus-within {
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.3);
+}
+
+.browser-omnibox input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 0.8rem;
+  outline: none;
+  padding: 0 6px;
+}
+
+.browser-bookmarks-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  background: #070a14;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.72rem;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.browser-bookmark-pill {
+  color: #bbb;
+  text-decoration: none;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.browser-bookmark-pill:hover {
+  background: rgba(0, 229, 255, 0.15);
+  border-color: var(--neon-cyan);
+  color: #fff;
+}
+
+.browser-csp-notice {
+  padding: 4px 10px;
+  background: rgba(0, 229, 255, 0.08);
+  border-bottom: 1px solid rgba(0, 229, 255, 0.15);
+  font-size: 0.7rem;
+  color: #93c5fd;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+
 
