@@ -171,8 +171,19 @@ To spin up this entire environment on any fresh Google Cloud Shell or Linux VPS:
 ```bash
 git clone https://github.com/darkvirgoyt-beep/VirgoX-Cloud-Computer.git
 cd VirgoX-Cloud-Computer
-./setup_pc.sh
+
+# 🐧 Boot Linux (Ubuntu XFCE Desktop + ROM Tools + Wine):
+./setup_pc.sh linux
+
+# 🪟 Boot Windows 11 Pro Cloud PC (KVM VM / Web Stream & RDP):
+./setup_pc.sh win11
 ```
+
+### 🪟 Windows 11 Features & Integration:
+* **Web VNC / RDP Stream:** Connect directly in your browser on port `8006` or via native Remote Desktop on port `3389`.
+* **Zero-Touch ISO Download:** Uses `dockurr/windows` with automatic Windows 11 ISO retrieval, VirtIO drivers, and KVM hardware acceleration.
+* **Dual OS Switcher:** Toggle smoothly between Linux and Windows 11 directly from the Web Control Center toolbar.
+
 
 ---
 

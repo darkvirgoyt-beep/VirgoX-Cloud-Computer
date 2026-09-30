@@ -123,7 +123,9 @@
             <button id="zoom-reset" class="cyber-btn xs">FIT</button>
           </div>
           
-          <div class="mode-toggles">
+            <button id="btn-toggle-os" class="cyber-btn xs neon-cyan" title="Switch Between Linux (Ubuntu) & Windows 11 Desktop">
+              🪟 OS: <span id="os-mode-label">Linux</span>
+            </button>
             <button id="btn-toggle-screen-trackpad" class="cyber-btn xs neon-cyan active" title="Toggle Screen as Touchpad (Relative Mouse Control)">
               🖱️ Touchpad: <span id="screen-trackpad-state">ON</span>
             </button>
@@ -922,9 +924,15 @@
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label for="input-desktop-url">🖥️ Phone 2 Desktop URL (Port 3000):</label>
-            <input type="url" id="input-desktop-url" class="cyber-input" placeholder="https://....pinggy-free.link" />
-            <span class="hint">Enter your live Pinggy tunnel or Cloud Shell Web Preview URL</span>
+            <label for="input-desktop-url">🖥️ Linux Desktop URL (Port 3000):</label>
+            <input type="url" id="input-desktop-url" class="cyber-input" placeholder="https://....trycloudflare.com" />
+            <span class="hint">Ubuntu XFCE desktop stream</span>
+          </div>
+
+          <div class="form-group">
+            <label for="input-windows-url">🪟 Windows 11 Desktop URL (Port 8006):</label>
+            <input type="url" id="input-windows-url" class="cyber-input" placeholder="http://localhost:8006 or live tunnel" />
+            <span class="hint">Windows 11 web stream & RDP viewer</span>
           </div>
 
           <div class="form-group">

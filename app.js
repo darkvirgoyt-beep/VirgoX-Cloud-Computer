@@ -9,8 +9,10 @@
   // Default Configuration
   const DEFAULT_CONFIG = {
     desktopUrl: 'https://laboratory-margin-seats-pierre.trycloudflare.com',
+    windowsUrl: 'http://localhost:8006',
     terminalUrl: 'https://superb-welding-retro-cohen.trycloudflare.com',
     bridgeUrl: 'https://instrument-fame-reduces-parent.trycloudflare.com',
+    osMode: 'linux', // 'linux' or 'windows'
     sensitivity: 1.5,
     crosshairEnabled: false,
     ecoMode: true
@@ -109,6 +111,7 @@
   const settingsModal = document.getElementById('settings-modal');
   const closeSettingsBtn = document.getElementById('close-settings');
   const inputDesktopUrl = document.getElementById('input-desktop-url');
+  const inputWindowsUrl = document.getElementById('input-windows-url');
   const inputTerminalUrl = document.getElementById('input-terminal-url');
   const inputBridgeUrl = document.getElementById('input-bridge-url');
   const btnSaveSettings = document.getElementById('btn-save-settings');
@@ -180,6 +183,7 @@
     setupCrosshair();
     setupQuickKeys();
     setupSettingsModal();
+    setupOsSwitcher();
     setupTabsModal();
     setupDesktopRefresh();
     setupDesktopTrackpadOverlay();
@@ -196,11 +200,16 @@
   }
 
   // Frame Security Controllers: STRICT zero-trust isolation
+  function getActiveDesktopUrl() {
+    return state.config.osMode === 'windows' ? (state.config.windowsUrl || 'http://localhost:8006') : state.config.desktopUrl;
+  }
+
   function loadFrames() {
     if (sessionStorage.getItem('virgox_authenticated') !== 'true') return;
-    if (state.config.desktopUrl && (!desktopFrame.src || desktopFrame.src === 'about:blank')) {
-      desktopFrame.src = state.config.desktopUrl;
-      linkPhone2.href = state.config.desktopUrl;
+    const activeUrl = getActiveDesktopUrl();
+    if (activeUrl && (!desktopFrame.src || desktopFrame.src === 'about:blank' || desktopFrame.src !== activeUrl)) {
+      desktopFrame.src = activeUrl;
+      linkPhone2.href = activeUrl;
     }
     if (state.config.terminalUrl) {
       linkPhone1.href = state.config.terminalUrl;
@@ -922,6 +931,7 @@
 
     btnSettings.addEventListener('click', () => {
       inputDesktopUrl.value = state.config.desktopUrl;
+      if (inputWindowsUrl) inputWindowsUrl.value = state.config.windowsUrl || '';
       inputTerminalUrl.value = state.config.terminalUrl;
       inputBridgeUrl.value = state.config.bridgeUrl || '';
       if (settingEcoMode) settingEcoMode.checked = state.config.ecoMode !== false;
@@ -934,6 +944,7 @@
 
     btnSaveSettings.addEventListener('click', () => {
       state.config.desktopUrl = inputDesktopUrl.value.trim();
+      if (inputWindowsUrl) state.config.windowsUrl = inputWindowsUrl.value.trim();
       state.config.terminalUrl = inputTerminalUrl.value.trim();
       state.config.bridgeUrl = inputBridgeUrl.value.trim();
       if (settingEcoMode) {
@@ -956,12 +967,50 @@
         state.config = { ...DEFAULT_CONFIG };
         saveConfig();
         inputDesktopUrl.value = state.config.desktopUrl;
+        if (inputWindowsUrl) inputWindowsUrl.value = state.config.windowsUrl;
         inputTerminalUrl.value = state.config.terminalUrl;
         inputBridgeUrl.value = state.config.bridgeUrl;
         if (settingEcoMode) settingEcoMode.checked = state.config.ecoMode !== false;
         setupFrames();
       }
     });
+  }
+
+  // OS Switcher (Linux Ubuntu XFCE vs Windows 11 Cloud VM)
+  function setupOsSwitcher() {
+    const btnToggleOs = document.getElementById('btn-toggle-os');
+    const osModeLabel = document.getElementById('os-mode-label');
+
+    function updateOsUI() {
+      const isWin = state.config.osMode === 'windows';
+      if (osModeLabel) {
+        osModeLabel.textContent = isWin ? 'Windows 11' : 'Linux';
+      }
+      if (btnToggleOs) {
+        if (isWin) {
+          btnToggleOs.classList.add('neon-purple');
+          btnToggleOs.classList.remove('neon-cyan');
+        } else {
+          btnToggleOs.classList.add('neon-cyan');
+          btnToggleOs.classList.remove('neon-purple');
+        }
+      }
+    }
+
+    if (btnToggleOs) {
+      btnToggleOs.addEventListener('click', () => {
+        state.config.osMode = state.config.osMode === 'windows' ? 'linux' : 'windows';
+        saveConfig();
+        updateOsUI();
+        const activeUrl = getActiveDesktopUrl();
+        if (desktopFrame && sessionStorage.getItem('virgox_authenticated') === 'true') {
+          desktopFrame.src = activeUrl;
+          if (linkPhone2) linkPhone2.href = activeUrl;
+        }
+      });
+    }
+
+    updateOsUI();
   }
 
   // Fullscreen
