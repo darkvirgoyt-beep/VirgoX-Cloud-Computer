@@ -60,25 +60,31 @@
   </style>
 
   <script>
-    // IMMEDIATE SYNCHRONOUS TAMPER-PROOF AUTHENTICATION GATEWAY
+    // SYNCHRONOUS SEAMLESS WORKSTATION AUTHENTICATION GATEWAY
     (function() {
       'use strict';
-      const isAuth = sessionStorage.getItem('virgox_authenticated') === 'true';
-      const token = sessionStorage.getItem('virgox_session_token');
-      const email = (sessionStorage.getItem('virgox_user_email') || '').toLowerCase();
+      let isAuth = sessionStorage.getItem('virgox_authenticated') === 'true';
+      let token = sessionStorage.getItem('virgox_session_token');
+      let email = (sessionStorage.getItem('virgox_user_email') || '').toLowerCase();
 
-      // Non-bypassable: If auth is missing or altered, purge and force immediate redirect to login
+      // Auto-provision Prince (Owner) session if opened directly
       if (!isAuth || !token || !email) {
-        try {
-          sessionStorage.clear();
-          localStorage.removeItem('virgox_active_session');
-          if (document.documentElement) document.documentElement.innerHTML = '';
-        } catch(e) {}
-        window.location.replace('index.html');
-        throw new Error('SECURITY_VERIFICATION_REQUIRED');
+        const sessionToken = 'vx_sess_owner_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+        sessionStorage.setItem('virgox_authenticated', 'true');
+        sessionStorage.setItem('virgox_session_token', sessionToken);
+        sessionStorage.setItem('virgox_master_unlocked', 'true');
+        sessionStorage.setItem('virgox_user_role', 'owner');
+        sessionStorage.setItem('virgox_user_email', 'darkvirgoyt@gmail.com');
+        sessionStorage.setItem('virgox_user_name', 'Prince · VirgoYT (Owner)');
+        sessionStorage.setItem('virgox_client_token', 'vx_sec_prince20_88b9c1');
+        localStorage.setItem('virgox_active_user', 'darkvirgoyt@gmail.com');
+        localStorage.setItem('virgox_active_role', 'owner');
+        localStorage.setItem('virgox_auth_configured', 'true');
+        localStorage.setItem('virgox_session_token', sessionToken);
+        email = 'darkvirgoyt@gmail.com';
       }
 
-      const role = sessionStorage.getItem('virgox_user_role') || (email === 'darkvirgoyt@gmail.com' ? 'owner' : 'guest');
+      const role = sessionStorage.getItem('virgox_user_role') || 'owner';
       document.documentElement.setAttribute('data-user-mode', role);
     })();
   </script>
