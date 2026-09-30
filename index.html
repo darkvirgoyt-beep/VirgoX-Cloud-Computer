@@ -349,8 +349,10 @@
       const role = isOwner ? 'owner' : 'guest';
       const finalEmail = isOwner ? 'darkvirgoyt@gmail.com' : (cleanEmail || 'guest@cloudpc.internal');
       const finalName = isOwner ? 'Prince · VirgoYT (Owner)' : (name || cleanEmail.split('@')[0] || 'Cloud User');
+      const sessionToken = isOwner ? 'Princeraj@20' : ('vx_sess_' + Math.random().toString(36).substring(2) + Date.now().toString(36));
 
       sessionStorage.setItem('virgox_authenticated', 'true');
+      sessionStorage.setItem('virgox_session_token', sessionToken);
       sessionStorage.setItem('virgox_master_unlocked', 'true');
       sessionStorage.setItem('virgox_user_role', role);
       sessionStorage.setItem('virgox_user_email', finalEmail);
@@ -360,6 +362,7 @@
       localStorage.setItem('virgox_active_user', finalEmail);
       localStorage.setItem('virgox_active_role', role);
       localStorage.setItem('virgox_auth_configured', 'true');
+      localStorage.setItem('virgox_session_token', sessionToken);
 
       if (isOwner) {
         showAlert(`👑 Access Granted: Owner (darkvirgoyt@gmail.com). Loading Full Root Suite...`, true);

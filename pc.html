@@ -11,15 +11,39 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&family=Rajdhani:wght@500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    /* Tamper-Proof Security Gate: Workstation is locked and hidden until validated */
+    #app {
+      display: none !important;
+    }
+    body.virgox-authorized #app {
+      display: flex !important;
+    }
+  </style>
   <script>
     (function() {
-      if (sessionStorage.getItem('virgox_authenticated') !== 'true') {
+      const isAuth = sessionStorage.getItem('virgox_authenticated') === 'true';
+      const token = sessionStorage.getItem('virgox_session_token');
+      const email = (sessionStorage.getItem('virgox_user_email') || '').toLowerCase();
+
+      // Non-bypassable: If auth flag, session token, or email identity is missing, immediately purge and kick to login
+      if (!isAuth || !token || !email) {
+        sessionStorage.clear();
         window.location.replace('index.html');
         return;
       }
-      const email = (sessionStorage.getItem('virgox_user_email') || '').toLowerCase();
+
       const role = sessionStorage.getItem('virgox_user_role') || (email === 'darkvirgoyt@gmail.com' ? 'owner' : 'guest');
       document.documentElement.setAttribute('data-user-mode', role);
+
+      // Reveal workstation UI only after verification
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+          document.body.classList.add('virgox-authorized');
+        });
+      } else {
+        document.body.classList.add('virgox-authorized');
+      }
     })();
   </script>
 </head>

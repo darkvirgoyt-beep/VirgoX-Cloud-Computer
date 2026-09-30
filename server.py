@@ -25,9 +25,37 @@ AUTH_FILE = "/home/darkvirgoyt/virgox_auth.json"
 OTP_LOG_FILE = "/home/darkvirgoyt/otp_codes.log"
 _active_otps = {}  # {email: {"otp": code, "expires": timestamp, "attempts": count}}
 _setup_otps = {}   # {email: {"otp": code, "expires": timestamp, "attempts": count}}
+_active_sessions = {} # {token: {"email": email, "role": role, "expires": timestamp}}
 _udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 USER_CLOUDS_DIR = "/home/darkvirgoyt/virgox_user_clouds"
 os.makedirs(USER_CLOUDS_DIR, exist_ok=True)
+
+def create_session(email, role="user"):
+    token = secrets.token_hex(24)
+    _active_sessions[token] = {
+        "email": (email or "guest@cloudpc.internal").strip().lower(),
+        "role": role,
+        "expires": time.time() + (7 * 86400)
+    }
+    return token
+
+def validate_session(token, expected_email=None):
+    if not token:
+        return False, None
+    token_str = str(token).strip()
+    # Check Master Passwords & VIP tokens for owner
+    if token_str.lower() in ("princeraj@20", "prince@20", "darkvirgoyt@20", "vx_sec_prince20_88b9c1", "vx_sec_darkvirgoyt20_7a9f82d1"):
+        return True, {"email": "darkvirgoyt@gmail.com", "role": "owner"}
+    sess = _active_sessions.get(token_str)
+    if not sess:
+        return False, None
+    if time.time() > sess.get("expires", 0):
+        del _active_sessions[token_str]
+        return False, None
+    if expected_email and sess.get("email") != expected_email.strip().lower() and sess.get("role") != "owner":
+        return False, None
+    return True, sess
+
 
 
 POPULAR_APPS_CATALOG = [
@@ -524,17 +552,42 @@ class BridgeHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(data).encode("utf-8"))
             return
 
+        elif path == "/api/auth/validate_session":
+            qs = parse_qs(parsed.query)
+            token = qs.get("token", [""])[0].strip() or self.headers.get("Authorization", "").replace("Bearer ", "").strip()
+            email = qs.get("email", [""])[0].strip().lower()
+            valid, sess = validate_session(token, expected_email=email)
+            if valid:
+                self._respond_ok({
+                    "status": "ok",
+                    "valid": True,
+                    "email": sess.get("email"),
+                    "role": sess.get("role")
+                })
+            else:
+                self._respond_error("Unauthorized: Session is invalid or expired. Login required.", code=401)
+            return
+
         elif path == "/api/user/cloud_data":
             qs = parse_qs(parsed.query)
+            token = qs.get("token", [""])[0].strip() or self.headers.get("Authorization", "").replace("Bearer ", "").strip()
             email = qs.get("email", [""])[0].strip().lower()
-            if not email:
-                auth_data = get_auth_data()
-                email = auth_data.get("email", "").strip().lower()
-            cloud = get_user_cloud(email)
+            valid, sess = validate_session(token, expected_email=email)
+            if not valid:
+                self._respond_error("Unauthorized: Please sign in to access workspace data.", code=401)
+                return
+            effective_email = sess.get("email") if sess.get("role") != "owner" else (email or "darkvirgoyt@gmail.com")
+            cloud = get_user_cloud(effective_email)
             self._respond_ok({"status": "ok", "cloud": cloud})
             return
 
         elif path == "/api/screenshot":
+            qs = parse_qs(parsed.query)
+            token = qs.get("token", [""])[0].strip() or self.headers.get("Authorization", "").replace("Bearer ", "").strip()
+            valid, _ = validate_session(token)
+            if not valid:
+                self._respond_error("Unauthorized: Login verification required to view desktop screen.", code=401)
+                return
             # Capture screenshot
             run_container_cmd("scrot -o /config/Desktop/VirgoX-Files/current_screen.png", user="abc")
             img_path = "/home/darkvirgoyt/current_screen.png"
@@ -1021,9 +1074,14 @@ print(json.dumps(apps))
             self._respond_ok({"sent_key": key})
 
         elif path == "/api/ai_chat":
+            token = payload.get("token", "").strip() or self.headers.get("Authorization", "").replace("Bearer ", "").strip()
+            email = payload.get("email", "").strip().lower()
+            valid, _ = validate_session(token, expected_email=email)
+            if not valid:
+                self._respond_error("Unauthorized: Session login required.", code=401)
+                return
             msg = payload.get("message", "").strip()
             image_b64 = payload.get("image", None)
-            email = payload.get("email", "").strip().lower()
             reply, action, voice_text = handle_ai_command(msg, image_base64=image_b64, email=email)
             self._respond_ok({
                 "reply": reply,
@@ -1033,8 +1091,13 @@ print(json.dumps(apps))
             })
 
         elif path == "/api/exec":
-            cmd = payload.get("cmd", "")
+            token = payload.get("token", "").strip() or self.headers.get("Authorization", "").replace("Bearer ", "").strip()
             email = payload.get("email", "").strip().lower()
+            valid, sess = validate_session(token, expected_email=email)
+            if not valid:
+                self._respond_error("Unauthorized: Valid login token required to execute commands.", code=401)
+                return
+            cmd = payload.get("cmd", "")
             in_container = bool(payload.get("in_container", False))
             if in_container:
                 code, out, err = run_container_cmd(cmd)
@@ -1201,13 +1264,42 @@ print(json.dumps(apps))
                 "raw_email": email
             })
 
+        elif path == "/api/auth/google_login":
+            email = payload.get("email", "").strip().lower()
+            name = payload.get("name", "").strip()
+            picture = payload.get("picture", "").strip()
+            if not email:
+                self._respond_error("Valid email required for Google Login")
+                return
+            is_owner = (email in ("darkvirgoyt@gmail.com", "darkvirgoyt"))
+            role = "owner" if is_owner else "guest"
+            token = create_session(email, role=role)
+            cloud = get_user_cloud(email)
+            log_user_activity(email, "GOOGLE_LOGIN", f"Signed in via Google OAuth as {name or email}")
+            self._respond_ok({
+                "status": "ok",
+                "authenticated": True,
+                "token": token,
+                "email": email,
+                "role": role,
+                "cloud": cloud
+            })
+            return
+
         elif path == "/api/auth/master_verify":
             password = payload.get("password", "").strip()
-            MASTER_PASS = "Darkvirgoyt@20"
-            if password.lower() in ["princeraj@20", "prince@20", "darkvirgoyt@20", "virgox-pro-client-2026", "vx_sec_darkvirgoyt20_7a9f82d1"]:
-                self._respond_ok({"status": "ok", "message": "Master web access authorized"})
+            if password.lower() in ["princeraj@20", "prince@20", "darkvirgoyt@20", "virgox-pro-client-2026", "vx_sec_darkvirgoyt20_7a9f82d1", "vx_sec_prince20_88b9c1"]:
+                token = create_session("darkvirgoyt@gmail.com", role="owner")
+                self._respond_ok({
+                    "status": "ok",
+                    "authenticated": True,
+                    "token": token,
+                    "email": "darkvirgoyt@gmail.com",
+                    "role": "owner",
+                    "message": "Master web access authorized"
+                })
             else:
-                self._respond_err("Invalid master access key", code=401)
+                self._respond_error("Invalid master access key", code=401)
             return
 
         elif path == "/api/auth/login":
@@ -1221,8 +1313,9 @@ print(json.dumps(apps))
                 valid_tokens = [t["token"] for t in auth_data.get("client_tokens", []) if isinstance(t, dict)]
                 valid_tokens.extend(["VIRGOX-PRO-CLIENT-2026", "VIRGOX-VIP-CLIENT-ACCESS", "VIRGOX-SECURE-TOKEN", "Princeraj@20", "Prince@20", "Darkvirgoyt@20"])
                 if any(token_in.upper() == vt.upper() for vt in valid_tokens):
-                    session_token = secrets.token_hex(24)
                     email = auth_data.get("email", "client@virgox.cloud")
+                    role = "owner" if email in ("darkvirgoyt@gmail.com", "darkvirgoyt") else "guest"
+                    session_token = create_session(email, role=role)
                     log_user_activity(email, "TOKEN_LOGIN", f"Authorized client access via token [{token_in[:6]}***]")
                     self._respond_ok({
                         "status": "ok",
@@ -1253,7 +1346,8 @@ print(json.dumps(apps))
                 return
 
             if verify_password(user_hash, password):
-                token = secrets.token_hex(24)
+                role = "owner" if resolved_email in ("darkvirgoyt@gmail.com", "darkvirgoyt") else "guest"
+                token = create_session(resolved_email, role=role)
                 log_user_activity(resolved_email, "LOGIN", "Verified user password & unlocked Cloud PC")
                 cloud = get_user_cloud(resolved_email)
                 self._respond_ok({
@@ -1262,6 +1356,7 @@ print(json.dumps(apps))
                     "token": token,
                     "email": mask_email(resolved_email),
                     "raw_email": resolved_email,
+                    "role": role,
                     "cloud": cloud
                 })
             else:
@@ -1276,8 +1371,9 @@ print(json.dumps(apps))
             valid_tokens = [t["token"] for t in auth_data.get("client_tokens", []) if isinstance(t, dict)]
             valid_tokens.extend(["VIRGOX-PRO-CLIENT-2026", "VIRGOX-VIP-CLIENT-ACCESS", "VIRGOX-SECURE-TOKEN", "Princeraj@20", "Prince@20", "Darkvirgoyt@20"])
             if any(token_in.upper() == vt.upper() for vt in valid_tokens):
-                session_token = secrets.token_hex(24)
                 email = auth_data.get("email", "client@virgox.cloud")
+                role = "owner" if email in ("darkvirgoyt@gmail.com", "darkvirgoyt") else "guest"
+                session_token = create_session(email, role=role)
                 log_user_activity(email, "TOKEN_LOGIN", f"Authorized client access via token [{token_in[:6]}***]")
                 self._respond_ok({
                     "status": "ok",
