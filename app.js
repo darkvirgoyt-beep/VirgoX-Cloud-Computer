@@ -1378,18 +1378,6 @@
 
       nativeDesk.innerHTML = `
         <div class="cyber-desktop-workspace" id="cyber-desktop-canvas">
-          <div class="cyber-desktop-watermark">
-            VIRGOX CYBER OS<br>
-            <span style="font-size:1.05rem; opacity:0.85;">64 GB VIRTUAL RAM • 120 FPS</span>
-          </div>
-
-          <div class="cyber-desktop-hud">
-            <div class="hud-row"><span>⚡ CPU:</span> <span class="hud-val">14% (32-Core Turbo)</span></div>
-            <div class="hud-row"><span>🧠 RAM:</span> <span class="hud-val">64 GB (ZRAM Engine)</span></div>
-            <div class="hud-row"><span>💽 DISK:</span> <span class="hud-val">5.0 TB (/dev/loop0)</span></div>
-            <div class="hud-row"><span>🎮 FPS:</span> <span class="hud-val" style="color:var(--neon-green);">120 FPS SYNC</span></div>
-          </div>
-
           <div class="desktop-icons-container" id="desktop-icons-container"></div>
           <div id="desktop-windows-layer"></div>
         </div>
@@ -1411,9 +1399,9 @@
             <div class="taskbar-active-chips" id="taskbar-active-chips"></div>
           </div>
           <div class="taskbar-right-tray">
-            <span title="High-Speed Hardware Symmetrical">📶 10G</span>
-            <span title="Audio Driver">🔊</span>
-            <span style="color:var(--neon-green); font-weight:700;">120Hz</span>
+            <span title="Network">&#128246;</span>
+            <span title="Volume">&#128266;</span>
+            <span title="Battery">&#128267;</span>
             <span id="taskbar-clock">12:00:00 PM</span>
           </div>
         </footer>
@@ -3009,8 +2997,6 @@ print("All systems operational.")
     const nativeDesk = document.getElementById('native-cyber-desktop');
     if (!nativeDesk) return;
 
-    const watermark = nativeDesk.querySelector('.cyber-desktop-watermark');
-    const hud = nativeDesk.querySelector('.cyber-desktop-hud');
     const taskbar = nativeDesk.querySelector('.cyber-desktop-taskbar');
     const startMenu = document.getElementById('cyber-start-menu');
     const iconsContainer = document.getElementById('desktop-icons-container');
@@ -3018,29 +3004,10 @@ print("All systems operational.")
     if (isWin) {
       nativeDesk.classList.add('os-win11');
 
-      if (watermark) {
-        watermark.innerHTML = `🪟 WINDOWS 11 PRO<br><span style="font-size:0.95rem; opacity:0.85;">OFFICIAL EDITION • 64 GB RAM • 120 FPS</span>`;
-      }
-
-      if (hud) {
-        hud.innerHTML = `
-          <div class="hud-row"><span>🪟 OS:</span> <span class="hud-val" style="color:#60a5fa;">Windows 11 Pro 24H2</span></div>
-          <div class="hud-row"><span>⚡ CPU:</span> <span class="hud-val">Snapdragon 32-Thread Turbo</span></div>
-          <div class="hud-row"><span>🧠 RAM:</span> <span class="hud-val">64.0 GB Installed Virtual RAM</span></div>
-          <div class="hud-row"><span>💽 DISK:</span> <span class="hud-val">5.0 TB Local Disk (C:)</span></div>
-          <div class="hud-row"><span>🎮 GPU:</span> <span class="hud-val" style="color:var(--neon-green);">120Hz Hardware Sync</span></div>
-        `;
-      }
-
       if (taskbar) {
         taskbar.classList.add('win11');
         taskbar.innerHTML = `
           <div class="taskbar-left" style="display:flex; align-items:center;">
-            <div style="font-size:0.75rem; color:#94a3b8; display:flex; align-items:center; gap:6px;">
-              <span>🌤️ 74°F</span>
-              <span style="opacity:0.6;">|</span>
-              <span style="color:#38bdf8;">Widget Hub</span>
-            </div>
           </div>
 
           <div class="win11-taskbar-center" id="win11-taskbar-center">
@@ -3061,11 +3028,17 @@ print("All systems operational.")
             <div class="taskbar-active-chips" id="taskbar-active-chips" style="margin-left:4px;"></div>
           </div>
 
-          <div class="taskbar-right-tray" style="display:flex; align-items:center; gap:8px;">
+          <div class="taskbar-right-tray" style="display:flex; align-items:center; gap:12px;">
             <div class="win11-tray-cluster">
-              <span title="Wi-Fi 10G Turbo">📶</span>
-              <span title="Audio Pulse">🔊</span>
-              <span title="Battery">🔋 100%</span>
+              <span class="win11-tray-glyph" title="Network">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e8e8ea" stroke-width="2" stroke-linecap="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+              </span>
+              <span class="win11-tray-glyph" title="Volume">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e8e8ea" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+              </span>
+              <span class="win11-tray-glyph" title="Battery">
+                <svg width="22" height="16" viewBox="0 0 26 16" fill="none"><rect x="1" y="3.5" width="21" height="9" rx="2.5" stroke="#e8e8ea" stroke-width="1.3"/><rect x="3" y="5.5" width="14" height="5" rx="1" fill="#e8e8ea"/><path d="M24 7v2a2.2 2.2 0 0 0 0-2z" fill="#e8e8ea"/></svg>
+              </span>
             </div>
             <div class="win11-clock-cluster" id="win11-clock-box">
               <span id="win11-clock-time">12:00 PM</span>
@@ -3239,17 +3212,6 @@ print("All systems operational.")
     } else {
       // Return to Linux
       nativeDesk.classList.remove('os-win11');
-      if (watermark) {
-        watermark.innerHTML = `VIRGOX CYBER OS<br><span style="font-size:1.05rem; opacity:0.85;">64 GB VIRTUAL RAM • 120 FPS</span>`;
-      }
-      if (hud) {
-        hud.innerHTML = `
-          <div class="hud-row"><span>⚡ CPU:</span> <span class="hud-val">14% (32-Core Turbo)</span></div>
-          <div class="hud-row"><span>🧠 RAM:</span> <span class="hud-val">64 GB (ZRAM Engine)</span></div>
-          <div class="hud-row"><span>💽 DISK:</span> <span class="hud-val">5.0 TB (/dev/loop0)</span></div>
-          <div class="hud-row"><span>🎮 FPS:</span> <span class="hud-val" style="color:var(--neon-green);">120 FPS SYNC</span></div>
-        `;
-      }
       if (taskbar) {
         taskbar.classList.remove('win11');
         taskbar.innerHTML = `
@@ -3268,9 +3230,9 @@ print("All systems operational.")
             <div class="taskbar-active-chips" id="taskbar-active-chips"></div>
           </div>
           <div class="taskbar-right-tray">
-            <span title="High-Speed Hardware Symmetrical">📶 10G</span>
-            <span title="Audio Driver">🔊</span>
-            <span style="color:var(--neon-green); font-weight:700;">120Hz</span>
+            <span title="Network">&#128246;</span>
+            <span title="Volume">&#128266;</span>
+            <span title="Battery">&#128267;</span>
             <span id="taskbar-clock">12:00:00 PM</span>
           </div>
         `;

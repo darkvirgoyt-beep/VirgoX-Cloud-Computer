@@ -2394,11 +2394,8 @@ html, body, .viewport-container, .screen-wrapper, .screen-touchpad-overlay {
   flex: 1;
   position: relative;
   overflow: hidden;
-  padding: 12px;
-  background-image: 
-    linear-gradient(rgba(0, 229, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 229, 255, 0.03) 1px, transparent 1px);
-  background-size: 32px 32px;
+  padding: 0;
+  background: transparent;
 }
 
 /* Watermark */
@@ -2451,37 +2448,39 @@ html, body, .viewport-container, .screen-wrapper, .screen-touchpad-overlay {
   font-weight: 700;
 }
 
-/* Desktop Icon Grid */
+/* Desktop Icon Grid — Win11 puts icons in a left-hand column, 8px gutter,
+   76px cells, label in 12px Segoe with a soft shadow. */
 .desktop-icons-container {
   display: flex;
   flex-direction: column;
   flex-wrap: wrap;
   align-content: flex-start;
-  gap: 12px;
-  height: calc(100% - 40px);
+  gap: 2px;
+  height: 100%;
   max-width: 100%;
   position: relative;
   z-index: 2;
+  padding: 8px 6px;
 }
 
 .desktop-icon {
-  width: 76px;
+  width: 78px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   cursor: pointer;
-  padding: 6px 4px;
-  border-radius: 8px;
-  transition: all 0.15s ease;
+  padding: 6px 4px 7px;
+  border-radius: 4px;
+  transition: background 0.1s ease;
   background: transparent;
-  border: 1px solid transparent;
+  border: none;
 }
 
 .desktop-icon:hover, .desktop-icon:active {
-  background: rgba(0, 229, 255, 0.15);
-  border: 1px solid rgba(0, 229, 255, 0.4);
-  box-shadow: 0 0 10px rgba(0, 229, 255, 0.2);
+  background: rgba(255, 255, 255, 0.14);
+  border: none;
+  box-shadow: none;
 }
 
 .desktop-icon .icon-art {
@@ -2489,40 +2488,49 @@ html, body, .viewport-container, .screen-wrapper, .screen-touchpad-overlay {
   display: flex;
   align-items: center;
   justify-content: center;
-  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
+}
+
+.desktop-icon .icon-art svg {
+  width: 34px;
+  height: 34px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
 }
 
 .desktop-icon .icon-label {
   font-size: 0.72rem;
   color: #fff;
-  font-family: var(--font-display);
-  font-weight: 600;
+  font-family: 'Segoe UI Variable Text', 'Segoe UI', sans-serif;
+  font-weight: 400;
   text-align: center;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
-  line-height: 1.1;
-  word-break: break-word;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 8px rgba(0, 0, 0, 0.7);
+  line-height: 1.2;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
-/* Floating Window System */
+/* Floating Window System — Fluent. Mica-tinted body, 1px hairline, soft drop
+   shadow, no glow. The active state is a lighter hairline, not a colour change. */
 .cyber-window {
   position: absolute;
   min-width: 280px;
   min-height: 200px;
-  background: rgba(9, 13, 24, 0.95);
-  border: 1px solid rgba(0, 229, 255, 0.4);
+  background: rgba(32, 32, 32, 0.90);
+  border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 8px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 15px rgba(0, 229, 255, 0.15);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   z-index: 10;
-  backdrop-filter: blur(14px);
+  backdrop-filter: blur(24px) saturate(1.3);
+  -webkit-backdrop-filter: blur(24px) saturate(1.3);
   transition: transform 0.15s ease, opacity 0.15s ease;
 }
 
 .cyber-window.active {
-  border-color: var(--neon-cyan);
-  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.9), 0 0 20px rgba(0, 229, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55), 0 3px 8px rgba(0, 0, 0, 0.35);
 }
 
 .cyber-window.minimized {
@@ -2537,17 +2545,26 @@ html, body, .viewport-container, .screen-wrapper, .screen-touchpad-overlay {
   border-radius: 0;
 }
 
-/* Window Titlebar */
+/* Window Titlebar — Fluent unified: same fill as the body, no divider until
+   the window is hovered, caption glyphs bare until hover then fill. */
 .cyber-window-titlebar {
-  height: 34px;
-  background: linear-gradient(90deg, #11182c, #0c1220);
-  border-bottom: 1px solid rgba(0, 229, 255, 0.25);
+  height: 32px;
+  flex: 0 0 32px;
+  background: transparent;
+  border-bottom: 1px solid transparent;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 10px;
+  padding: 0 4px 0 12px;
   cursor: grab;
   touch-action: none;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.cyber-window:hover .cyber-window-titlebar,
+.cyber-window.active .cyber-window-titlebar {
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom-color: rgba(255, 255, 255, 0.06);
 }
 
 .cyber-window-titlebar:active {
@@ -2570,41 +2587,43 @@ html, body, .viewport-container, .screen-wrapper, .screen-touchpad-overlay {
 .win-title-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0;
 }
 
+/* Fluent caption buttons: no chrome at rest, square glyph on hover, close goes red. */
 .win-btn {
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.05);
-  color: #ccc;
+  width: 40px;
+  height: 32px;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  color: #e8e8ea;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
+  line-height: 1;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.1s ease, color 0.1s ease;
 }
 
 .win-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.10);
   color: #fff;
 }
 
 .win-btn.close:hover {
-  background: #ff3366;
-  border-color: #ff3366;
+  background: #c42b1c;
+  border: none;
   color: #fff;
 }
 
-/* Window Body */
+/* Window Body — transparent so the Mica titlebar/body tint reads as one surface. */
 .cyber-window-body {
   flex: 1;
   overflow: auto;
   position: relative;
-  background: #070a14;
+  background: transparent;
 }
 
 /* Terminal Inside Window */
@@ -3141,42 +3160,31 @@ html, body, .viewport-container, .screen-wrapper, .screen-touchpad-overlay {
 /* ==============================================================================
    🪟 WINDOWS 11 PRO — OFFICIAL DESKTOP EXPERIENCE
    ============================================================================== */
+/* Windows 11 wallpaper — abstract "Bloom" approximation, layered soft light only.
+   No hue-shifting animation, no neon: Win11's wallpaper is a still image and the
+   taskbar/windows supply all the colour in the UI. */
 .native-cyber-desktop.os-win11 {
-  background: radial-gradient(ellipse at 50% 60%, #1e3a8a 0%, #0f172a 45%, #020617 100%);
-  background-image: 
-    radial-gradient(ellipse at 50% 45%, rgba(59, 130, 246, 0.45) 0%, rgba(147, 51, 234, 0.3) 35%, transparent 75%),
-    radial-gradient(circle at 50% 100%, #0a1128 0%, #030712 100%);
+  background-color: #0b1220;
+  background-image:
+    radial-gradient(ellipse 60% 45% at 50% 58%, rgba(120, 160, 255, 0.42) 0%, rgba(120, 160, 255, 0) 70%),
+    radial-gradient(ellipse 45% 38% at 34% 34%, rgba(96, 128, 255, 0.38) 0%, rgba(96, 128, 255, 0) 72%),
+    radial-gradient(ellipse 42% 36% at 68% 30%, rgba(160, 130, 255, 0.34) 0%, rgba(160, 130, 255, 0) 72%),
+    radial-gradient(ellipse 55% 40% at 50% 88%, rgba(40, 90, 200, 0.34) 0%, rgba(40, 90, 200, 0) 74%),
+    linear-gradient(170deg, #16203a 0%, #0b1220 55%, #060a14 100%);
   font-family: 'Segoe UI Variable Text', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-}
-
-.native-cyber-desktop.os-win11 .cyber-desktop-watermark {
-  color: rgba(255, 255, 255, 0.08);
-  font-family: 'Segoe UI Variable Display', 'Segoe UI', sans-serif;
-  letter-spacing: 2px;
-}
-
-.native-cyber-desktop.os-win11 .cyber-desktop-hud {
-  background: rgba(20, 24, 38, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  backdrop-filter: blur(20px);
-}
-
-.native-cyber-desktop.os-win11 .cyber-desktop-hud .hud-row {
-  font-family: 'Segoe UI', sans-serif;
-  color: #cbd5e1;
 }
 
 /* Windows 11 Centered Taskbar */
 .native-cyber-desktop.os-win11 .cyber-desktop-taskbar {
-  background: rgba(30, 34, 48, 0.85);
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(24px);
+  background: rgba(32, 32, 32, 0.72);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(30px) saturate(1.6);
+  -webkit-backdrop-filter: blur(30px) saturate(1.6);
   position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 12px;
+  padding: 0 8px;
   height: 48px;
 }
 
@@ -3216,7 +3224,7 @@ html, body, .viewport-container, .screen-wrapper, .screen-touchpad-overlay {
 .win11-taskbar-icon {
   width: 40px;
   height: 40px;
-  border-radius: 6px;
+  border-radius: 5px;
   border: none;
   background: transparent;
   display: flex;
@@ -3224,35 +3232,51 @@ html, body, .viewport-container, .screen-wrapper, .screen-touchpad-overlay {
   justify-content: center;
   font-size: 1.35rem;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.12s ease;
   position: relative;
 }
 
 .win11-taskbar-icon:hover {
-  background: rgba(255, 255, 255, 0.12);
-  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.10);
+}
+
+.win11-taskbar-icon svg {
+  width: 24px;
+  height: 24px;
 }
 
 .win11-taskbar-icon.active::after {
   content: '';
   position: absolute;
   bottom: 2px;
-  width: 14px;
+  width: 6px;
   height: 3px;
-  background: #3b82f6;
+  background: #e8e8ea;
   border-radius: 2px;
+  opacity: 0.9;
 }
 
 .win11-tray-cluster {
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 4px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
+  gap: 12px;
+  background: transparent;
+  border: none;
+  padding: 4px 6px;
+  border-radius: 5px;
+  cursor: default;
+  transition: background 0.12s ease;
+}
+
+.win11-tray-cluster:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.win11-tray-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.92;
 }
 
 .win11-tray-cluster:hover {
