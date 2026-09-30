@@ -14,7 +14,7 @@
 
 set -u
 
-VXC_VERSION="1.0.0"
+VXC_VERSION="1.1.0"
 
 # ---- config ---------------------------------------------------------------
 
@@ -22,8 +22,10 @@ CONFIG_DIR="${VXC_CONFIG_DIR:-$HOME/.config/vxc}"
 CONFIG_FILE="$CONFIG_DIR/config"
 SESSION_FILE="$CONFIG_DIR/session"
 
-# Base URL of the VirgoX auth service. Override with VXC_AUTH or `vxc config`.
-AUTH_BASE="${VXC_AUTH:-}"
+# Base URL of the VirgoX auth service. Defaults to loopback: `vxc auth login`
+# starts the service itself when nothing is listening, so a fresh install needs
+# no configuration at all. Override with VXC_AUTH or `vxc config set auth`.
+AUTH_BASE="${VXC_AUTH:-http://127.0.0.1:8787}"
 CLIENT_ID="${VXC_CLIENT_ID:-virgox-cloud-pc}"
 SCOPE="${VXC_SCOPE:-workstation:read}"
 WORKSTATION_URL="${VXC_WORKSTATION:-https://darkvirgoyt-beep.github.io/VirgoX-Cloud-Computer/}"
@@ -33,6 +35,7 @@ if [ -z "$AUTH_BASE" ] && [ -f "$CONFIG_FILE" ]; then
   . "$CONFIG_FILE"
 fi
 AUTH_BASE="${VXC_AUTH:-$AUTH_BASE}"
+AUTH_BASE="${AUTH_BASE:-http://127.0.0.1:8787}"
 
 # ---- output ---------------------------------------------------------------
 
@@ -153,6 +156,127 @@ require_auth_base() {
   fi
 }
 
+# ---- local auth service --------------------------------------------------
+#
+# `vxc auth login` should be one command. If nothing is reachable we start the
+# auth service ourselves, in the background, run the device flow against it, and
+# shut it down afterwards. That keeps the user out of the "clone the repo, run
+# node, configure a URL" dance.
+
+NODE_BIN=""
+find_node() {
+  if command -v node >/dev/null 2>&1; then NODE_BIN=node
+  elif command -v nodejs >/dev/null 2>&1; then NODE_BIN=nodejs
+  fi
+}
+
+service_script() {
+  printf '%s' "$CONFIG_DIR/auth-service.js"
+}
+
+# fetch the service script if we do not already have it
+ensure_service() {
+  _dest="$CONFIG_DIR/auth-service.js"
+  if [ -s "$_dest" ]; then return 0; fi
+
+  mkdir -p "$CONFIG_DIR"
+  local src="$WORKSTATION_URL/server/auth-service.js"
+  printf '  fetching auth service … '
+  if [ "$have_curl" -eq 1 ]; then
+    curl -fsSL "$src" -o "$_dest" >/dev/null 2>&1
+  else
+    wget -qO "$_dest" "$src" >/dev/null 2>&1
+  fi
+  if [ ! -s "$_dest" ]; then
+    printf '%s\n' "failed"
+    warn "could not download the auth service from $src"
+    return 1
+  fi
+  printf '%s\n' "ok"
+  return 0
+}
+
+# health <url> -> 0 if something answers /health
+health() {
+  if [ "$have_curl" -eq 1 ]; then
+    curl -fsS -m 2 "$1/health" >/dev/null 2>&1
+  else
+    wget -q -T 2 -O /dev/null "$1/health" >/dev/null 2>&1
+  fi
+}
+
+AUTH_PID=""
+
+start_local_service() {
+  _port="$1"
+  _url="http://127.0.0.1:$_port"
+
+  if health "$_url"; then
+    return 0
+  fi
+
+  find_node
+  if [ -z "$NODE_BIN" ]; then
+    bad "no node found — run: pkg install nodejs"
+    return 1
+  fi
+
+  ensure_service || return 1
+
+  printf '  starting local auth service on port %s … ' "$_port"
+  # The service does not serve the approval page — auth.html is a static file on
+  # the workstation. Without this the verification URI would point at the
+  # service root and the link the CLI prints would 404.
+  PORT="$_port" HOST=127.0.0.1 \
+  VXC_VERIFY_URL="${WORKSTATION_URL}auth.html" \
+    "$NODE_BIN" "$(service_script)" \
+    >"$CONFIG_DIR/auth-service.log" 2>&1 &
+  AUTH_PID=$!
+
+  # Wait for it to answer.
+  _n=0
+  while [ "$_n" -lt 25 ]; do
+    if health "$_url"; then
+      printf '%s\n' "ok"
+      return 0
+    fi
+    # If it died, do not spin for 25s.
+    kill -0 "$AUTH_PID" 2>/dev/null || break
+    sleep 1
+    _n=$((_n + 1))
+  done
+
+  printf '%s\n' "failed"
+  stop_local_service
+  warn "the auth service did not come up — see $CONFIG_DIR/auth-service.log"
+  return 1
+}
+
+stop_local_service() {
+  if [ -n "$AUTH_PID" ]; then
+    kill "$AUTH_PID" 2>/dev/null
+    wait "$AUTH_PID" 2>/dev/null
+    AUTH_PID=""
+  fi
+}
+
+cmd_serve() {
+  port="${1:-8787}"
+  find_node
+  [ -n "$NODE_BIN" ] || { bad "no node found — run: pkg install nodejs"; exit 1; }
+  ensure_service || exit 1
+
+  trap 'stop_local_service; exit 0' INT TERM
+  say ""
+  dim "  serving on http://127.0.0.1:$port"
+  dim "  log: $CONFIG_DIR/auth-service.log"
+  say ""
+  PORT="$port" HOST=127.0.0.1 \
+  VXC_VERIFY_URL="${WORKSTATION_URL}auth.html" \
+    "$NODE_BIN" "$(service_script)"
+  stop_local_service
+}
+
 cmd_login() {
   require_auth_base
 
@@ -165,6 +289,20 @@ cmd_login() {
   printf '%s\n' ""
   printf '%sVirgoX Cloud PC — device login%s\n' "$C_BLD$C_BLU" "$C_OFF"
   printf '%s\n' ""
+  # If nothing is reachable, run our own rather than making the user stand up a
+  # server by hand. AUTH_BASE already defaults to 127.0.0.1.
+  if ! health "$AUTH_BASE"; then
+    case "$AUTH_BASE" in
+      http://127.0.0.1:*|http://localhost:*)
+        if start_local_service "${AUTH_BASE##*:}"; then
+          trap 'stop_local_service' EXIT INT TERM
+        else
+          exit 1
+        fi
+        ;;
+    esac
+  fi
+
   printf '  Contacting %s … ' "$AUTH_BASE"
 
   http_post "$AUTH_BASE/device/code" \
@@ -173,9 +311,12 @@ cmd_login() {
 
   if [ "$HTTP_STATUS" = "000" ] || [ -z "$resp" ]; then
     printf '%s\n' ""
-    bad "could not reach the auth service"
+    bad "could not reach the auth service at $AUTH_BASE"
     say ""
-    dim "  Checked $AUTH_BASE"
+    say "  Run ${C_BLD}vxc auth serve${C_OFF} in another tab, or point at a remote one:"
+    say "    ${C_BLD}vxc config set auth https://your-host${C_OFF}"
+    say ""
+    stop_local_service
     exit 1
   fi
 
@@ -408,6 +549,7 @@ ${C_BLD}USAGE${C_OFF}
   vxc auth status             show the current session
   vxc auth logout             clear the session
   vxc auth token              print the session token
+  vxc auth serve [port]       run the auth service here (default 8787)
   vxc app <name>              open an app in the web workstation
   vxc apps                    list available apps
   vxc config set auth <url>   point at your auth service
@@ -430,6 +572,7 @@ case "${1:-}" in
       status|whoami)    cmd_status ;;
       token)            cmd_token ;;
       logout|signout)   cmd_logout ;;
+      serve)            shift 2; cmd_serve "$@" ;;
       *)
         say ""
         bad "unknown: vxc auth ${2:-}"

@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>VirgoX — Authorise device</title>
-<link rel="stylesheet" href="style.css?v=20261001_01" />
+<link rel="stylesheet" href="style.css?v=20261001_02" />
 <style>
   body {
     margin: 0;
@@ -274,6 +274,15 @@
   var origin = document.getElementById('origin');
 
   origin.textContent = 'VirgoX Cloud PC · ' + location.host;
+
+  // The CLI appends ?code=XXXX-XXXX to the verification URI, so tapping the
+  // link it printed lands you here with the code already filled in.
+  var prefill = new URLSearchParams(location.search).get('code');
+  if (prefill) {
+    input.value = normalise(prefill);
+    submit.disabled = false;
+    say('wait', 'Code loaded from the link. Tap Authorise to finish.');
+  }
 
   function say(kind, text) {
     status.className = 'status show ' + kind;
