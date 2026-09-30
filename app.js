@@ -203,6 +203,10 @@
     const modeLabel = document.getElementById('desktop-mode-label');
     const btnToggle = document.getElementById('btn-toggle-desktop-mode');
     const overlay = document.getElementById('screen-touchpad-overlay');
+    const panOverlay = document.getElementById('pan-overlay');
+    const crosshairTarget = document.getElementById('crosshair-target');
+    const floatingPill = document.getElementById('floating-input-mode-pill');
+    const quickMouseBar = document.querySelector('.quick-mouse-bar');
 
     if (state.config.desktopMode === 'stream' && state.config.desktopUrl) {
       if (nativeDesk) nativeDesk.classList.add('hidden');
@@ -213,6 +217,13 @@
           desktopFrame.src = activeUrl;
         }
       }
+      if (overlay) {
+        overlay.style.display = '';
+        overlay.style.pointerEvents = 'auto';
+        overlay.classList.remove('hidden');
+      }
+      if (quickMouseBar) quickMouseBar.style.display = '';
+      if (floatingPill) floatingPill.style.display = '';
       if (modeLabel) modeLabel.textContent = 'Remote Stream';
       if (btnToggle) {
         btnToggle.classList.add('neon-cyan');
@@ -224,6 +235,15 @@
         desktopFrame.style.display = 'none';
         desktopFrame.src = 'about:blank';
       }
+      if (overlay) {
+        overlay.style.display = 'none';
+        overlay.style.pointerEvents = 'none';
+        overlay.classList.add('hidden');
+      }
+      if (panOverlay) panOverlay.style.display = 'none';
+      if (crosshairTarget) crosshairTarget.classList.add('hidden');
+      if (floatingPill) floatingPill.style.display = 'none';
+      if (quickMouseBar) quickMouseBar.style.display = 'none';
       if (nativeDesk) nativeDesk.classList.remove('hidden');
       if (modeLabel) modeLabel.textContent = 'Native Cyber PC';
       if (btnToggle) {
@@ -928,7 +948,7 @@
 
   const PRINCE_PFP_URL = 'https://avatars.githubusercontent.com/u/263169230?v=4';
 
-  let highestZ = 20;
+  let highestZ = 600;
   const openWindows = {};
 
   
@@ -1475,10 +1495,7 @@
           <div class="icon-art">${app.icon}</div>
           <div class="icon-label">${app.name}</div>
         `;
-        item.addEventListener('click', (e) => {
-          e.stopPropagation();
-          openAppWindow(app.id);
-        });
+        attachAppLaunch(item, app.id);
         iconsContainer.appendChild(item);
       });
     }
@@ -1487,28 +1504,38 @@
     const startBtn = document.getElementById('taskbar-start-toggle');
     const startMenu = document.getElementById('cyber-start-menu');
     if (startBtn && startMenu) {
-      startBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
+      let lastToggle = 0;
+      function toggleStart(e) {
+        if (e) e.stopPropagation();
+        const now = Date.now();
+        if (now - lastToggle < 300) return;
+        lastToggle = now;
         startMenu.classList.toggle('hidden');
+      }
+      startBtn.addEventListener('click', toggleStart);
+      startBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        toggleStart(e);
       });
+
       document.addEventListener('click', (e) => {
-        if (!startMenu.contains(e.target) && e.target !== startBtn) {
+        if (!startMenu.contains(e.target) && e.target !== startBtn && !startBtn.contains(e.target)) {
           startMenu.classList.add('hidden');
         }
       });
       startMenu.querySelectorAll('[data-start-app]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const appId = btn.getAttribute('data-start-app');
-          openAppWindow(appId);
-          startMenu.classList.add('hidden');
-        });
+        const appId = btn.getAttribute('data-start-app');
+        if (appId) {
+          attachAppLaunch(btn, appId);
+          btn.addEventListener('click', () => startMenu.classList.add('hidden'));
+          btn.addEventListener('touchend', () => startMenu.classList.add('hidden'));
+        }
       });
       const startSettings = document.getElementById('btn-start-settings');
       if (startSettings) {
         startSettings.addEventListener('click', () => {
           startMenu.classList.add('hidden');
-          const btnSet = document.getElementById('btn-settings');
-          if (btnSet) btnSet.click();
+          openAppWindow('settings');
         });
       }
       const startLogout = document.getElementById('btn-start-logout');
@@ -1522,10 +1549,8 @@
 
     // Taskbar pinned clicks
     document.querySelectorAll('.taskbar-app-icon').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const appId = btn.getAttribute('data-open');
-        openAppWindow(appId);
-      });
+      const appId = btn.getAttribute('data-open');
+      if (appId) attachAppLaunch(btn, appId);
     });
 
     // Real-Time Clock
@@ -1550,13 +1575,49 @@
     updateDesktopModeUI();
   }
 
+  function attachAppLaunch(el, appId) {
+    if (!el || !appId) return;
+    let lastLaunch = 0;
+    function doLaunch(e) {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      const now = Date.now();
+      if (now - lastLaunch < 350) return;
+      lastLaunch = now;
+      openAppWindow(appId);
+    }
+    el.addEventListener('click', doLaunch);
+    el.addEventListener('touchend', doLaunch);
+  }
+
   window.openAppWindow = function(appId) { return openAppWindow(appId); };
+  window.attachAppLaunch = attachAppLaunch;
 
   function openAppWindow(appId) {
-    const windowsLayer = document.getElementById('desktop-windows-layer');
+    let windowsLayer = document.getElementById('desktop-windows-layer');
+    if (!windowsLayer) {
+      const canvas = document.getElementById('cyber-desktop-canvas');
+      if (canvas) {
+        windowsLayer = document.createElement('div');
+        windowsLayer.id = 'desktop-windows-layer';
+        canvas.appendChild(windowsLayer);
+      }
+    }
     if (!windowsLayer) return;
 
-    // Direct Windows 11 Settings window
+    // Switch to desktop tab if needed
+    const deskTab = document.querySelector('.tab-btn[data-tab="desktop"]');
+    if (deskTab && !deskTab.classList.contains('active')) {
+      deskTab.click();
+    }
+
+    // Force native desktop mode
+    if (state.config.desktopMode !== 'native') {
+      state.config.desktopMode = 'native';
+      updateDesktopModeUI();
+    }
 
     if (openWindows[appId]) {
       const win = openWindows[appId];
@@ -1570,6 +1631,7 @@
     win.className = 'cyber-window active';
     win.id = `win-${appId}`;
     win.style.zIndex = highestZ;
+    win.style.pointerEvents = 'auto';
 
     // Window configurations
     const isWinTheme = state.config.osMode === 'windows';
@@ -2903,11 +2965,21 @@ print("All systems operational.")
     // Start menu app clicks (pinned & recommended)
     if (startMenu) {
       startMenu.querySelectorAll('[data-start-app]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const appId = btn.getAttribute('data-start-app');
-          if (appId) openAppWindow(appId);
-          startMenu.classList.add('hidden');
-        });
+        const appId = btn.getAttribute('data-start-app');
+        if (appId) {
+          attachAppLaunch(btn, appId);
+          btn.addEventListener('click', () => startMenu.classList.add('hidden'));
+          btn.addEventListener('touchend', () => startMenu.classList.add('hidden'));
+        }
+      });
+
+      startMenu.querySelectorAll('.win11-rec-row').forEach(row => {
+        const appId = row.getAttribute('data-start-app');
+        if (appId) {
+          attachAppLaunch(row, appId);
+          row.addEventListener('click', () => startMenu.classList.add('hidden'));
+          row.addEventListener('touchend', () => startMenu.classList.add('hidden'));
+        }
       });
 
       const startSettings = document.getElementById('btn-start-settings');
@@ -2958,10 +3030,8 @@ print("All systems operational.")
 
     // Taskbar pinned clicks
     document.querySelectorAll('.taskbar-app-icon, .win11-taskbar-icon').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const appId = btn.getAttribute('data-open');
-        if (appId) openAppWindow(appId);
-      });
+      const appId = btn.getAttribute('data-open');
+      if (appId) attachAppLaunch(btn, appId);
     });
 
     // Right-Click Context Menu on Desktop Canvas
@@ -3229,10 +3299,7 @@ print("All systems operational.")
             <div class="icon-art" style="width:42px; height:42px; display:flex; align-items:center; justify-content:center;">${app.icon}</div>
             <div class="icon-label" style="margin-top:2px;">${app.name}</div>
           `;
-          item.addEventListener('click', (e) => {
-            e.stopPropagation();
-            openAppWindow(app.id);
-          });
+          attachAppLaunch(item, app.id);
           iconsContainer.appendChild(item);
         });
       }
@@ -3331,10 +3398,7 @@ print("All systems operational.")
             <div class="icon-art">${app.icon}</div>
             <div class="icon-label">${app.name}</div>
           `;
-          item.addEventListener('click', (e) => {
-            e.stopPropagation();
-            openAppWindow(app.id);
-          });
+          attachAppLaunch(item, app.id);
           iconsContainer.appendChild(item);
         });
       }
@@ -3463,7 +3527,7 @@ print("All systems operational.")
     state.isScreenTrackpadActive = false;
 
     function updateTrackpadUI() {
-      if (state.isScreenTrackpadActive) {
+      if (state.isScreenTrackpadActive && state.config.desktopMode === 'stream') {
         if (overlay) {
           overlay.classList.remove('hidden');
           overlay.style.pointerEvents = 'auto';
