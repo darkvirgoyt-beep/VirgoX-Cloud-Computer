@@ -146,12 +146,19 @@
     }
     if (welcomeGuest) welcomeGuest.textContent = name;
 
-    if (picture && avatarImg && avatarInitials) {
-      avatarImg.src = picture;
-      avatarImg.style.display = 'block';
-      avatarInitials.style.display = 'none';
-    } else if (avatarInitials) {
-      avatarInitials.textContent = (name.charAt(0) || 'U').toUpperCase();
+    const defaultPrincePic = 'https://avatars.githubusercontent.com/u/263169230?v=4';
+    const effectivePic = picture || (isOwner ? defaultPrincePic : '');
+
+    if (avatarImg && avatarInitials) {
+      if (effectivePic) {
+        avatarImg.src = effectivePic;
+        avatarImg.style.display = 'block';
+        avatarInitials.style.display = 'none';
+      } else {
+        avatarImg.style.display = 'none';
+        avatarInitials.style.display = 'block';
+        avatarInitials.textContent = (name.charAt(0) || 'U').toUpperCase();
+      }
     }
 
     // Connect header lock / logout button
@@ -893,8 +900,439 @@
   // ==========================================================================
   // ⚡ Native Interactive Cyber Workstation Desktop & Window Manager
   // ==========================================================================
+  
+  // ==========================================================================
+  // 🪟 Windows 11 Fluent Vector SVG Icons Library
+  // ==========================================================================
+  const WIN11_ICONS = {
+    start: '<svg width="22" height="22" viewBox="0 0 88 88" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M0 12.4955L35.7273 7.63636V41.4545H0V12.4955ZM0 46.5455H35.7273V80.3636L0 75.5045V46.5455ZM41.0909 6.90909L88 0V41.4545H41.0909V6.90909ZM41.0909 46.5455H88V88L41.0909 81.0909V46.5455Z" fill="#00ADEF"/></svg>',
+    chrome: '<svg width="34" height="34" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path fill="#4CAF50" d="M44 24c0 11.045-8.955 20-20 20S4 35.045 4 24 12.955 4 24 4s20 8.955 20 20z"/><path fill="#FFC107" d="M43.7 20.3L31.5 20.3C29.8 15.6 25.3 12.3 20 12.3c-4.2 0-7.9 2-10.3 5.1L3.9 11.6C7.9 6.9 13.6 4 20 4c10.4 0 19.1 7.1 21.7 16.3h2z"/><path fill="#FF3D00" d="M20 4c-5.7 0-10.9 2.4-14.6 6.3l6.5 11.2C13.2 16.7 16.3 14 20 14h23.7C41.1 7.1 32.4 4 20 4z"/><circle fill="#FFF" cx="24" cy="24" r="10"/><circle fill="#1976D2" cx="24" cy="24" r="7.5"/></svg>',
+    edge: '<svg width="34" height="34" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path fill="#0c59a4" d="M40.9 33.1C39.4 39.5 33.7 44 26.9 44 18.1 44 11 36.9 11 28.1c0-7.7 5.4-14.1 12.7-15.6-.4 1.1-.6 2.3-.6 3.5 0 5.5 4.5 10 10 10 2.8 0 5.3-1.1 7.1-2.9.5 3.3.6 6.8.7 10z"/><path fill="#1193d4" d="M35 15.1c0-4.4-3.6-8-8-8-4.2 0-7.7 3.3-8 7.4 1.5-.3 3.1-.5 4.7-.5 6.2 0 11.3 5.1 11.3 11.3v.8c0-3.9-3.1-7.1-7.1-7.1-1.6 0-3 .5-4.2 1.4.3-3.6 3.4-6.4 7.2-6.4 3.9 0 7.1 3.2 7.1 7.1 0 .4 0 .7-.1 1.1 1.2-1.7 1.9-3.8 1.9-6.1z"/><path fill="#2dd5c4" d="M26.9 4c-3.1 0-6 1-8.3 2.7 1.7 1.4 3.9 2.3 6.3 2.3 5.5 0 10 4.5 10 10 0 1.2-.2 2.3-.6 3.4 3.8-1.5 6.5-5.2 6.5-9.4 0-5-4.5-9-13.9-9z"/></svg>',
+    msstore: '<svg width="34" height="34" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="12" width="36" height="32" rx="4" fill="#0078D4"/><path d="M16 12V10C16 5.6 19.6 2 24 2C28.4 2 32 5.6 32 10V12H28V10C28 7.8 26.2 6 24 6C21.8 6 20 7.8 20 10V12H16Z" fill="#60A5FA"/><rect x="18" y="22" width="5" height="5" fill="#F25022"/><rect x="25" y="22" width="5" height="5" fill="#7FBA00"/><rect x="18" y="29" width="5" height="5" fill="#00A4EF"/><rect x="25" y="29" width="5" height="5" fill="#FFB900"/></svg>',
+    files: '<svg width="34" height="34" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path d="M4 12C4 9.8 5.8 8 8 8H20L24 14H40C42.2 14 44 15.8 44 18V38C44 40.2 42.2 42 40 42H8C5.8 42 4 40.2 4 38V12Z" fill="#FBBF24"/><path d="M4 20H44V38C44 40.2 42.2 42 40 42H8C5.8 42 4 40.2 4 38V20Z" fill="#F59E0B"/><path d="M8 14H24L20 20H4V18C4 15.8 5.8 14 8 14Z" fill="#60A5FA"/></svg>',
+    terminal: '<svg width="34" height="34" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="6" width="40" height="36" rx="6" fill="#18181B" stroke="#3F3F46" stroke-width="2"/><path d="M12 18L20 24L12 30" stroke="#22C55E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><line x1="22" y1="30" x2="32" y2="30" stroke="#38BDF8" stroke-width="3" stroke-linecap="round"/></svg>',
+    settings: '<svg width="34" height="34" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><circle cx="24" cy="24" r="18" fill="#4B5563"/><circle cx="24" cy="24" r="8" fill="#1F2937"/><path d="M24 2V6M24 42V46M46 24H42M6 24H2M39.5 8.5L36.7 11.3M11.3 36.7L8.5 39.5M39.5 39.5L36.7 36.7M11.3 11.3L8.5 8.5" stroke="#9CA3AF" stroke-width="4" stroke-linecap="round"/></svg>',
+    notepad: '<svg width="34" height="34" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect x="8" y="6" width="32" height="36" rx="4" fill="#0284C7"/><path d="M14 14H34M14 20H34M14 26H28M14 32H24" stroke="#E0F2FE" stroke-width="2.5" stroke-linecap="round"/><circle cx="36" cy="34" r="8" fill="#38BDF8"/><path d="M33 37L39 31" stroke="#0369A1" stroke-width="2" stroke-linecap="round"/></svg>',
+    taskmgr: '<svg width="34" height="34" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="6" width="40" height="36" rx="4" fill="#1E293B" stroke="#00E5FF" stroke-width="1.5"/><path d="M8 26L16 26L20 14L26 34L30 22L34 26L40 26" fill="none" stroke="#00E5FF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    photoshop: '<svg width="34" height="34" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="4" width="40" height="40" rx="8" fill="#001E36" stroke="#00C8FF" stroke-width="2"/><text x="10" y="32" font-family="Segoe UI, sans-serif" font-size="20" font-weight="900" fill="#00C8FF">Ps</text></svg>',
+    video: '<svg width="34" height="34" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="8" width="40" height="32" rx="6" fill="#7C3AED"/><polygon points="20,16 32,24 20,32" fill="#FFFFFF"/></svg>',
+    steam: '<svg width="34" height="34" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><circle cx="24" cy="24" r="20" fill="#171A21"/><path d="M35 18A5 5 0 0 1 30 23L22 26A6 6 0 1 1 16 20L25 15A5 5 0 0 1 35 18Z" fill="#FFFFFF" opacity="0.9"/><circle cx="16" cy="32" r="3.5" fill="#171A21"/></svg>',
+    xbox: '<svg width="34" height="34" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><circle cx="24" cy="24" r="20" fill="#107C10"/><path d="M12 14C16 19 22 26 24 29C26 26 32 19 36 14C32 10 28 8 24 8C20 8 16 10 12 14ZM10 18C10 24 13 30 18 34C15 28 17 21 21 16C17 15 13 16 10 18ZM38 18C35 16 31 15 27 16C31 21 33 28 30 34C35 30 38 24 38 18Z" fill="#FFFFFF"/></svg>',
+    vlc: '<svg width="34" height="34" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path d="M22 4H26L38 38H10L22 4Z" fill="#F97316"/><path d="M18 16H30L34 26H14L18 16Z" fill="#FFFFFF"/><rect x="6" y="38" width="36" height="6" rx="3" fill="#EA580C"/></svg>',
+    blender: '<svg width="34" height="34" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><circle cx="24" cy="28" r="10" fill="#EA580C"/><circle cx="24" cy="28" r="5" fill="#38BDF8"/><path d="M24 18V6M16 20L8 12M32 20L40 12" stroke="#EA580C" stroke-width="4" stroke-linecap="round"/></svg>',
+    unreal: '<svg width="34" height="34" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><circle cx="24" cy="24" r="20" fill="#0E1117" stroke="#FFFFFF" stroke-width="1.5"/><circle cx="24" cy="24" r="14" fill="none" stroke="#FFFFFF" stroke-width="2"/><text x="17" y="32" font-family="Segoe UI, sans-serif" font-size="22" font-weight="900" fill="#FFFFFF">U</text></svg>',
+    playstore: '<svg width="34" height="34" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path d="M8 6L28 24L8 42Z" fill="#4285F4"/><path d="M28 24L8 6L34 16Z" fill="#34A853"/><path d="M28 24L34 32L8 42Z" fill="#EA4335"/><path d="M28 24L34 16L40 22C42 23.5 42 24.5 40 26L34 32Z" fill="#FBBC05"/></svg>',
+    folder: '<svg width="22" height="22" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path d="M4 12C4 9.8 5.8 8 8 8H20L24 14H40C42.2 14 44 15.8 44 18V38C44 40.2 42.2 42 40 42H8C5.8 42 4 40.2 4 38V12Z" fill="#FBBF24"/><path d="M4 20H44V38C44 40.2 42.2 42 40 42H8C5.8 42 4 40.2 4 38V20Z" fill="#F59E0B"/><path d="M8 14H24L20 20H4V18C4 15.8 5.8 14 8 14Z" fill="#60A5FA"/></svg>',
+    file: '<svg width="22" height="22" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="6" width="28" height="36" rx="3" fill="#E2E8F0"/><path d="M26 6V16H38" fill="#CBD5E1"/><line x1="16" y1="22" x2="32" y2="22" stroke="#94A3B8" stroke-width="2"/><line x1="16" y1="28" x2="32" y2="28" stroke="#94A3B8" stroke-width="2"/><line x1="16" y1="34" x2="26" y2="34" stroke="#94A3B8" stroke-width="2"/></svg>'
+  };
+
+  const PRINCE_PFP_URL = 'https://avatars.githubusercontent.com/u/263169230?v=4';
+
   let highestZ = 20;
   const openWindows = {};
+
+  
+  // ==========================================================================
+  // 🌐 Google Chrome Official Web Browser Engine
+  // ==========================================================================
+  function getChromeHtml() {
+    return `
+      <div class="chrome-window-wrap">
+        <!-- Chrome Tab Strip -->
+        <div class="chrome-tabbar">
+          <div class="chrome-tab active" id="chrome-main-tab">
+            <span style="display:flex; align-items:center; width:18px; height:18px;">${WIN11_ICONS.chrome}</span>
+            <span id="chrome-tab-title" style="margin-left:4px;">Google Search</span>
+            <span style="font-size:0.7rem; opacity:0.6; margin-left:6px;">✕</span>
+          </div>
+          <button class="cyber-btn xs" id="chrome-btn-newtab" title="New Tab" style="padding:2px 8px; border-radius:50%; margin-bottom:4px;">+</button>
+        </div>
+
+        <!-- Chrome Navigation Toolbar -->
+        <div class="chrome-toolbar">
+          <button class="cyber-btn xs" id="chrome-nav-back" title="Back">◀</button>
+          <button class="cyber-btn xs" id="chrome-nav-fwd" title="Forward">▶</button>
+          <button class="cyber-btn xs" id="chrome-nav-reload" title="Reload">🔄</button>
+          <button class="cyber-btn xs" id="chrome-nav-home" title="Google Home">🏠</button>
+          
+          <div class="chrome-omnibox">
+            <span style="font-size:0.8rem; color:#8ab4f8;">🔒</span>
+            <input type="text" id="chrome-url-input" value="https://www.google.com" placeholder="Search Google or type a URL" autocomplete="off" spellcheck="false" />
+          </div>
+
+          <button class="cyber-btn xs neon-cyan" id="chrome-btn-go">Go</button>
+          <button class="cyber-btn xs neon-purple" id="chrome-btn-open-tab" title="Open current URL in full external Chrome tab to bypass frame restrictions">
+            🌐 Open Tab ↗
+          </button>
+          <div style="width:26px; height:26px; border-radius:50%; overflow:hidden; border:1px solid #8ab4f8; flex-shrink:0;">
+            <img src="${PRINCE_PFP_URL}" style="width:100%; height:100%; object-fit:cover;" title="Prince Profile (Administrator)" />
+          </div>
+        </div>
+
+        <!-- Bookmarks Bar -->
+        <div class="chrome-bookmarks-bar">
+          <div class="chrome-bookmark-item" data-url="https://www.google.com">🔍 Google</div>
+          <div class="chrome-bookmark-item" data-url="https://www.youtube.com">🎥 YouTube</div>
+          <div class="chrome-bookmark-item" data-url="https://github.com/darkvirgoyt-beep">💻 GitHub</div>
+          <div class="chrome-bookmark-item" data-url="https://chatgpt.com">🤖 ChatGPT</div>
+          <div class="chrome-bookmark-item" data-url="https://wikipedia.org">📚 Wikipedia</div>
+          <div class="chrome-bookmark-item" data-url="https://apps.microsoft.com">🛍️ Store</div>
+          <div class="chrome-bookmark-item" data-url="https://mail.google.com">📧 Gmail</div>
+        </div>
+
+        <!-- Web View Area -->
+        <div style="flex:1; position:relative; background:#202124; overflow:hidden;">
+          <iframe id="chrome-frame-inner" src="https://wikipedia.org" style="width:100%; height:100%; border:none;" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
+        </div>
+      </div>
+    `;
+  }
+
+  function initChromeActions(win) {
+    const input = win.querySelector('#chrome-url-input');
+    const iframe = win.querySelector('#chrome-frame-inner');
+    const goBtn = win.querySelector('#chrome-btn-go');
+    const backBtn = win.querySelector('#chrome-nav-back');
+    const fwdBtn = win.querySelector('#chrome-nav-fwd');
+    const reloadBtn = win.querySelector('#chrome-nav-reload');
+    const homeBtn = win.querySelector('#chrome-nav-home');
+    const openTabBtn = win.querySelector('#chrome-btn-open-tab');
+    const tabTitle = win.querySelector('#chrome-tab-title');
+
+    function navigate(rawUrl) {
+      if (!rawUrl || !iframe) return;
+      let target = rawUrl.trim();
+      if (!target.startsWith('http://') && !target.startsWith('https://')) {
+        if (target.includes('.') && !target.includes(' ')) {
+          target = 'https://' + target;
+        } else {
+          target = 'https://duckduckgo.com/?q=' + encodeURIComponent(target);
+        }
+      }
+      if (input) input.value = target;
+      if (tabTitle) {
+        try {
+          const u = new URL(target);
+          tabTitle.textContent = u.hostname.replace('www.', '');
+        } catch(e) {
+          tabTitle.textContent = target;
+        }
+      }
+      iframe.src = target;
+    }
+
+    if (goBtn && input) {
+      goBtn.addEventListener('click', () => navigate(input.value));
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') navigate(input.value);
+      });
+    }
+
+    if (reloadBtn && iframe) {
+      reloadBtn.addEventListener('click', () => {
+        const curr = iframe.src;
+        iframe.src = 'about:blank';
+        setTimeout(() => { iframe.src = curr; }, 50);
+      });
+    }
+
+    if (homeBtn) {
+      homeBtn.addEventListener('click', () => navigate('https://wikipedia.org'));
+    }
+
+    if (backBtn && iframe) {
+      backBtn.addEventListener('click', () => {
+        try { iframe.contentWindow.history.back(); } catch(e) {}
+      });
+    }
+
+    if (fwdBtn && iframe) {
+      fwdBtn.addEventListener('click', () => {
+        try { iframe.contentWindow.history.forward(); } catch(e) {}
+      });
+    }
+
+    if (openTabBtn && input) {
+      openTabBtn.addEventListener('click', () => {
+        const url = input.value || 'https://www.google.com';
+        window.open(url, '_blank');
+      });
+    }
+
+    win.querySelectorAll('.chrome-bookmark-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const u = item.getAttribute('data-url');
+        if (u) navigate(u);
+      });
+    });
+  }
+
+  // ==========================================================================
+  // 📁 Interactive Windows 11 File Explorer
+  // ==========================================================================
+  const FILE_EXPLORER_DIRS = {
+    'root': [
+      { name: 'Program Files', type: 'dir', size: '4.2 GB' },
+      { name: 'Program Files (x86)', type: 'dir', size: '2.8 GB' },
+      { name: 'Windows', type: 'dir', size: '18.4 GB' },
+      { name: 'Users', type: 'dir', size: '120 GB' },
+      { name: 'VirgoX-Files (5.0 TB)', type: 'dir', size: '4.8 TB Free' }
+    ],
+    'Program Files': [
+      { name: 'Google Chrome', type: 'dir', size: '320 MB' },
+      { name: 'Microsoft Edge', type: 'dir', size: '280 MB' },
+      { name: 'Windows Terminal', type: 'dir', size: '45 MB' },
+      { name: 'Steam', type: 'dir', size: '1.2 GB' },
+      { name: 'Blender Foundation', type: 'dir', size: '850 MB' },
+      { name: 'Epic Games', type: 'dir', size: '420 MB' }
+    ],
+    'Windows': [
+      { name: 'System32', type: 'dir', size: '12 GB' },
+      { name: 'Fonts', type: 'dir', size: '340 MB' },
+      { name: 'explorer.exe', type: 'exe', size: '4.2 MB', action: 'files' },
+      { name: 'notepad.exe', type: 'exe', size: '1.8 MB', action: 'editor' },
+      { name: 'cmd.exe', type: 'exe', size: '320 KB', action: 'terminal' },
+      { name: 'powershell.exe', type: 'exe', size: '450 KB', action: 'terminal' },
+      { name: 'Taskmgr.exe', type: 'exe', size: '2.1 MB', action: 'taskmgr' }
+    ],
+    'Users': [
+      { name: 'Prince', type: 'dir', size: '118 GB' },
+      { name: 'Public', type: 'dir', size: '2 GB' }
+    ],
+    'Prince': [
+      { name: 'Desktop', type: 'dir', size: '12 MB' },
+      { name: 'Documents', type: 'dir', size: '450 MB' },
+      { name: 'Downloads', type: 'dir', size: '14.2 GB' },
+      { name: 'Pictures', type: 'dir', size: '2.4 GB' },
+      { name: 'VirgoX-ROMs', type: 'dir', size: '98 GB' },
+      { name: 'welcome_to_windows11.txt', type: 'file', size: '2 KB', action: 'editor' }
+    ],
+    'Downloads': [
+      { name: 'ChromeSetup.exe', type: 'exe', size: '1.4 MB', action: 'chrome' },
+      { name: 'VirgoX-Workstation-Setup.exe', type: 'exe', size: '24 MB', action: 'terminal' },
+      { name: 'motorola_fogos_rom_v2.zip', type: 'file', size: '3.4 GB', action: 'editor' },
+      { name: 'adb_fastboot_linux.tar.gz', type: 'file', size: '18 MB', action: 'terminal' }
+    ],
+    'Documents': [
+      { name: 'VirgoX_Cloud_PC_Specs.txt', type: 'file', size: '4 KB', action: 'editor' },
+      { name: 'system_architecture.md', type: 'file', size: '12 KB', action: 'editor' },
+      { name: 'credentials_vault.enc', type: 'file', size: '1 KB', action: 'editor' }
+    ],
+    'Pictures': [
+      { name: 'win11_bloom_wallpaper.png', type: 'file', size: '4.8 MB', action: 'photopea' },
+      { name: 'prince_avatar.png', type: 'file', size: '280 KB', action: 'photopea' },
+      { name: 'workstation_screenshot.png', type: 'file', size: '1.2 MB', action: 'photopea' }
+    ],
+    'VirgoX-Files (5.0 TB)': [
+      { name: 'Android-ROM-Builds', type: 'dir', size: '420 GB' },
+      { name: 'Mesa-LLVMpipe-3D', type: 'dir', size: '1.2 GB' },
+      { name: 'Virtual-RAM-ZRAM-Pool', type: 'dir', size: '64 GB' },
+      { name: 'Cloud-Storage-Pool.img', type: 'file', size: '5.0 TB', action: 'terminal' }
+    ]
+  };
+
+  let activeExplorerPath = 'Prince';
+
+  function getFilesHtml() {
+    const isWin = state.config.osMode === 'windows';
+    return `
+      <div style="display:flex; flex-direction:column; height:100%; background:#1a1e2d; color:#fff; font-family:'Segoe UI', sans-serif;">
+        <!-- Top Ribbon -->
+        <div class="explorer-ribbon">
+          <button class="explorer-ribbon-btn" id="explorer-btn-up" title="Up to parent directory">⬆ Up</button>
+          <button class="explorer-ribbon-btn" id="explorer-btn-new" onclick="openAppWindow('editor')" title="New Text Document">➕ New Document</button>
+          <button class="explorer-ribbon-btn" onclick="openAppWindow('terminal')" title="Open PowerShell Here">💻 Open Terminal</button>
+          <button class="explorer-ribbon-btn" id="explorer-btn-refresh" title="Refresh folder">🔄 Refresh</button>
+        </div>
+
+        <!-- Address Bar -->
+        <div class="explorer-addr-bar">
+          <div class="explorer-path-box">
+            <span>This PC &gt; Local Disk (C:) &gt; Users &gt; </span>
+            <span class="active-path" id="explorer-crumb-text">Prince</span>
+          </div>
+          <span style="font-size:0.75rem; color:#60a5fa; font-weight:700; white-space:nowrap; margin-left:8px;">4.8 TB Free</span>
+        </div>
+
+        <div style="display:flex; flex:1; overflow:hidden;">
+          <!-- Left Tree Sidebar -->
+          <div style="width:160px; background:rgba(20,24,38,0.95); border-right:1px solid rgba(255,255,255,0.08); padding:8px 4px; display:flex; flex-direction:column; gap:2px; font-size:0.78rem; overflow-y:auto;">
+            <div class="files-sidebar-item" data-nav="root" style="padding:5px 8px; border-radius:6px; cursor:pointer;">💻 This PC (C:)</div>
+            <div class="files-sidebar-item" data-nav="Prince" style="padding:5px 8px; border-radius:6px; cursor:pointer; color:#60a5fa; font-weight:700;">👤 Users\Prince</div>
+            <div class="files-sidebar-item" data-nav="Downloads" style="padding:5px 8px; border-radius:6px; cursor:pointer;">⬇️ Downloads</div>
+            <div class="files-sidebar-item" data-nav="Documents" style="padding:5px 8px; border-radius:6px; cursor:pointer;">📁 Documents</div>
+            <div class="files-sidebar-item" data-nav="Pictures" style="padding:5px 8px; border-radius:6px; cursor:pointer;">🖼️ Pictures</div>
+            <div class="files-sidebar-item" data-nav="Program Files" style="padding:5px 8px; border-radius:6px; cursor:pointer;">📦 Program Files</div>
+            <div class="files-sidebar-item" data-nav="Windows" style="padding:5px 8px; border-radius:6px; cursor:pointer;">🪟 Windows</div>
+            <div class="files-sidebar-item" data-nav="VirgoX-Files (5.0 TB)" style="padding:5px 8px; border-radius:6px; cursor:pointer; color:var(--neon-green);">💽 VirgoX-Files (5TB)</div>
+          </div>
+
+          <!-- Main Grid -->
+          <div style="flex:1; padding:14px; overflow-y:auto;">
+            <div id="explorer-files-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(90px, 1fr)); gap:12px;"></div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function initFilesActions(win) {
+    const grid = win.querySelector('#explorer-files-grid');
+    const crumb = win.querySelector('#explorer-crumb-text');
+    const upBtn = win.querySelector('#explorer-btn-up');
+    const refreshBtn = win.querySelector('#explorer-btn-refresh');
+
+    function renderDir(dirKey) {
+      if (!grid) return;
+      activeExplorerPath = dirKey;
+      if (crumb) crumb.textContent = dirKey;
+
+      const items = FILE_EXPLORER_DIRS[dirKey] || FILE_EXPLORER_DIRS['Prince'] || [];
+      grid.innerHTML = '';
+
+      items.forEach(item => {
+        const el = document.createElement('div');
+        el.className = 'files-grid-item';
+        el.style.display = 'flex';
+        el.style.flexDirection = 'column';
+        el.style.alignItems = 'center';
+        el.style.gap = '4px';
+        el.style.padding = '8px 4px';
+        el.style.borderRadius = '8px';
+        el.style.cursor = 'pointer';
+        el.style.textAlign = 'center';
+
+        let iconSvg = WIN11_ICONS.folder;
+        if (item.type === 'exe') iconSvg = WIN11_ICONS.terminal;
+        else if (item.name.endsWith('.txt') || item.name.endsWith('.md')) iconSvg = WIN11_ICONS.notepad;
+        else if (item.name.endsWith('.png') || item.name.endsWith('.jpg')) iconSvg = WIN11_ICONS.photoshop;
+        else if (item.name.endsWith('.zip') || item.name.endsWith('.tar.gz')) iconSvg = WIN11_ICONS.files;
+        else if (item.type === 'file') iconSvg = WIN11_ICONS.file;
+
+        el.innerHTML = `
+          <div style="width:36px; height:36px; display:flex; align-items:center; justify-content:center;">${iconSvg}</div>
+          <div style="font-size:0.72rem; color:#fff; word-break:break-word; max-width:84px; line-height:1.2;">${item.name}</div>
+          <div style="font-size:0.62rem; color:#94a3b8;">${item.size}</div>
+        `;
+
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (item.type === 'dir' && FILE_EXPLORER_DIRS[item.name]) {
+            renderDir(item.name);
+          } else if (item.action) {
+            openAppWindow(item.action);
+          } else {
+            openAppWindow('editor');
+          }
+        });
+
+        grid.appendChild(el);
+      });
+    }
+
+    if (upBtn) {
+      upBtn.addEventListener('click', () => {
+        if (activeExplorerPath === 'root') return;
+        if (activeExplorerPath === 'Prince') renderDir('Users');
+        else if (activeExplorerPath === 'Users') renderDir('root');
+        else renderDir('root');
+      });
+    }
+
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => renderDir(activeExplorerPath));
+    }
+
+    win.querySelectorAll('.files-sidebar-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const nav = btn.getAttribute('data-nav');
+        if (nav && FILE_EXPLORER_DIRS[nav]) renderDir(nav);
+      });
+    });
+
+    renderDir(activeExplorerPath || 'Prince');
+  }
+
+  // ==========================================================================
+  // 🎥 VLC Media Player Window
+  // ==========================================================================
+  function getVlcHtml() {
+    return `
+      <div style="display:flex; flex-direction:column; height:100%; background:#111; color:#fff; font-family:'Segoe UI', sans-serif;">
+        <div style="display:flex; align-items:center; gap:8px; padding:6px 12px; background:#18181b; border-bottom:1px solid rgba(255,255,255,0.1); font-size:0.75rem;">
+          <span>Media</span> <span>Playback</span> <span>Audio</span> <span>Video</span> <span>Subtitle</span> <span>Tools</span> <span>View</span> <span>Help</span>
+        </div>
+        <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#000; padding:20px;">
+          <div style="width:72px; height:72px; margin-bottom:12px;">${WIN11_ICONS.vlc}</div>
+          <div style="font-weight:700; font-size:1.1rem; color:#f97316;">VLC Media Player 3.0.20</div>
+          <div style="font-size:0.78rem; color:#94a3b8; margin-top:4px;">Hardware Accelerated Video Output (Mesa Direct Sync)</div>
+          <button class="cyber-btn sm neon-amber" style="margin-top:16px;" onclick="openAppWindow('files')">📁 Open Media File</button>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px; padding:8px 14px; background:#18181b; border-top:1px solid rgba(255,255,255,0.1);">
+          <button class="cyber-btn xs neon-green">▶</button>
+          <button class="cyber-btn xs">⏹</button>
+          <button class="cyber-btn xs">⏮</button>
+          <button class="cyber-btn xs">⏭</button>
+          <div style="flex:1; height:4px; background:#333; border-radius:2px; position:relative;">
+            <div style="width:30%; height:100%; background:#f97316; border-radius:2px;"></div>
+          </div>
+          <span style="font-size:0.7rem; color:#aaa;">00:42 / 03:15</span>
+          <span style="font-size:0.8rem;">🔊</span>
+        </div>
+      </div>
+    `;
+  }
+
+  // ==========================================================================
+  // 🖱️ Windows 11 Desktop Context Menu
+  // ==========================================================================
+  function showDesktopContextMenu(x, y) {
+    const old = document.getElementById('win11-desktop-ctx');
+    if (old) old.remove();
+
+    const isWin = state.config.osMode === 'windows';
+    const menu = document.createElement('div');
+    menu.id = 'win11-desktop-ctx';
+    menu.className = 'win11-context-menu';
+    menu.style.left = `${Math.min(x, window.innerWidth - 230)}px`;
+    menu.style.top = `${Math.min(y, window.innerHeight - 260)}px`;
+
+    menu.innerHTML = `
+      <div class="win11-context-item" onclick="openAppWindow('chrome')">
+        <span style="width:18px; height:18px; display:flex;">${WIN11_ICONS.chrome}</span>
+        <span>Open Google Chrome</span>
+      </div>
+      <div class="win11-context-item" onclick="openAppWindow('files')">
+        <span style="width:18px; height:18px; display:flex;">${WIN11_ICONS.files}</span>
+        <span>Open File Explorer</span>
+      </div>
+      <div class="win11-context-item" onclick="openAppWindow('terminal')">
+        <span style="width:18px; height:18px; display:flex;">${WIN11_ICONS.terminal}</span>
+        <span>Open in Windows Terminal</span>
+      </div>
+      <div class="win11-context-sep"></div>
+      <div class="win11-context-item" onclick="openAppWindow('editor')">
+        <span>📝</span>
+        <span>New Text Document</span>
+      </div>
+      <div class="win11-context-item" onclick="openAppWindow('settings')">
+        <span style="width:18px; height:18px; display:flex;">${WIN11_ICONS.settings}</span>
+        <span>Display settings</span>
+      </div>
+      <div class="win11-context-item" onclick="openAppWindow('settings')">
+        <span>🎨</span>
+        <span>Personalize</span>
+      </div>
+      <div class="win11-context-sep"></div>
+      <div class="win11-context-item" onclick="state.config.osMode = state.config.osMode === 'windows' ? 'linux' : 'windows'; saveConfig(); applyDesktopOsTheme(); document.getElementById('win11-desktop-ctx')?.remove();">
+        <span>${isWin ? '🐧' : '🪟'}</span>
+        <span>${isWin ? 'Switch to Ubuntu Linux' : 'Switch to Windows 11'}</span>
+      </div>
+    `;
+
+    document.body.appendChild(menu);
+  }
+
 
   function setupNativeDesktop() {
     const wrapper = document.getElementById('desktop-wrapper');
@@ -1112,15 +1550,13 @@
     updateDesktopModeUI();
   }
 
+  window.openAppWindow = function(appId) { return openAppWindow(appId); };
+
   function openAppWindow(appId) {
     const windowsLayer = document.getElementById('desktop-windows-layer');
     if (!windowsLayer) return;
 
-    if (appId === 'settings' || appId === 'windows_settings') {
-      const btnSet = document.getElementById('btn-settings');
-      if (btnSet) btnSet.click();
-      return;
-    }
+    // Direct Windows 11 Settings window
 
     if (openWindows[appId]) {
       const win = openWindows[appId];
@@ -1136,118 +1572,210 @@
     win.style.zIndex = highestZ;
 
     // Window configurations
+    const isWinTheme = state.config.osMode === 'windows';
     const configs = {
+      chrome: {
+        title: 'Google Chrome',
+        icon: WIN11_ICONS.chrome,
+        width: Math.min(640, window.innerWidth - 20),
+        height: Math.min(460, window.innerHeight - 80),
+        content: getChromeHtml()
+      },
+      google_chrome: {
+        title: 'Google Chrome',
+        icon: WIN11_ICONS.chrome,
+        width: Math.min(640, window.innerWidth - 20),
+        height: Math.min(460, window.innerHeight - 80),
+        content: getChromeHtml()
+      },
+      edge: {
+        title: 'Microsoft Edge',
+        icon: WIN11_ICONS.edge,
+        width: Math.min(620, window.innerWidth - 20),
+        height: Math.min(440, window.innerHeight - 80),
+        content: getBrowserHtml()
+      },
+      microsoft_edge: {
+        title: 'Microsoft Edge',
+        icon: WIN11_ICONS.edge,
+        width: Math.min(620, window.innerWidth - 20),
+        height: Math.min(440, window.innerHeight - 80),
+        content: getBrowserHtml()
+      },
+      browser: {
+        title: isWinTheme ? 'Microsoft Edge' : 'Chromium Web Browser',
+        icon: isWinTheme ? WIN11_ICONS.edge : '🌐',
+        width: Math.min(620, window.innerWidth - 20),
+        height: Math.min(440, window.innerHeight - 80),
+        content: getBrowserHtml()
+      },
       terminal: {
-        title: 'Terminal CLI (Root Bash — Port 7681/8888)',
-        icon: '💻',
-        width: Math.min(500, window.innerWidth - 30),
-        height: 310,
+        title: isWinTheme ? 'Windows Terminal (PowerShell / CMD)' : 'Terminal CLI (Root Bash — Port 7681/8888)',
+        icon: isWinTheme ? WIN11_ICONS.terminal : '💻',
+        width: Math.min(540, window.innerWidth - 30),
+        height: 340,
+        content: getTerminalHtml()
+      },
+      cmd: {
+        title: 'Command Prompt (Administrator)',
+        icon: WIN11_ICONS.terminal,
+        width: Math.min(540, window.innerWidth - 30),
+        height: 340,
+        content: getTerminalHtml()
+      },
+      powershell: {
+        title: 'Windows PowerShell (Administrator)',
+        icon: WIN11_ICONS.terminal,
+        width: Math.min(540, window.innerWidth - 30),
+        height: 340,
         content: getTerminalHtml()
       },
       msstore: {
-        title: 'Microsoft Store (Web) — Windows & Linux Apps Hub',
-        icon: '🛍️',
+        title: 'Microsoft Store — Apps & Games Catalog',
+        icon: WIN11_ICONS.msstore,
+        width: Math.min(680, window.innerWidth - 20),
+        height: Math.min(460, window.innerHeight - 80),
+        content: getMsStoreHtml()
+      },
+      ms_store: {
+        title: 'Microsoft Store — Apps & Games Catalog',
+        icon: WIN11_ICONS.msstore,
         width: Math.min(680, window.innerWidth - 20),
         height: Math.min(460, window.innerHeight - 80),
         content: getMsStoreHtml()
       },
       microsoft_store: {
-        title: 'Microsoft Store (Web) — Windows & Linux Apps Hub',
-        icon: '🛍️',
+        title: 'Microsoft Store — Apps & Games Catalog',
+        icon: WIN11_ICONS.msstore,
         width: Math.min(680, window.innerWidth - 20),
         height: Math.min(460, window.innerHeight - 80),
         content: getMsStoreHtml()
       },
       files: {
-        title: 'This PC — 5.0 TB High-Speed Storage Pool',
-        icon: '📁',
-        width: Math.min(520, window.innerWidth - 30),
-        height: 330,
+        title: isWinTheme ? 'File Explorer — This PC (C:)' : 'This PC — 5.0 TB Storage Pool',
+        icon: WIN11_ICONS.files,
+        width: Math.min(560, window.innerWidth - 30),
+        height: 360,
         content: getFilesHtml()
       },
-      browser: {
-        title: 'Chromium Web Browser',
-        icon: '🌐',
-        width: Math.min(560, window.innerWidth - 20),
-        height: Math.min(440, window.innerHeight - 80),
-        content: getBrowserHtml()
+      explorer: {
+        title: 'File Explorer — This PC (C:)',
+        icon: WIN11_ICONS.files,
+        width: Math.min(560, window.innerWidth - 30),
+        height: 360,
+        content: getFilesHtml()
+      },
+      thispc: {
+        title: 'File Explorer — This PC (C:)',
+        icon: WIN11_ICONS.files,
+        width: Math.min(560, window.innerWidth - 30),
+        height: 360,
+        content: getFilesHtml()
       },
       editor: {
-        title: 'VirgoX Code Studio Editor',
-        icon: '📝',
-        width: Math.min(520, window.innerWidth - 30),
-        height: 340,
+        title: isWinTheme ? 'Untitled - Notepad' : 'VirgoX Code Studio Editor',
+        icon: isWinTheme ? WIN11_ICONS.notepad : '📝',
+        width: Math.min(540, window.innerWidth - 30),
+        height: 350,
+        content: getEditorHtml()
+      },
+      notepad: {
+        title: 'Untitled - Notepad',
+        icon: WIN11_ICONS.notepad,
+        width: Math.min(540, window.innerWidth - 30),
+        height: 350,
         content: getEditorHtml()
       },
       taskmgr: {
         title: 'Task Manager (64 GB Virtual RAM • 120 FPS)',
-        icon: '📊',
-        width: Math.min(480, window.innerWidth - 30),
-        height: 320,
+        icon: WIN11_ICONS.taskmgr,
+        width: Math.min(500, window.innerWidth - 30),
+        height: 340,
         content: getTaskmgrHtml()
+      },
+      settings: {
+        title: 'Settings — Windows 11 Pro System',
+        icon: WIN11_ICONS.settings,
+        width: Math.min(560, window.innerWidth - 20),
+        height: 400,
+        content: getSettingsHtml()
+      },
+      windows_settings: {
+        title: 'Settings — Windows 11 Pro System',
+        icon: WIN11_ICONS.settings,
+        width: Math.min(560, window.innerWidth - 20),
+        height: 400,
+        content: getSettingsHtml()
       },
       photopea: {
         title: 'Adobe Photoshop Studio (Photopea Pro)',
-        icon: '🎨',
-        width: Math.min(600, window.innerWidth - 20),
-        height: 380,
+        icon: WIN11_ICONS.photoshop,
+        width: Math.min(620, window.innerWidth - 20),
+        height: 400,
         content: `<iframe src="https://www.photopea.com" style="width:100%; height:100%; border:none;"></iframe>`
       },
       photoshop: {
         title: 'Adobe Photoshop Studio (Photopea Pro)',
-        icon: '🎨',
-        width: Math.min(600, window.innerWidth - 20),
-        height: 380,
+        icon: WIN11_ICONS.photoshop,
+        width: Math.min(620, window.innerWidth - 20),
+        height: 400,
         content: `<iframe src="https://www.photopea.com" style="width:100%; height:100%; border:none;"></iframe>`
       },
       shotcut: {
-        title: 'Shotcut 4K Video Editor Studio',
-        icon: '🎬',
-        width: Math.min(520, window.innerWidth - 30),
-        height: 330,
+        title: 'Clipchamp / Shotcut 4K Video Editor Studio',
+        icon: WIN11_ICONS.video,
+        width: Math.min(540, window.innerWidth - 30),
+        height: 350,
         content: getVideoEditorHtml()
       },
       video_editor: {
-        title: 'Shotcut 4K Video Editor Studio',
-        icon: '🎬',
-        width: Math.min(520, window.innerWidth - 30),
-        height: 330,
+        title: 'Clipchamp / Shotcut 4K Video Editor Studio',
+        icon: WIN11_ICONS.video,
+        width: Math.min(540, window.innerWidth - 30),
+        height: 350,
         content: getVideoEditorHtml()
       },
       steam: {
         title: 'Steam Gaming Platform',
-        icon: '🎮',
+        icon: WIN11_ICONS.steam,
+        width: Math.min(540, window.innerWidth - 30),
+        height: 350,
+        content: getSteamHtml()
+      },
+      vlc: {
+        title: 'VLC Media Player',
+        icon: WIN11_ICONS.vlc,
         width: Math.min(520, window.innerWidth - 30),
         height: 330,
-        content: getSteamHtml()
+        content: getVlcHtml()
       },
       blender: {
         title: 'Blender 5.0.1 3D Creation Suite',
-        icon: '🚀',
-        width: Math.min(520, window.innerWidth - 30),
-        height: 330,
+        icon: WIN11_ICONS.blender,
+        width: Math.min(540, window.innerWidth - 30),
+        height: 350,
         content: getBlenderHtml()
       },
       unreal: {
         title: 'Unreal Engine 6 Hub',
-        icon: '⚡',
-        width: Math.min(520, window.innerWidth - 30),
-        height: 330,
+        icon: WIN11_ICONS.unreal,
+        width: Math.min(540, window.innerWidth - 30),
+        height: 350,
         content: getUnrealHtml()
       },
       unreal_engine: {
         title: 'Unreal Engine 6 Hub',
-        icon: '⚡',
-        width: Math.min(520, window.innerWidth - 30),
-        height: 330,
+        icon: WIN11_ICONS.unreal,
+        width: Math.min(540, window.innerWidth - 30),
+        height: 350,
         content: getUnrealHtml()
       },
-      settings: {
-        title: state.config.osMode === 'windows' ? 'Settings — Windows 11 Pro System' : 'System Settings & Config',
-        icon: '⚙️',
-        width: Math.min(540, window.innerWidth - 20),
-        height: 380,
-        content: getSettingsHtml()
+      playstore: {
+        title: 'Google Play Store (Web Hub)',
+        icon: WIN11_ICONS.playstore,
+        width: Math.min(600, window.innerWidth - 20),
+        height: 420,
+        content: `<div style="padding:14px; color:#fff; height:100%; overflow-y:auto; font-family:'Segoe UI', sans-serif;"><div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;"><div style="width:36px; height:36px;">${WIN11_ICONS.playstore}</div><div><h4 style="margin:0;">Google Play Store Hub</h4><span style="font-size:0.75rem; color:#aaa;">Official Android Apps on Cloud Workstation</span></div></div><div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px;"><div style="background:rgba(255,255,255,0.06); padding:10px; border-radius:8px; text-align:center;"><div style="font-size:1.8rem;">🏃</div><div style="font-weight:700; font-size:0.8rem; margin:4px 0;">Subway Surfers</div><button class="cyber-btn xs neon-green" onclick="openAppWindow('terminal')">Install APK</button></div><div style="background:rgba(255,255,255,0.06); padding:10px; border-radius:8px; text-align:center;"><div style="font-size:1.8rem;">💬</div><div style="font-weight:700; font-size:0.8rem; margin:4px 0;">WhatsApp</div><button class="cyber-btn xs neon-cyan" onclick="openAppWindow('chrome')">Open Web</button></div><div style="background:rgba(255,255,255,0.06); padding:10px; border-radius:8px; text-align:center;"><div style="font-size:1.8rem;">⛏️</div><div style="font-weight:700; font-size:0.8rem; margin:4px 0;">Minecraft Trial</div><button class="cyber-btn xs neon-purple" onclick="openAppWindow('terminal')">Install APK</button></div></div></div>`
       }
     };
 
@@ -1319,11 +1847,13 @@
     setupWindowDrag(win, win.querySelector('.cyber-window-titlebar'));
 
     // Post-attach initializers
-    if (appId === 'terminal') initTerminalInput(win);
-    if (appId === 'browser') initBrowserActions(win);
-    if (appId === 'msstore' || appId === 'microsoft_store') initMsStoreActions(win);
-    if (appId === 'editor') initEditorActions(win);
-    if (appId === 'settings') initSettingsActions(win);
+    if (appId === 'chrome' || appId === 'google_chrome') initChromeActions(win);
+    if (appId === 'files' || appId === 'explorer' || appId === 'thispc') initFilesActions(win);
+    if (appId === 'terminal' || appId === 'cmd' || appId === 'powershell') initTerminalInput(win);
+    if (appId === 'browser' || appId === 'edge' || appId === 'microsoft_edge') initBrowserActions(win);
+    if (appId === 'msstore' || appId === 'ms_store' || appId === 'microsoft_store') initMsStoreActions(win);
+    if (appId === 'editor' || appId === 'notepad') initEditorActions(win);
+    if (appId === 'settings' || appId === 'windows_settings') initSettingsActions(win);
 
     updateTaskbarChips();
     bringToFront(win);
@@ -2340,11 +2870,10 @@ print("All systems operational.")
     });
   }
 
-  function bindDesktopEvents() {
+    function bindDesktopEvents() {
     const startBtn = document.getElementById('taskbar-start-toggle');
     const startMenu = document.getElementById('cyber-start-menu');
     if (startBtn && startMenu) {
-      // clone to drop old event listeners
       const newStartBtn = startBtn.cloneNode(true);
       startBtn.parentNode.replaceChild(newStartBtn, startBtn);
 
@@ -2371,12 +2900,12 @@ print("All systems operational.")
       });
     }
 
-    // Start menu app clicks
+    // Start menu app clicks (pinned & recommended)
     if (startMenu) {
       startMenu.querySelectorAll('[data-start-app]').forEach(btn => {
         btn.addEventListener('click', () => {
           const appId = btn.getAttribute('data-start-app');
-          openAppWindow(appId);
+          if (appId) openAppWindow(appId);
           startMenu.classList.add('hidden');
         });
       });
@@ -2434,6 +2963,45 @@ print("All systems operational.")
         if (appId) openAppWindow(appId);
       });
     });
+
+    // Right-Click Context Menu on Desktop Canvas
+    const canvas = document.getElementById('cyber-desktop-canvas');
+    if (canvas && !canvas._hasWin11Ctx) {
+      canvas._hasWin11Ctx = true;
+      canvas.addEventListener('contextmenu', (e) => {
+        if (state.config.osMode !== 'windows') return;
+        if (e.target.closest('.cyber-window')) return;
+        e.preventDefault();
+        showDesktopContextMenu(e.clientX, e.clientY);
+      });
+      document.addEventListener('click', (e) => {
+        const ctxMenu = document.getElementById('win11-desktop-ctx');
+        if (ctxMenu && !ctxMenu.contains(e.target)) {
+          ctxMenu.remove();
+        }
+      });
+    }
+
+    // Windows 11 Live Clock & Date in Tray
+    function updateWin11Clock() {
+      const timeEl = document.getElementById('win11-clock-time');
+      const dateEl = document.getElementById('win11-clock-date');
+      const now = new Date();
+      if (timeEl) {
+        timeEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+      if (dateEl) {
+        dateEl.textContent = now.toLocaleDateString([], { month: 'numeric', day: 'numeric', year: 'numeric' });
+      }
+      const classicClock = document.getElementById('taskbar-clock');
+      if (classicClock) {
+        classicClock.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      }
+    }
+    updateWin11Clock();
+    if (!window._win11ClockInterval) {
+      window._win11ClockInterval = setInterval(updateWin11Clock, 1000);
+    }
   }
 
   function applyDesktopOsTheme() {
@@ -2469,7 +3037,7 @@ print("All systems operational.")
         taskbar.innerHTML = `
           <div class="taskbar-left" style="display:flex; align-items:center;">
             <div style="font-size:0.75rem; color:#94a3b8; display:flex; align-items:center; gap:6px;">
-              <span>🌤️ 72°F</span>
+              <span>🌤️ 74°F</span>
               <span style="opacity:0.6;">|</span>
               <span style="color:#38bdf8;">Widget Hub</span>
             </div>
@@ -2477,24 +3045,26 @@ print("All systems operational.")
 
           <div class="win11-taskbar-center" id="win11-taskbar-center">
             <button class="win11-start-btn" id="taskbar-start-toggle" title="Start">
-              <svg width="22" height="22" viewBox="0 0 88 88" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M0 12.4955L35.7273 7.63636V41.4545H0V12.4955ZM0 46.5455H35.7273V80.3636L0 75.5045V46.5455ZM41.0909 6.90909L88 0V41.4545H41.0909V6.90909ZM41.0909 46.5455H88V88L41.0909 81.0909V46.5455Z" fill="#00ADEF"/>
-              </svg>
+              ${WIN11_ICONS.start}
             </button>
-            <button class="win11-taskbar-icon" id="win11-btn-search" title="Search">🔍</button>
-            <button class="win11-taskbar-icon" data-open="browser" title="Microsoft Edge">🌐</button>
-            <button class="win11-taskbar-icon" data-open="files" title="File Explorer (C: Drive)">📁</button>
-            <button class="win11-taskbar-icon" data-open="msstore" title="Microsoft Store">🛍️</button>
-            <button class="win11-taskbar-icon" data-open="terminal" title="Windows Terminal (PowerShell)">💻</button>
-            <button class="win11-taskbar-icon" data-open="editor" title="Notepad">📝</button>
-            <button class="win11-taskbar-icon" data-open="settings" title="Settings">⚙️</button>
+            <button class="win11-taskbar-icon" id="win11-btn-search" title="Search">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </button>
+            <button class="win11-taskbar-icon" data-open="chrome" title="Google Chrome">${WIN11_ICONS.chrome}</button>
+            <button class="win11-taskbar-icon" data-open="files" title="File Explorer (This PC C:)">${WIN11_ICONS.files}</button>
+            <button class="win11-taskbar-icon" data-open="msstore" title="Microsoft Store">${WIN11_ICONS.msstore}</button>
+            <button class="win11-taskbar-icon" data-open="browser" title="Microsoft Edge">${WIN11_ICONS.edge}</button>
+            <button class="win11-taskbar-icon" data-open="terminal" title="Windows Terminal (PowerShell)">${WIN11_ICONS.terminal}</button>
+            <button class="win11-taskbar-icon" data-open="editor" title="Notepad">${WIN11_ICONS.notepad}</button>
+            <button class="win11-taskbar-icon" data-open="settings" title="Settings">${WIN11_ICONS.settings}</button>
+            <button class="win11-taskbar-icon" data-open="taskmgr" title="Task Manager">${WIN11_ICONS.taskmgr}</button>
             <div class="taskbar-active-chips" id="taskbar-active-chips" style="margin-left:4px;"></div>
           </div>
 
           <div class="taskbar-right-tray" style="display:flex; align-items:center; gap:8px;">
             <div class="win11-tray-cluster">
-              <span title="Wi-Fi">📶</span>
-              <span title="Audio">🔊</span>
+              <span title="Wi-Fi 10G Turbo">📶</span>
+              <span title="Audio Pulse">🔊</span>
               <span title="Battery">🔋 100%</span>
             </div>
             <div class="win11-clock-cluster" id="win11-clock-box">
@@ -2521,52 +3091,60 @@ print("All systems operational.")
               <button class="cyber-btn xs" onclick="openAppWindow('msstore')">All Apps &gt;</button>
             </div>
             <div class="win11-pinned-grid" id="win11-pinned-grid">
+              <div class="win11-app-item" data-start-app="chrome">
+                <div class="win11-app-icon">${WIN11_ICONS.chrome}</div>
+                <div class="win11-app-name">Chrome</div>
+              </div>
               <div class="win11-app-item" data-start-app="browser">
-                <div class="win11-app-icon">🌐</div>
+                <div class="win11-app-icon">${WIN11_ICONS.edge}</div>
                 <div class="win11-app-name">Edge</div>
               </div>
               <div class="win11-app-item" data-start-app="files">
-                <div class="win11-app-icon">📁</div>
+                <div class="win11-app-icon">${WIN11_ICONS.files}</div>
                 <div class="win11-app-name">Explorer</div>
               </div>
               <div class="win11-app-item" data-start-app="msstore">
-                <div class="win11-app-icon">🛍️</div>
+                <div class="win11-app-icon">${WIN11_ICONS.msstore}</div>
                 <div class="win11-app-name">Store</div>
               </div>
               <div class="win11-app-item" data-start-app="terminal">
-                <div class="win11-app-icon">💻</div>
+                <div class="win11-app-icon">${WIN11_ICONS.terminal}</div>
                 <div class="win11-app-name">Terminal</div>
               </div>
               <div class="win11-app-item" data-start-app="editor">
-                <div class="win11-app-icon">📝</div>
+                <div class="win11-app-icon">${WIN11_ICONS.notepad}</div>
                 <div class="win11-app-name">Notepad</div>
               </div>
               <div class="win11-app-item" data-start-app="taskmgr">
-                <div class="win11-app-icon">📊</div>
+                <div class="win11-app-icon">${WIN11_ICONS.taskmgr}</div>
                 <div class="win11-app-name">Taskmgr</div>
               </div>
               <div class="win11-app-item" data-start-app="settings">
-                <div class="win11-app-icon">⚙️</div>
+                <div class="win11-app-icon">${WIN11_ICONS.settings}</div>
                 <div class="win11-app-name">Settings</div>
               </div>
               <div class="win11-app-item" data-start-app="photopea">
-                <div class="win11-app-icon">🎨</div>
-                <div class="win11-app-name">Photos</div>
+                <div class="win11-app-icon">${WIN11_ICONS.photoshop}</div>
+                <div class="win11-app-name">Photoshop</div>
               </div>
               <div class="win11-app-item" data-start-app="shotcut">
-                <div class="win11-app-icon">🎬</div>
+                <div class="win11-app-icon">${WIN11_ICONS.video}</div>
                 <div class="win11-app-name">Clipchamp</div>
               </div>
               <div class="win11-app-item" data-start-app="steam">
-                <div class="win11-app-icon">🎮</div>
-                <div class="win11-app-name">Xbox / Steam</div>
+                <div class="win11-app-icon">${WIN11_ICONS.steam}</div>
+                <div class="win11-app-name">Steam</div>
+              </div>
+              <div class="win11-app-item" data-start-app="vlc">
+                <div class="win11-app-icon">${WIN11_ICONS.vlc}</div>
+                <div class="win11-app-name">VLC Player</div>
               </div>
               <div class="win11-app-item" data-start-app="blender">
-                <div class="win11-app-icon">🚀</div>
+                <div class="win11-app-icon">${WIN11_ICONS.blender}</div>
                 <div class="win11-app-name">Blender 5.0</div>
               </div>
               <div class="win11-app-item" data-start-app="unreal">
-                <div class="win11-app-icon">⚡</div>
+                <div class="win11-app-icon">${WIN11_ICONS.unreal}</div>
                 <div class="win11-app-name">Unreal Engine</div>
               </div>
             </div>
@@ -2578,15 +3156,22 @@ print("All systems operational.")
               <span>Recommended</span>
             </div>
             <div style="display:flex; flex-direction:column; gap:4px; font-size:0.75rem;">
-              <div style="display:flex; align-items:center; gap:8px; padding:4px 8px; border-radius:6px; cursor:pointer;" onclick="openAppWindow('files')">
-                <span>📁</span>
+              <div class="win11-rec-row" data-start-app="files" style="display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:6px; cursor:pointer; background:rgba(255,255,255,0.03);">
+                <div style="width:24px; height:24px; display:flex; align-items:center; justify-content:center;">${WIN11_ICONS.files}</div>
                 <div>
                   <div style="color:#fff; font-weight:600;">This PC — Local Disk (C:)</div>
-                  <div style="color:#94a3b8; font-size:0.68rem;">5.0 TB High-Speed Storage Pool</div>
+                  <div style="color:#94a3b8; font-size:0.68rem;">5.0 TB High-Speed Storage Pool (/dev/loop0)</div>
                 </div>
               </div>
-              <div style="display:flex; align-items:center; gap:8px; padding:4px 8px; border-radius:6px; cursor:pointer;" onclick="openAppWindow('terminal')">
-                <span>💻</span>
+              <div class="win11-rec-row" data-start-app="chrome" style="display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:6px; cursor:pointer; background:rgba(255,255,255,0.03);">
+                <div style="width:24px; height:24px; display:flex; align-items:center; justify-content:center;">${WIN11_ICONS.chrome}</div>
+                <div>
+                  <div style="color:#fff; font-weight:600;">Google Chrome Web Browser</div>
+                  <div style="color:#94a3b8; font-size:0.68rem;">Omnibox search & persistent Google profiles</div>
+                </div>
+              </div>
+              <div class="win11-rec-row" data-start-app="terminal" style="display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:6px; cursor:pointer; background:rgba(255,255,255,0.03);">
+                <div style="width:24px; height:24px; display:flex; align-items:center; justify-content:center;">${WIN11_ICONS.terminal}</div>
                 <div>
                   <div style="color:#fff; font-weight:600;">Windows Terminal (PowerShell)</div>
                   <div style="color:#94a3b8; font-size:0.68rem;">Live PRoot-Distro Subsystem connected</div>
@@ -2597,11 +3182,17 @@ print("All systems operational.")
 
           <!-- User Profile & Power Bar -->
           <div class="win11-user-footer">
-            <div class="win11-user-profile" id="btn-win11-profile">
-              <div style="width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg, #0078d4, #00bcf2); display:flex; align-items:center; justify-content:center; font-weight:bold; color:#fff;">P</div>
+            <div class="win11-user-profile" id="btn-win11-profile" onclick="openAppWindow('settings')">
+              <div class="win11-avatar-box">
+                <img src="${PRINCE_PFP_URL}" alt="Prince" class="win11-avatar-img" />
+                <span class="win11-avatar-badge" title="Administrator Verified">🛡️</span>
+              </div>
               <div>
-                <div style="font-weight:700; color:#fff; font-size:0.82rem;">Prince · VirgoYT</div>
-                <div style="font-size:0.68rem; color:#94a3b8;">Administrator</div>
+                <div style="font-weight:700; color:#fff; font-size:0.86rem; display:flex; align-items:center; gap:4px;">
+                  <span>Prince · VirgoYT</span>
+                  <span style="font-size:0.75rem; color:#38bdf8;">✓</span>
+                </div>
+                <div style="font-size:0.68rem; color:#94a3b8;">Administrator (darkvirgoyt@gmail.com)</div>
               </div>
             </div>
             <div style="display:flex; align-items:center; gap:4px;">
@@ -2616,25 +3207,27 @@ print("All systems operational.")
       if (iconsContainer) {
         iconsContainer.innerHTML = '';
         const WIN_APPS = [
-          { id: 'files', name: 'This PC (C:)', icon: '📁' },
-          { id: 'browser', name: 'Microsoft Edge', icon: '🌐' },
-          { id: 'msstore', name: 'Microsoft Store', icon: '🛍️' },
-          { id: 'terminal', name: 'Terminal (PS)', icon: '💻' },
-          { id: 'editor', name: 'Notepad', icon: '📝' },
-          { id: 'settings', name: 'Settings', icon: '⚙️' },
-          { id: 'taskmgr', name: 'Task Manager', icon: '📊' },
-          { id: 'photopea', name: 'Photoshop', icon: '🎨' },
-          { id: 'shotcut', name: 'Clipchamp', icon: '🎬' },
-          { id: 'steam', name: 'Xbox & Steam', icon: '🎮' },
-          { id: 'blender', name: 'Blender 5.0', icon: '🚀' },
-          { id: 'unreal', name: 'Unreal Engine', icon: '⚡' }
+          { id: 'files', name: 'This PC (C:)', icon: WIN11_ICONS.files },
+          { id: 'chrome', name: 'Google Chrome', icon: WIN11_ICONS.chrome },
+          { id: 'browser', name: 'Microsoft Edge', icon: WIN11_ICONS.edge },
+          { id: 'msstore', name: 'Microsoft Store', icon: WIN11_ICONS.msstore },
+          { id: 'terminal', name: 'Terminal (PS)', icon: WIN11_ICONS.terminal },
+          { id: 'editor', name: 'Notepad', icon: WIN11_ICONS.notepad },
+          { id: 'settings', name: 'Settings', icon: WIN11_ICONS.settings },
+          { id: 'taskmgr', name: 'Task Manager', icon: WIN11_ICONS.taskmgr },
+          { id: 'photopea', name: 'Photoshop', icon: WIN11_ICONS.photoshop },
+          { id: 'shotcut', name: 'Clipchamp', icon: WIN11_ICONS.video },
+          { id: 'steam', name: 'Xbox & Steam', icon: WIN11_ICONS.steam },
+          { id: 'vlc', name: 'VLC Media', icon: WIN11_ICONS.vlc },
+          { id: 'blender', name: 'Blender 5.0', icon: WIN11_ICONS.blender },
+          { id: 'unreal', name: 'Unreal Engine', icon: WIN11_ICONS.unreal }
         ];
         WIN_APPS.forEach(app => {
           const item = document.createElement('div');
           item.className = 'desktop-icon';
           item.innerHTML = `
-            <div class="icon-art">${app.icon}</div>
-            <div class="icon-label">${app.name}</div>
+            <div class="icon-art" style="width:42px; height:42px; display:flex; align-items:center; justify-content:center;">${app.icon}</div>
+            <div class="icon-label" style="margin-top:2px;">${app.name}</div>
           `;
           item.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -2665,9 +3258,9 @@ print("All systems operational.")
               <span>⚡</span> START
             </button>
             <div class="taskbar-apps-pinned">
+              <button class="taskbar-app-icon" data-open="chrome" title="Google Chrome">🌐</button>
               <button class="taskbar-app-icon" data-open="terminal" title="Terminal CLI">💻</button>
               <button class="taskbar-app-icon" data-open="msstore" title="Microsoft Store">🛍️</button>
-              <button class="taskbar-app-icon" data-open="browser" title="Web Browser">🌐</button>
               <button class="taskbar-app-icon" data-open="files" title="This PC / Files">📁</button>
               <button class="taskbar-app-icon" data-open="editor" title="Code Studio">📝</button>
               <button class="taskbar-app-icon" data-open="taskmgr" title="Task Manager">📊</button>
@@ -2686,20 +3279,23 @@ print("All systems operational.")
         startMenu.className = 'cyber-start-menu hidden';
         startMenu.innerHTML = `
           <div style="display:flex; align-items:center; gap:10px; padding-bottom:8px; border-bottom:1px solid rgba(0,229,255,0.2);">
-            <div style="width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg, #00e5ff, #bd00ff); display:flex; align-items:center; justify-content:center; font-weight:bold; color:#fff;">P</div>
+            <div style="width:36px; height:36px; border-radius:50%; overflow:hidden;">
+              <img src="${PRINCE_PFP_URL}" style="width:100%; height:100%; object-fit:cover;" />
+            </div>
             <div>
               <div style="font-weight:700; color:#fff; font-size:0.9rem;">Prince · VirgoYT</div>
               <div style="font-size:0.75rem; color:var(--neon-green);">👑 ROOT ADMINISTRATOR</div>
             </div>
           </div>
           <div style="display:flex; flex-direction:column; gap:4px; max-height:240px; overflow-y:auto;">
+            <button class="cyber-btn sm" data-start-app="chrome" style="text-align:left; justify-content:flex-start;">🌐 Google Chrome Browser</button>
             <button class="cyber-btn sm" data-start-app="terminal" style="text-align:left; justify-content:flex-start;">💻 Terminal CLI (Root Bash)</button>
             <button class="cyber-btn sm" data-start-app="msstore" style="text-align:left; justify-content:flex-start;">🛍️ Microsoft Store (Web Hub)</button>
-            <button class="cyber-btn sm" data-start-app="browser" style="text-align:left; justify-content:flex-start;">🌐 Chrome Web Browser</button>
             <button class="cyber-btn sm" data-start-app="files" style="text-align:left; justify-content:flex-start;">📁 This PC (5.0 TB Storage)</button>
             <button class="cyber-btn sm" data-start-app="editor" style="text-align:left; justify-content:flex-start;">📝 Code Studio Editor</button>
             <button class="cyber-btn sm" data-start-app="taskmgr" style="text-align:left; justify-content:flex-start;">📊 Task Manager (64GB RAM)</button>
             <button class="cyber-btn sm" data-start-app="steam" style="text-align:left; justify-content:flex-start;">🎮 Steam Gaming Platform</button>
+            <button class="cyber-btn sm" data-start-app="vlc" style="text-align:left; justify-content:flex-start;">🟧 VLC Media Player</button>
             <button class="cyber-btn sm" data-start-app="blender" style="text-align:left; justify-content:flex-start;">🚀 Blender 5.0.1 3D Studio</button>
             <button class="cyber-btn sm" data-start-app="unreal" style="text-align:left; justify-content:flex-start;">⚡ Unreal Engine 6 Hub</button>
             <button class="cyber-btn sm" data-start-app="photopea" style="text-align:left; justify-content:flex-start;">🎨 Photoshop Studio (Photopea)</button>
@@ -2714,15 +3310,16 @@ print("All systems operational.")
       if (iconsContainer) {
         iconsContainer.innerHTML = '';
         const APPS = [
+          { id: 'chrome', name: 'Chrome', icon: '🌐' },
           { id: 'terminal', name: 'Terminal CLI', icon: '💻' },
           { id: 'msstore', name: 'Microsoft Store', icon: '🛍️' },
-          { id: 'browser', name: 'Chrome Web', icon: '🌐' },
           { id: 'files', name: 'This PC (5TB)', icon: '📁' },
           { id: 'editor', name: 'Code Studio', icon: '📝' },
           { id: 'taskmgr', name: 'Task Manager', icon: '📊' },
           { id: 'photopea', name: 'Photoshop', icon: '🎨' },
           { id: 'shotcut', name: 'Video Studio', icon: '🎬' },
           { id: 'steam', name: 'Steam Hub', icon: '🎮' },
+          { id: 'vlc', name: 'VLC Media', icon: '🟧' },
           { id: 'blender', name: 'Blender 5.0', icon: '🚀' },
           { id: 'unreal', name: 'Unreal Engine', icon: '⚡' },
           { id: 'settings', name: 'Stream Config', icon: '⚙️' }
