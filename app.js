@@ -184,6 +184,222 @@
     return String(value).replace(/[&<>"']/g, ch => HTML_ESCAPES[ch]);
   }
 
+  /* ------------------------------------------------------------------ reality
+   *
+   * Every number this shell prints about the machine comes out of a live
+   * platform API, or it is printed as "not exposed". There is not one
+   * plausible-looking constant in here. A made-up 64 GB pool or a "120 FPS
+   * hardware-synchronised compositor" reads as a measurement, and a fabricated
+   * reading is worse than admitting the browser will not tell us — so where the
+   * platform withholds a value, the null is rendered rather than replaced.
+   *
+   * Most of these APIs are Chromium-only. On Firefox and Safari they are absent,
+   * so every reading is allowed to be null and every caller must render it.
+   */
+  const NOT_EXPOSED = 'not exposed';
+
+  function fact(value, suffix) {
+    if (value === null || value === undefined || value === '') return NOT_EXPOSED;
+    return suffix ? value + ' ' + suffix : String(value);
+  }
+
+  /* navigator.storage.estimate() is the only quota figure that exists, and it
+   * is a browser-managed allowance for this origin — not a disk, not a pool. It
+   * is async, so callers await it instead of guessing. */
+  function storageEstimate() {
+    if (!navigator.storage || typeof navigator.storage.estimate !== 'function') {
+      return Promise.resolve(null);
+    }
+    return navigator.storage.estimate().catch(() => null);
+  }
+
+  function fmtDuration(ms) {
+    if (!Number.isFinite(ms)) return NOT_EXPOSED;
+    const s = Math.floor(ms / 1000);
+    const d = Math.floor(s / 86400);
+    const h = Math.floor((s % 86400) / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    if (d) return d + 'd ' + h + 'h ' + m + 'm';
+    if (h) return h + 'h ' + m + 'm';
+    if (m) return m + 'm ' + (s % 60) + 's';
+    return (ms / 1000).toFixed(1) + 's';
+  }
+
+  /* WebGL's unmasked renderer, when the browser will hand it over. A masked
+   * string is still the truthful answer, so it is reported as-is. */
+  function readGpuInfo() {
+    let gl = null;
+    try {
+      gl = document.createElement('canvas').getContext('webgl2')
+        || document.createElement('canvas').getContext('webgl');
+    } catch (e) { gl = null; }
+    if (!gl) return { renderer: null, vendor: null, version: null, reason: 'WebGL unavailable' };
+    try {
+      const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+      return {
+        renderer: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
+        vendor: dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
+        version: gl.getParameter(gl.VERSION),
+        masked: !dbg,
+        reason: null,
+      };
+    } catch (e) {
+      return { renderer: null, vendor: null, version: null, reason: 'WebGL blocked by this browser' };
+    }
+  }
+
+  function platformFacts() {
+    const nav = window.navigator || {};
+    const scr = window.screen || {};
+    const conn = nav.connection || nav.mozConnection || nav.webkitConnection || null;
+    const mem = window.performance && window.performance.memory ? window.performance.memory : null;
+    const gpu = readGpuInfo();
+    const now = window.performance && Number.isFinite(performance.now()) ? performance.now() : null;
+
+    return {
+      /* The one real number the platform gives us about the CPU. */
+      logicalCores: Number.isFinite(nav.hardwareConcurrency) && nav.hardwareConcurrency > 0
+        ? nav.hardwareConcurrency : null,
+      /* Chromium-only, and deliberately bucketed to 0.25/0.5/1/2/4/8 — it is a
+       * cap on device class, not a measurement, so it is labelled as such. */
+      deviceMemoryGb: typeof nav.deviceMemory === 'number' ? nav.deviceMemory : null,
+      jsHeapUsedBytes: mem && Number.isFinite(mem.usedJSHeapSize) ? mem.usedJSHeapSize : null,
+      jsHeapLimitBytes: mem && Number.isFinite(mem.jsHeapSizeLimit) ? mem.jsHeapSizeLimit : null,
+      screenWidth: Number.isFinite(scr.width) ? scr.width : null,
+      screenHeight: Number.isFinite(scr.height) ? scr.height : null,
+      availWidth: Number.isFinite(scr.availWidth) ? scr.availWidth : null,
+      availHeight: Number.isFinite(scr.availHeight) ? scr.availHeight : null,
+      viewportWidth: Number.isFinite(window.innerWidth) ? window.innerWidth : null,
+      viewportHeight: Number.isFinite(window.innerHeight) ? window.innerHeight : null,
+      dpr: Number.isFinite(window.devicePixelRatio) ? window.devicePixelRatio : null,
+      colourDepth: Number.isFinite(scr.colorDepth) ? scr.colorDepth : null,
+      maxTouchPoints: Number.isFinite(nav.maxTouchPoints) ? nav.maxTouchPoints : null,
+      platform: nav.userAgentData && nav.userAgentData.platform
+        ? nav.userAgentData.platform
+        : (typeof nav.platform === 'string' ? nav.platform : null),
+      mobile: nav.userAgentData ? !!nav.userAgentData.mobile : null,
+      ua: typeof nav.userAgent === 'string' ? nav.userAgent : null,
+      language: nav.language || null,
+      vendor: nav.vendor || null,
+      effectiveType: conn && conn.effectiveType ? conn.effectiveType : null,
+      downlinkMbps: conn && Number.isFinite(conn.downlink) ? conn.downlink : null,
+      rttMs: conn && Number.isFinite(conn.rtt) ? conn.rtt : null,
+      saveData: conn ? !!conn.saveData : null,
+      online: typeof nav.onLine === 'boolean' ? nav.onLine : null,
+      /* performance.now() is monotonic since navigation start, so this is the
+       * real age of the document — the only uptime a tab genuinely has. */
+      pageAgeMs: now,
+      cookiesEnabled: nav.cookieEnabled === true,
+      origin: location.origin,
+      host: location.host,
+      gpu: gpu,
+    };
+  }
+
+  /* ------------------------------------------------------------------ file index
+   *
+   * A static page cannot list a directory and a browser cannot read a local
+   * disk, so the only file list that can be honest is the one this app actually
+   * loads. Every size below is read with a live HEAD request, which means a file
+   * that is not deployed reports 404 instead of a made-up byte count, and a file
+   * that grows reports its new size.
+   */
+  const SITE_FILES = [
+    'pc.html', 'app.js', 'style.css', 'auth.html', 'index.html',
+    'manifest.json', 'sw.js', 'server.py', 'playstore.html',
+    'server/auth-service.js', 'tools/vxc', 'install.sh',
+  ];
+
+  function headSize(url) {
+    return fetch(url, { method: 'HEAD', cache: 'no-store' }).then(r => {
+      const len = r.headers.get('content-length');
+      return {
+        ok: r.ok,
+        status: r.status,
+        bytes: r.ok && len && /^\d+$/.test(len) ? Number(len) : null,
+        modified: r.headers.get('last-modified'),
+      };
+    }).catch(() => ({ ok: false, status: 0, bytes: null, modified: null }));
+  }
+
+  async function siteFileIndex() {
+    const base = new URL('.', location.href).href;
+    return Promise.all(SITE_FILES.map(async name => {
+      const r = await headSize(base + name);
+      return { name, ok: r.ok, status: r.status, bytes: r.bytes, modified: r.modified };
+    }));
+  }
+
+  function stamp(iso) {
+    if (!iso) return '                 ';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '                 ';
+    const two = n => String(n).padStart(2, '0');
+    const ampm = d.getHours() >= 12 ? 'PM' : 'AM';
+    return two(d.getMonth() + 1) + '/' + two(d.getDate()) + '/' + d.getFullYear()
+      + '  ' + two(d.getHours() % 12 || 12) + ':' + two(d.getMinutes()) + ' ' + ampm;
+  }
+
+  /* One source of truth for what the machine is, so the banner, neofetch, the
+   * settings panel and the Store cannot drift apart or drift into fiction. */
+  function realityLine() {
+    const f = platformFacts();
+    return {
+      f,
+      cpu: fact(f.logicalCores, 'logical cores'),
+      gpu: f.gpu.renderer || f.gpu.reason || NOT_EXPOSED,
+      mem: f.deviceMemoryGb === null
+        ? NOT_EXPOSED
+        : 'up to ' + f.deviceMemoryGb + ' GB device class (browser-declared bucket)',
+      screen: (f.screenWidth && f.screenHeight)
+        ? f.screenWidth + 'x' + f.screenHeight + ' @ ' + f.dpr + 'x'
+        : NOT_EXPOSED,
+    };
+
+  /* Any element carrying data-pf="key" is filled from a live reading as soon as
+   * its window is in the DOM. One pass, centralised, so no panel — settings,
+   * store, tray, about — can hardcode a specification and drift from the truth. */
+  const PF_KEYS = {
+    host: f => f.host || NOT_EXPOSED,
+    origin: f => f.origin || NOT_EXPOSED,
+    cores: f => fact(f.logicalCores, 'logical cores'),
+    deviceMemory: f => f.deviceMemoryGb === null
+      ? NOT_EXPOSED
+      : 'up to ' + f.deviceMemoryGb + ' GB device class (browser bucket)',
+    heap: f => f.jsHeapUsedBytes === null
+      ? NOT_EXPOSED
+      : fmtBytes(f.jsHeapUsedBytes) + ' of ' + fmtBytes(f.jsHeapLimitBytes),
+    gpu: f => f.gpu.renderer || f.gpu.reason || NOT_EXPOSED,
+    screen: f => (f.screenWidth && f.screenHeight)
+      ? f.screenWidth + '×' + f.screenHeight + ' @ ' + f.dpr + 'x'
+      : NOT_EXPOSED,
+    ua: f => fact(f.ua),
+    platform: f => fact(f.platform),
+    touch: f => fact(f.maxTouchPoints),
+    connection: f => f.effectiveType
+      ? f.effectiveType + ' · ' + f.downlinkMbps + ' Mb/s · ' + f.rttMs + ' ms'
+      : NOT_EXPOSED,
+    uptime: f => fmtDuration(f.pageAgeMs),
+    account: () => vxcCurrentUser().email || 'not signed in',
+    quota: f => f.storageLabel || NOT_EXPOSED,
+  };
+
+  async function hydratePlatformFacts(root) {
+    const scope = root && typeof root.querySelectorAll === 'function' ? root : document;
+    const nodes = scope.querySelectorAll('[data-pf]');
+    if (!nodes.length) return;
+    const f = platformFacts();
+    const est = await storageEstimate();
+    if (est && Number.isFinite(est.quota)) {
+      f.storageLabel = fmtBytes(est.usage || 0) + ' used of ' + fmtBytes(est.quota) + ' allowance';
+    }
+    nodes.forEach(n => {
+      const fn = PF_KEYS[n.getAttribute('data-pf')];
+      n.textContent = fn ? fn(f) : NOT_EXPOSED;
+    });
+  }
+  }
+
   // Large sites (Google, most banks, anything behind a CDN) send
   // X-Frame-Options: DENY or a frame-ancestors CSP, so they refuse to render
   // inside our iframe and the user just sees a blank rectangle. We cannot read
@@ -1338,9 +1554,6 @@
       if (blockedOpen) blockedOpen.dataset.url = target;
     }
 
-    function hideBlocked() {
-      if (blockedPanel) blockedPanel.hidden = true;
-    }
 
     if (blockedOpen) {
       blockedOpen.addEventListener('click', () => {
@@ -1432,68 +1645,7 @@
   // ==========================================================================
   // 📁 Interactive Windows 11 File Explorer
   // ==========================================================================
-  const FILE_EXPLORER_DIRS = {
-    'root': [
-      { name: 'Program Files', type: 'dir', size: '4.2 GB' },
-      { name: 'Program Files (x86)', type: 'dir', size: '2.8 GB' },
-      { name: 'Windows', type: 'dir', size: '18.4 GB' },
-      { name: 'Users', type: 'dir', size: '120 GB' },
-      { name: 'VirgoX-Files (5.0 TB)', type: 'dir', size: '4.8 TB Free' }
-    ],
-    'Program Files': [
-      { name: 'Google Chrome', type: 'dir', size: '320 MB' },
-      { name: 'Microsoft Edge', type: 'dir', size: '280 MB' },
-      { name: 'Windows Terminal', type: 'dir', size: '45 MB' },
-      { name: 'Steam', type: 'dir', size: '1.2 GB' },
-      { name: 'Blender Foundation', type: 'dir', size: '850 MB' },
-      { name: 'Epic Games', type: 'dir', size: '420 MB' }
-    ],
-    'Windows': [
-      { name: 'System32', type: 'dir', size: '12 GB' },
-      { name: 'Fonts', type: 'dir', size: '340 MB' },
-      { name: 'explorer.exe', type: 'exe', size: '4.2 MB', action: 'files' },
-      { name: 'notepad.exe', type: 'exe', size: '1.8 MB', action: 'editor' },
-      { name: 'cmd.exe', type: 'exe', size: '320 KB', action: 'terminal' },
-      { name: 'powershell.exe', type: 'exe', size: '450 KB', action: 'terminal' },
-      { name: 'Taskmgr.exe', type: 'exe', size: '2.1 MB', action: 'taskmgr' }
-    ],
-    'Users': [
-      { name: 'Prince', type: 'dir', size: '118 GB' },
-      { name: 'Public', type: 'dir', size: '2 GB' }
-    ],
-    'Prince': [
-      { name: 'Desktop', type: 'dir', size: '12 MB' },
-      { name: 'Documents', type: 'dir', size: '450 MB' },
-      { name: 'Downloads', type: 'dir', size: '14.2 GB' },
-      { name: 'Pictures', type: 'dir', size: '2.4 GB' },
-      { name: 'VirgoX-ROMs', type: 'dir', size: '98 GB' },
-      { name: 'welcome_to_windows11.txt', type: 'file', size: '2 KB', action: 'editor' }
-    ],
-    'Downloads': [
-      { name: 'ChromeSetup.exe', type: 'exe', size: '1.4 MB', action: 'chrome' },
-      { name: 'VirgoX-Workstation-Setup.exe', type: 'exe', size: '24 MB', action: 'terminal' },
-      { name: 'motorola_fogos_rom_v2.zip', type: 'file', size: '3.4 GB', action: 'editor' },
-      { name: 'adb_fastboot_linux.tar.gz', type: 'file', size: '18 MB', action: 'terminal' }
-    ],
-    'Documents': [
-      { name: 'VirgoX_Cloud_PC_Specs.txt', type: 'file', size: '4 KB', action: 'editor' },
-      { name: 'system_architecture.md', type: 'file', size: '12 KB', action: 'editor' },
-      { name: 'credentials_vault.enc', type: 'file', size: '1 KB', action: 'editor' }
-    ],
-    'Pictures': [
-      { name: 'win11_bloom_wallpaper.png', type: 'file', size: '4.8 MB', action: 'photopea' },
-      { name: 'prince_avatar.png', type: 'file', size: '280 KB', action: 'photopea' },
-      { name: 'workstation_screenshot.png', type: 'file', size: '1.2 MB', action: 'photopea' }
-    ],
-    'VirgoX-Files (5.0 TB)': [
-      { name: 'Android-ROM-Builds', type: 'dir', size: '420 GB' },
-      { name: 'Mesa-LLVMpipe-3D', type: 'dir', size: '1.2 GB' },
-      { name: 'Virtual-RAM-ZRAM-Pool', type: 'dir', size: '64 GB' },
-      { name: 'Cloud-Storage-Pool.img', type: 'file', size: '5.0 TB', action: 'terminal' }
-    ]
-  };
-
-  let activeExplorerPath = 'Prince';
+  let activeExplorerPath = 'This PC';
 
   function getFilesHtml() {
     const isWin = state.config.osMode === 'windows';
@@ -1510,23 +1662,19 @@
         <!-- Address Bar -->
         <div class="explorer-addr-bar">
           <div class="explorer-path-box">
-            <span>This PC &gt; Local Disk (C:) &gt; Users &gt; </span>
-            <span class="active-path" id="explorer-crumb-text">Prince</span>
+            <span>This PC &gt; </span>
+id="explorer-crumb-text">This PC<
           </div>
-          <span style="font-size:0.75rem; color:#60a5fa; font-weight:700; white-space:nowrap; margin-left:8px;">4.8 TB Free</span>
+id="explorer-quota" title="navigator.storage.estimate() — what the browser allows this origin to store">reading storage…</span>
         </div>
 
         <div style="display:flex; flex:1; overflow:hidden;">
           <!-- Left Tree Sidebar -->
           <div style="width:160px; background:rgba(20,24,38,0.95); border-right:1px solid rgba(255,255,255,0.08); padding:8px 4px; display:flex; flex-direction:column; gap:2px; font-size:0.78rem; overflow-y:auto;">
-            <div class="files-sidebar-item" data-nav="root" style="padding:5px 8px; border-radius:6px; cursor:pointer;">💻 This PC (C:)</div>
-            <div class="files-sidebar-item" data-nav="Prince" style="padding:5px 8px; border-radius:6px; cursor:pointer; color:#60a5fa; font-weight:700;">👤 Users\Prince</div>
-            <div class="files-sidebar-item" data-nav="Downloads" style="padding:5px 8px; border-radius:6px; cursor:pointer;">⬇️ Downloads</div>
-            <div class="files-sidebar-item" data-nav="Documents" style="padding:5px 8px; border-radius:6px; cursor:pointer;">📁 Documents</div>
-            <div class="files-sidebar-item" data-nav="Pictures" style="padding:5px 8px; border-radius:6px; cursor:pointer;">🖼️ Pictures</div>
-            <div class="files-sidebar-item" data-nav="Program Files" style="padding:5px 8px; border-radius:6px; cursor:pointer;">📦 Program Files</div>
-            <div class="files-sidebar-item" data-nav="Windows" style="padding:5px 8px; border-radius:6px; cursor:pointer;">🪟 Windows</div>
-            <div class="files-sidebar-item" data-nav="VirgoX-Files (5.0 TB)" style="padding:5px 8px; border-radius:6px; cursor:pointer; color:var(--neon-green);">💽 VirgoX-Files (5TB)</div>
+            <div class="files-sidebar-item" data-nav="This PC" style="padding:5px 8px; border-radius:6px; cursor:pointer;">💻 This PC</div>
+            <div class="files-sidebar-item" data-nav="Deployed files" style="padding:5px 8px; border-radius:6px; cursor:pointer;">📦 Deployed files</div>
+            <div class="files-sidebar-item" data-nav="Browser storage" style="padding:5px 8px; border-radius:6px; cursor:pointer;">💾 Browser storage</div>
+            <div class="files-sidebar-item" data-nav="This device" style="padding:5px 8px; border-radius:6px; cursor:pointer;">📊 This device</div>
           </div>
 
           <!-- Main Grid -->
@@ -1538,111 +1686,178 @@
     `;
   }
 
+  /* The tree is rebuilt on every navigation because every size in it comes from
+   * a live HEAD request. Nothing here is a stored constant, so a file that
+   * changes size shows its new size and a file that is not deployed says so. */
+  const EXPLORER_PARENT = {
+    'Deployed files': 'This PC',
+    'Browser storage': 'This PC',
+    'This device': 'This PC',
+  };
+
   function initFilesActions(win) {
     const grid = win.querySelector('#explorer-files-grid');
     const crumb = win.querySelector('#explorer-crumb-text');
     const upBtn = win.querySelector('#explorer-btn-up');
     const refreshBtn = win.querySelector('#explorer-btn-refresh');
+    const quotaChip = win.querySelector('#explorer-quota');
+
+    let tree = null;
 
     function renderDir(dirKey) {
       if (!grid) return;
       activeExplorerPath = dirKey;
       if (crumb) crumb.textContent = dirKey;
+      win.querySelectorAll('.files-sidebar-item[data-nav]').forEach(b2 => {
+        b2.style.color = b2.getAttribute('data-nav') === dirKey ? '#60a5fa' : '';
+        b2.style.fontWeight = b2.getAttribute('data-nav') === dirKey ? '700' : '';
+      });
+      grid.innerHTML = '<div style="grid-column:1/-1; font-size:0.72rem; color:#94a3b8;">reading…</div>';
 
-      const items = FILE_EXPLORER_DIRS[dirKey] || FILE_EXPLORER_DIRS['Prince'] || [];
-      grid.innerHTML = '';
+      buildExplorerTree().then(built => {
+        tree = built;
+        const items = tree[dirKey] || [];
+        grid.innerHTML = '';
 
-      items.forEach(item => {
-        const el = document.createElement('div');
-        el.className = 'files-grid-item';
-        el.style.display = 'flex';
-        el.style.flexDirection = 'column';
-        el.style.alignItems = 'center';
-        el.style.gap = '4px';
-        el.style.padding = '8px 4px';
-        el.style.borderRadius = '8px';
-        el.style.cursor = 'pointer';
-        el.style.textAlign = 'center';
+        if (!items.length) {
+          grid.innerHTML = '<div style="grid-column:1/-1; font-size:0.72rem; color:#94a3b8;">nothing here</div>';
+          return;
+        }
 
-        let iconSvg = WIN11_ICONS.folder;
-        if (item.type === 'exe') iconSvg = WIN11_ICONS.terminal;
-        else if (item.name.endsWith('.txt') || item.name.endsWith('.md')) iconSvg = WIN11_ICONS.notepad;
-        else if (item.name.endsWith('.png') || item.name.endsWith('.jpg')) iconSvg = WIN11_ICONS.photoshop;
-        else if (item.name.endsWith('.zip') || item.name.endsWith('.tar.gz')) iconSvg = WIN11_ICONS.files;
-        else if (item.type === 'file') iconSvg = WIN11_ICONS.file;
+        items.forEach(item => {
+          const el = document.createElement('div');
+          el.className = 'files-grid-item';
+          el.style.display = 'flex';
+          el.style.flexDirection = 'column';
+          el.style.alignItems = 'center';
+          el.style.gap = '4px';
+          el.style.padding = '8px 4px';
+          el.style.borderRadius = '8px';
+          el.style.cursor = item.type === 'text' ? 'default' : 'pointer';
+          el.style.textAlign = 'center';
 
-        el.innerHTML = `
-          <div style="width:36px; height:36px; display:flex; align-items:center; justify-content:center;">${iconSvg}</div>
-          <div style="font-size:0.72rem; color:#fff; word-break:break-word; max-width:84px; line-height:1.2;">${item.name}</div>
-          <div style="font-size:0.62rem; color:#94a3b8;">${item.size}</div>
-        `;
+          let iconSvg = WIN11_ICONS.folder;
+          if (item.type === 'text') iconSvg = null;
+          else if (item.type === 'file') iconSvg = WIN11_ICONS.file;
+          else if (item.name.endsWith('.txt') || item.name.endsWith('.md')) iconSvg = WIN11_ICONS.notepad;
+          else if (item.name.endsWith('.png') || item.name.endsWith('.jpg')) iconSvg = WIN11_ICONS.photoshop;
 
-        el.addEventListener('click', (e) => {
-          e.stopPropagation();
-          if (item.type === 'dir' && FILE_EXPLORER_DIRS[item.name]) {
-            renderDir(item.name);
-          } else if (item.action) {
-            openAppWindow(item.action);
-          } else {
-            openAppWindow('editor');
+          el.innerHTML = `
+            <div style="width:36px; height:36px; display:flex; align-items:center; justify-content:center;">${iconSvg || ''}</div>
+            <div style="font-size:0.72rem; color:#fff; word-break:break-word; max-width:88px; line-height:1.2;">${escapeHtml(item.name)}</div>
+            <div style="font-size:0.62rem; color:#94a3b8; word-break:break-word; max-width:88px;">${escapeHtml(item.size)}</div>
+          `;
+
+          if (item.type === 'dir') {
+            el.addEventListener('click', (e) => { e.stopPropagation(); renderDir(item.name); });
+          } else if (item.href) {
+            // A real file, at a real URL. Opening it is the honest action; the
+            // old tree called openAppWindow('editor') for everything, which
+            // pretended a photo and a shader were the same thing.
+            el.title = item.href;
+            el.addEventListener('click', (e) => { e.stopPropagation(); window.open(item.href, '_blank', 'noopener'); });
           }
+
+          grid.appendChild(el);
         });
 
-        grid.appendChild(el);
+        if (quotaChip) {
+          storageEstimate().then(est => {
+            quotaChip.textContent = est && Number.isFinite(est.quota)
+              ? fmtBytes(est.usage || 0) + ' used of ' + fmtBytes(est.quota) + ' allowance'
+              : NOT_EXPOSED;
+          });
+        }
+      }).catch(() => {
+        grid.innerHTML = '<div style="grid-column:1/-1; font-size:0.72rem; color:#fca5a5;">could not read the file list</div>';
       });
     }
 
     if (upBtn) {
-      upBtn.addEventListener('click', () => {
-        if (activeExplorerPath === 'root') return;
-        if (activeExplorerPath === 'Prince') renderDir('Users');
-        else if (activeExplorerPath === 'Users') renderDir('root');
-        else renderDir('root');
-      });
+      upBtn.addEventListener('click', () => renderDir(EXPLORER_PARENT[activeExplorerPath] || 'This PC'));
     }
 
     if (refreshBtn) {
       refreshBtn.addEventListener('click', () => renderDir(activeExplorerPath));
     }
 
-    win.querySelectorAll('.files-sidebar-item').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const nav = btn.getAttribute('data-nav');
-        if (nav && FILE_EXPLORER_DIRS[nav]) renderDir(nav);
-      });
+    win.querySelectorAll('.files-sidebar-item[data-nav]').forEach(btn => {
+      btn.addEventListener('click', () => renderDir(btn.getAttribute('data-nav')));
     });
 
-    renderDir(activeExplorerPath || 'Prince');
+    renderDir(activeExplorerPath || 'This PC');
   }
 
   // ==========================================================================
   // 🎥 VLC Media Player Window
   // ==========================================================================
+  /* The old panel named "VLC Media Player 3.0.20", advertised "Hardware
+   * Accelerated Video Output (Mesa Direct Sync)", drew a menu bar where every
+   * item was inert, and offered an "Open Media File" button that just opened
+   * File Explorer. VLC is a native application; a page can play media with the
+   * browser's own decoders, so that is what this says and does. */
+
+  /* Wires the file picker and reports which codecs the browser actually claims.
+   * The chosen file is played from a blob URL inside this tab — nothing is
+   * uploaded, because there is nowhere on a static page for it to go. */
+  function mountVlcPlayer(win) {
+    const input = win.querySelector('#vxc-media-input');
+    const video = win.querySelector('#vxc-media-video');
+    const note = win.querySelector('#vxc-media-note');
+    if (!input || !video) return;
+
+    if (note && video.canPlayType) {
+      const codecs = [
+        ['video/mp4; codecs="avc1.42E01E"', 'H.264/AAC in MP4'],
+        ['video/webm; codecs="vp9"', 'VP9 in WebM'],
+        ['video/webm; codecs="av01.0.05M.08"', 'AV1 in WebM'],
+        ['audio/mpeg', 'MP3'],
+      ].filter(c => video.canPlayType(c[0])).map(c => c[1]);
+      note.textContent = 'Codecs this browser reports: '
+        + (codecs.length ? codecs.join(', ') : 'none reported for the common formats');
+    }
+
+    input.addEventListener('change', () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      if (video.src) URL.revokeObjectURL(video.src);
+      video.src = URL.createObjectURL(file);
+      video.style.display = 'block';
+      if (note) {
+        note.textContent = file.name + ' — ' + (file.size ? fmtBytes(file.size) : 'size not exposed')
+          + ', playing with the codecs this browser reports as supported.';
+      }
+      // Autoplay can be refused before any user gesture; the controls still work.
+      video.play().catch(() => {});
+    });
+  }
   function getVlcHtml() {
-    return `
-      <div style="display:flex; flex-direction:column; height:100%; background:#111; color:#fff; font-family:'Segoe UI', sans-serif;">
-        <div style="display:flex; align-items:center; gap:8px; padding:6px 12px; background:#18181b; border-bottom:1px solid rgba(255,255,255,0.1); font-size:0.75rem;">
-          <span>Media</span> <span>Playback</span> <span>Audio</span> <span>Video</span> <span>Subtitle</span> <span>Tools</span> <span>View</span> <span>Help</span>
+    const probe = `
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; gap:12px;">
+        <div style="width:64px; height:64px;">${WIN11_ICONS.vlc}</div>
+        <div style="font-weight:700; font-size:1.05rem; color:#f97316;">Media Player</div>
+        <p style="color:#94a3b8; font-size:0.8rem; max-width:380px; text-align:center; line-height:1.5;">
+          This plays a file you pick using the codecs already in your browser. It is not
+          VLC, and there is no version number to quote, because nothing is bundled here.
+        </p>
+        <label class="cyber-btn sm neon-amber" style="cursor:pointer;">
+          &#9654; Choose a media file
+          <input type="file" accept="video/*,audio/*" style="display:none;" id="vxc-media-input">
+        </label>
+        <video id="vxc-media-video" controls playsinline style="width:100%; max-width:420px; border-radius:6px; background:#000; display:none;"></video>
+        <div style="font-size:0.7rem; color:#64748b; text-align:center;" id="vxc-media-note">
+          Nothing is uploaded. The file stays in this tab.
         </div>
-        <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#000; padding:20px;">
-          <div style="width:72px; height:72px; margin-bottom:12px;">${WIN11_ICONS.vlc}</div>
-          <div style="font-weight:700; font-size:1.1rem; color:#f97316;">VLC Media Player 3.0.20</div>
-          <div style="font-size:0.78rem; color:#94a3b8; margin-top:4px;">Hardware Accelerated Video Output (Mesa Direct Sync)</div>
-          <button class="cyber-btn sm neon-amber" style="margin-top:16px;" onclick="openAppWindow('files')">📁 Open Media File</button>
+      </div>`;
+
+
+    return `<div style="display:flex; flex-direction:column; height:100%; background:#111; color:#fff; font-family:'Segoe UI', sans-serif;">
+        <div style="display:flex; align-items:center; gap:10px; padding:6px 12px; background:#18181b; border-bottom:1px solid rgba(255,255,255,0.1); font-size:0.75rem;">
+          <span style="color:#f97316; font-weight:700;">Media Player</span>
+          <span style="color:#64748b;">plays locally · nothing is uploaded</span>
         </div>
-        <div style="display:flex; align-items:center; gap:12px; padding:8px 14px; background:#18181b; border-top:1px solid rgba(255,255,255,0.1);">
-          <button class="cyber-btn xs neon-green">▶</button>
-          <button class="cyber-btn xs">⏹</button>
-          <button class="cyber-btn xs">⏮</button>
-          <button class="cyber-btn xs">⏭</button>
-          <div style="flex:1; height:4px; background:#333; border-radius:2px; position:relative;">
-            <div style="width:30%; height:100%; background:#f97316; border-radius:2px;"></div>
-          </div>
-          <span style="font-size:0.7rem; color:#aaa;">00:42 / 03:15</span>
-          <span style="font-size:0.8rem;">🔊</span>
-        </div>
-      </div>
-    `;
+        ${probe}
+      </div>`;
   }
 
   // ==========================================================================
@@ -1781,14 +1996,14 @@
             <button class="cyber-btn sm" data-start-app="terminal" style="text-align:left; justify-content:flex-start;">💻 Terminal CLI (Root Bash)</button>
             <button class="cyber-btn sm" data-start-app="msstore" style="text-align:left; justify-content:flex-start;">🛍️ Microsoft Store (Web Hub)</button>
             <button class="cyber-btn sm" data-start-app="browser" style="text-align:left; justify-content:flex-start;">🌐 Chrome Web Browser</button>
-            <button class="cyber-btn sm" data-start-app="files" style="text-align:left; justify-content:flex-start;">📁 This PC (5.0 TB Storage)</button>
+            <button class="cyber-btn sm" data-start-app="files" style="text-align:left; justify-content:flex-start;">📁 This PC</button>
             <button class="cyber-btn sm" data-start-app="editor" style="text-align:left; justify-content:flex-start;">📝 Code Studio Editor</button>
-            <button class="cyber-btn sm" data-start-app="taskmgr" style="text-align:left; justify-content:flex-start;">📊 Task Manager (64GB RAM)</button>
+            <button class="cyber-btn sm" data-start-app="taskmgr" style="text-align:left; justify-content:flex-start;">📊 Task Manager</button>
             <button class="cyber-btn sm" data-start-app="steam" style="text-align:left; justify-content:flex-start;">🎮 Steam Gaming Platform</button>
-            <button class="cyber-btn sm" data-start-app="blender" style="text-align:left; justify-content:flex-start;">🚀 Blender 5.0.1 3D Studio</button>
-            <button class="cyber-btn sm" data-start-app="unreal" style="text-align:left; justify-content:flex-start;">⚡ Unreal Engine 6 Hub</button>
+            <button class="cyber-btn sm" data-start-app="blender" style="text-align:left; justify-content:flex-start;">🚀 Blender</button>
+            <button class="cyber-btn sm" data-start-app="unreal" style="text-align:left; justify-content:flex-start;">⚡ Unreal Engine</button>
             <button class="cyber-btn sm" data-start-app="photopea" style="text-align:left; justify-content:flex-start;">🎨 Photoshop Studio (Photopea)</button>
-            <button class="cyber-btn sm" data-start-app="shotcut" style="text-align:left; justify-content:flex-start;">🎬 Shotcut 4K Video Editor</button>
+            <button class="cyber-btn sm" data-start-app="shotcut" style="text-align:left; justify-content:flex-start;">🎬 FFmpeg WASM Converter</button>
           </div>
           <div style="display:flex; justify-content:space-between; align-items:center; padding-top:8px; border-top:1px solid rgba(255,255,255,0.1);">
             <button id="btn-start-settings" class="cyber-btn xs neon-cyan">⚙️ Settings</button>
@@ -1810,9 +2025,9 @@
       { id: 'editor', name: 'Code Studio', icon: '📝' },
       { id: 'taskmgr', name: 'Task Manager', icon: '📊' },
       { id: 'photopea', name: 'Photoshop', icon: '🎨' },
-      { id: 'shotcut', name: 'Video Studio', icon: '🎬' },
+      { id: 'shotcut', name: 'Video Converter', icon: '🎬' },
       { id: 'steam', name: 'Steam Hub', icon: '🎮' },
-      { id: 'blender', name: 'Blender 5.0', icon: '🚀' },
+      { id: 'blender', name: 'Blender', icon: '🚀' },
       { id: 'unreal', name: 'Unreal Engine', icon: '⚡' },
       { id: 'settings', name: 'Stream Config', icon: '⚙️' }
     ];
@@ -2002,7 +2217,7 @@
         content: getMsStoreHtml()
       },
       files: {
-        title: isWinTheme ? 'File Explorer — This PC (C:)' : 'This PC — 5.0 TB Storage Pool',
+        title: `File Explorer — ${location.host}`,
         icon: WIN11_ICONS.files,
         width: Math.min(560, window.innerWidth - 30),
         height: 360,
@@ -2045,18 +2260,20 @@
         onMount: mountTaskmgr
       },
       settings: {
-        title: 'Settings — Windows 11 Pro System',
+        title: 'Settings',
         icon: WIN11_ICONS.settings,
         width: Math.min(560, window.innerWidth - 20),
         height: 400,
-        content: getSettingsHtml()
+        content: getSettingsHtml(),
+        onMount: renderWallpaperPicker
       },
       windows_settings: {
-        title: 'Settings — Windows 11 Pro System',
+        title: 'Settings',
         icon: WIN11_ICONS.settings,
         width: Math.min(560, window.innerWidth - 20),
         height: 400,
-        content: getSettingsHtml()
+        content: getSettingsHtml(),
+        onMount: renderWallpaperPicker
       },
       photopea: {
         title: 'Photopea — Image Editor',
@@ -2101,11 +2318,12 @@
         content: getSteamHtml()
       },
       vlc: {
-        title: 'VLC Media Player',
+        title: 'Media Player',
         icon: WIN11_ICONS.vlc,
         width: Math.min(520, window.innerWidth - 30),
         height: 330,
-        content: getVlcHtml()
+        content: getVlcHtml(),
+        onMount: mountVlcPlayer
       },
       blender: {
         title: 'Blender',
@@ -2116,14 +2334,14 @@
         onMount: mountGpuProbe
       },
       unreal: {
-        title: 'Unreal Engine 6 Hub',
+        title: 'Unreal Engine',
         icon: WIN11_ICONS.unreal,
         width: Math.min(540, window.innerWidth - 30),
         height: 350,
         content: getUnrealHtml()
       },
       unreal_engine: {
-        title: 'Unreal Engine 6 Hub',
+        title: 'Unreal Engine',
         icon: WIN11_ICONS.unreal,
         width: Math.min(540, window.innerWidth - 30),
         height: 350,
@@ -2143,7 +2361,7 @@
       icon: '🗔',
       width: Math.min(480, window.innerWidth - 30),
       height: 300,
-      content: `<div style="padding:20px; color:#fff;"><h4>⚡ Application Running: ${appId}</h4><p style="color:#aaa; font-size:0.85rem; margin-top:8px;">Running inside VirgoX container with 64 GB virtual RAM and 120 FPS hardware acceleration.</p></div>`
+      content: `<div style="padding:20px; color:#fff;"><h4>⚡ ${escapeHtml(appId)}</h4><p style="color:#aaa; font-size:0.85rem; margin-top:8px;">This app id has no window of its own, so there is nothing to show here. The placeholder that stood in for it described a pool of memory and a frame rate no measurement ever produced.</p><p style="color:#94a3b8; font-size:0.8rem; margin-top:10px;">What is real on this page: <span data-pf="cores"></span> · <span data-pf="gpu"></span> · <span data-pf="quota"></span></p></div>`
     };
 
     // Responsive initial position
@@ -2181,6 +2399,8 @@
     // tag that will never run.
     if (typeof cfg.onMount === 'function') {
       try { cfg.onMount(win); } catch (e) { console.warn('onMount failed for', appId, e); }
+    // Every panel that shows a specification reads it live, not from a constant.
+    hydratePlatformFacts(win);
     }
 
     // Bring to front on click
@@ -2331,7 +2551,10 @@
       return `PS ${winPath}>`;
     }
     const p = cwd === '/root' ? '~' : cwd;
-    return `root@virgox-pc:${p}#`;
+    // Not root, and not a made-up hostname: the prompt names the account that is
+    // actually signed in and the host the page is actually served from.
+    const who = (vxcCurrentUser().email || 'guest').split('@')[0].replace(/[^A-Za-z0-9._-]/g, '');
+    return `${who}@${location.host}:${p}$ `;
   }
 
   function getTerminalHtml() {
@@ -2342,15 +2565,15 @@
         <div class="win11-term-tabbar" id="win11-term-tabbar">
           <div class="win11-term-tab ${activeShellType === 'pwsh' ? 'active' : ''}" data-shell="pwsh"><span>⚡</span> Windows PowerShell</div>
           <div class="win11-term-tab ${activeShellType === 'cmd' ? 'active' : ''}" data-shell="cmd"><span>💻</span> Command Prompt</div>
-          <div class="win11-term-tab ${activeShellType === 'bash' ? 'active' : ''}" data-shell="bash"><span>🐧</span> Ubuntu (PRoot)</div>
+          <div class="win11-term-tab ${activeShellType === 'bash' ? 'active' : ''}" data-shell="bash"><span>🐧</span> Bash (simulated)</div>
         </div>
         ` : ''}
         <div class="cyber-term-view" id="native-term-body" style="flex:1;">
           <div style="color:${isWin ? '#60a5fa' : 'var(--neon-cyan)'}; margin-bottom:4px;">
-            ${isWin ? '🪟 <strong>Windows PowerShell</strong> (Windows 11 Pro 64-bit / Kernel 6.17 aarch64)' : '⚡ <strong>VirgoX Cyber Linux Desktop v2.0</strong> (Resolute Raccoon / Ubuntu 26.04 aarch64)'}
+            ${isWin ? '🪟 <strong>Windows 11 shell</strong> — a Fluent theme drawn in this page, not an installed OS' : '⚡ <strong>VirgoX Cloud PC</strong> — a Linux shell theme, also drawn in this page'}
           </div>
           <div style="color:#8892b0; font-size:0.75rem; margin-bottom:8px;">
-            ${isWin ? 'Microsoft Windows [Version 10.0.26100.1882] · 64 GB Virtual RAM Pool · 120 FPS' : '👑 Architect: <strong>Prince · VirgoYT</strong> | Virtual RAM: <strong>64 GB Pool</strong> | Engine: <strong>120 FPS Synchronized</strong>'}
+            ${(() => { const r = realityLine(); return escapeHtml(`${r.cpu} · ${r.screen} · up ${fmtDuration(r.f.pageAgeMs)}`); })()}
           </div>
           <div id="term-output-stream" style="white-space:pre-wrap; word-break:break-all;"></div>
           <div class="cyber-term-input-row">
@@ -2415,44 +2638,91 @@
 
         // Direct Windows simulated utilities
         if (lower === 'ver') {
-          output.innerHTML += `Microsoft Windows [Version 10.0.26100.1882]\n(c) Microsoft Corporation. All rights reserved.\n`;
+          // There is no Windows build to print, because this document is not running
+          // on Windows. The shell borrows the Windows 11 look; the build string
+          // used to be invented, which turned a skin into a hardware claim.
+          const r = realityLine();
+          output.innerHTML += `VirgoX Cloud PC — Windows 11 Fluent shell (theme only)
+No Windows build is reported: this is a web document, not a Windows machine.
+
+Browser:    ${escapeHtml(fact(r.f.ua))}
+Platform:   ${escapeHtml(fact(r.f.platform))}
+CPU:        ${escapeHtml(r.cpu)}
+GPU:        ${escapeHtml(r.gpu)}
+Page age:   ${fmtDuration(r.f.pageAgeMs)}
+Origin:     ${escapeHtml(r.f.origin)}\n`;
           if (termBody) termBody.scrollTop = termBody.scrollHeight;
           return;
         } else if (lower === 'ipconfig') {
-          output.innerHTML += `Windows IP Configuration\n\nEthernet adapter vEthernet (VirgoX 10G Turbo Symmetrical):\n   Connection-specific DNS Suffix  . : local\n   IPv4 Address. . . . . . . . . . . : 10.0.0.2\n   Subnet Mask . . . . . . . . . . . : 255.255.255.0\n   Default Gateway . . . . . . . . . : 10.0.0.1\n`;
+          // No web API enumerates network interfaces, so this used to print an
+          // invented adapter, address and gateway. Now it prints only what the
+          // page can genuinely observe about the connection it is using.
+          const f = platformFacts();
+          output.innerHTML += `IP configuration
+There is no API that lists network interfaces, so no adapter, address or
+gateway is invented here. What the page can actually observe:
+
+Page origin:  ${escapeHtml(fact(f.origin))}
+Host:         ${escapeHtml(fact(f.host))}
+Protocol:     ${escapeHtml(location.protocol)}
+Online:       ${f.online === null ? NOT_EXPOSED : (f.online ? 'yes' : 'no')}
+Connection:   ${escapeHtml(fact(f.effectiveType))}
+Downlink:     ${escapeHtml(fact(f.downlinkMbps, 'Mb/s'))}
+Round trip:   ${escapeHtml(fact(f.rttMs, 'ms'))}
+Data saver:   ${f.saveData === null ? NOT_EXPOSED : (f.saveData ? 'on' : 'off')}\n`;
           if (termBody) termBody.scrollTop = termBody.scrollHeight;
           return;
         } else if (lower === 'systeminfo') {
-          output.innerHTML += `Host Name:                 VIRGOX-WIN11-PC
-OS Name:                   Microsoft Windows 11 Pro
-OS Version:                10.0.26100 N/A Build 26100
-OS Manufacturer:           Microsoft Corporation
-OS Configuration:          Standalone Workstation
-Registered Owner:          Prince (VirgoYT)
-System Type:               ARM64-based PC (Snapdragon Octa-Core 32-Thread)
-Total Physical Memory:     65,536 MB (64 GB Virtual RAM Pool)
-Available Physical Memory: 49,152 MB
-Virtual Memory: Max Size:  98,304 MB
-Storage Disk:              5.0 TB Ultra Storage Pool (/dev/loop0)
-Display Engine:            120 FPS Hardware Synchronized Compositor\n`;
-          if (termBody) termBody.scrollTop = termBody.scrollHeight;
+          // Every line is a live reading or an admission. This used to report a
+          // registered owner, a Windows build, an ARM64 CPU, 64 GB of RAM, a
+          // 5 TB disk and a 120 FPS compositor — none of which existed.
+          const f = platformFacts();
+          const est = await storageEstimate();
+          const row = (k, v) => k.padEnd(24, ' ') + escapeHtml(v);
+          output.innerHTML += `${row('Host:', f.host || NOT_EXPOSED + ' (page host, not a machine name)')}
+${row('OS:', 'not applicable — this is a web document')}
+${row('User agent:', fact(f.ua))}
+${row('Platform:', fact(f.platform))}
+${row('Vendor:', fact(f.vendor))}
+${row('Language:', fact(f.language))}
+${row('System type:', fact(f.platform) + ' \u00b7 ' + fact(f.logicalCores, 'logical cores'))}
+${row('Logical processors:', fact(f.logicalCores, '(navigator.hardwareConcurrency)'))}
+${row('Device memory:', f.deviceMemoryGb === null ? NOT_EXPOSED : 'up to ' + f.deviceMemoryGb + ' GB device class (browser bucket)')}
+${row('JS heap in use:', f.jsHeapUsedBytes === null ? NOT_EXPOSED + ' (performance.memory unavailable in this browser)' : (fmtBytes(f.jsHeapUsedBytes) + ' of ' + fmtBytes(f.jsHeapLimitBytes) + ' (performance.memory)'))}
+${row('Graphics:', f.gpu.renderer || f.gpu.reason || NOT_EXPOSED)}
+${row('GPU vendor:', fact(f.gpu.vendor))}
+${row('WebGL version:', fact(f.gpu.version))}
+${row('Screen:', f.screenWidth && f.screenHeight ? f.screenWidth + 'x' + f.screenHeight + ' @ ' + f.dpr + 'x, ' + f.colourDepth + '-bit colour' : NOT_EXPOSED)}
+${row('Viewport:', f.viewportWidth && f.viewportHeight ? f.viewportWidth + 'x' + f.viewportHeight + ' CSS px' : NOT_EXPOSED)}
+${row('Touch points:', fact(f.maxTouchPoints))}
+${row('Storage allowance:', est && Number.isFinite(est.quota) ? fmtBytes(est.usage || 0) + ' used of ' + fmtBytes(est.quota) + ' (navigator.storage.estimate)' : NOT_EXPOSED)}
+${row('Connection:', f.effectiveType ? f.effectiveType + ' · ' + f.downlinkMbps + ' Mb/s · ' + f.rttMs + ' ms' : NOT_EXPOSED)}
+${row('Cookies:', f.cookiesEnabled ? 'enabled' : 'blocked')}
+${row('Page age:', fmtDuration(f.pageAgeMs) + ' (performance.now, since navigation)')}
+${row('Page origin:', f.origin)}\n`;
           return;
         } else if (lower === 'dir') {
-          output.innerHTML += ` Volume in drive C is Local Disk (5.0 TB)
- Directory of ${termCwd === '/root' ? 'C:\\Users\\Prince' : 'C:' + termCwd.replace(/\//g, '\\')}
+          // A page cannot list a directory and cannot read a local disk, so the
+          // old listing — real-looking dates, real-looking byte counts for files
+          // that were never there — is gone. What is left is the set of files
+          // this app actually loads, with each size read live via HEAD, so a file
+          // that is not deployed says 404 instead of inventing a number.
+          const dirPath = termCwd === '/root' ? 'C:\\Users\\Prince' : 'C:' + termCwd.replace(/\//g, '\\');
+          const rows = await siteFileIndex();
+          const listing = rows.map(r => {
+            if (!r.ok) return stamp(r.modified) + '        <not deployed>   ' + r.name;
+            return stamp(r.modified) + '  ' + String(r.bytes === null ? '?' : r.bytes.toLocaleString()).padStart(12, ' ')
+              + '  ' + r.name;
+          }).join('\n');
+          output.innerHTML += ` Volume in drive C is VirgoX Cloud PC (no local disk is readable)
+ Directory of ${dirPath}
 
-09/30/2026  10:00 PM    <DIR>          .
-09/30/2026  10:00 PM    <DIR>          ..
-09/30/2026  10:00 PM    <DIR>          Desktop
-09/30/2026  10:00 PM    <DIR>          Downloads
-09/30/2026  10:00 PM    <DIR>          Documents
-09/30/2026  10:00 PM    <DIR>          VirgoX-Files
-09/30/2026  09:38 PM            82,434 server.py
-09/30/2026  09:40 PM           208,501 app.js
-09/30/2026  09:40 PM            65,000 style.css
-09/30/2026  09:30 PM               747 s.json
-               4 File(s)        356,682 bytes
-               6 Dir(s)   4,892,100,000,000 bytes free\n`;
+Files this app loads. Sizes and dates below are read live from the server; a
+file that is not deployed reports its HTTP status instead of a byte count.
+
+${escapeHtml(listing)}
+
+ Volume — see \`df\` for the real browser storage allowance\n`;
           if (termBody) termBody.scrollTop = termBody.scrollHeight;
           return;
         }
@@ -2512,18 +2782,27 @@ Display Engine:            120 FPS Hardware Synchronized Compositor\n`;
   async function runLocalShellFallback(cmd, output, promptEl, termBody) {
     const lower = cmd.toLowerCase().trim();
     if (lower === 'help') {
-      output.innerHTML += `VirgoX Core Commands:
-  • ver / systeminfo - Show Windows 11 system and kernel specifications
-  • dir / ls         - Directory listing
-  • ipconfig / ifconfig - Show IP network configuration
-  • neofetch / specs - Display hardware specs, 64GB RAM & 120 FPS pool
-  • pwd / cd <dir>   - Working directory navigation
-  • whoami           - Display active user profile
-  • free -h / df -h  - Memory and 5.0 TB storage metrics
-  • ps / top         - View system processes
-  • apt / python3    - Software execution tools
-  • vxc auth <cmd>   - Device login (login / status / token / logout)
-  • cls / clear      - Clear terminal screen\n`;
+      output.innerHTML += `VirgoX Cloud PC — commands
+Everything below reads a live browser API. Whatever the browser withholds is
+printed as "not exposed" rather than filled in with a plausible number.
+
+  ver / systeminfo    real platform readings
+  dir / ls            the files this app loads, each size read live via HEAD
+  ipconfig            what this page can observe about its own connection
+  whoami / id         the signed-in account, if there is one
+  uname               the real platform string; there is no kernel to name
+  uptime              how long this document has been open
+  neofetch / specs    the same readings, laid out
+  free                JS heap and the browser's declared device class
+  df                  the real storage allowance from navigator.storage
+  ps                  what this page has actually fetched, with real timings
+  date / pwd / cd     real
+  cls / clear         clear the screen
+  vxc auth <cmd>      real device login against your own auth service
+
+Deliberately not implemented, because nothing here could do them honestly:
+apt, python3, top, and listing a local disk. There is no shell and no
+filesystem behind this page — only a browser tab.\n`;
     } else if (lower === 'pwd') {
       output.innerHTML += `${termCwd}\n`;
     } else if (lower === 'cd' || lower === 'cd ~') {
@@ -2542,118 +2821,163 @@ Display Engine:            120 FPS Hardware Synchronized Compositor\n`;
       }
       if (promptEl) promptEl.textContent = getTerminalPrompt(termCwd);
     } else if (lower === 'whoami') {
-      output.innerHTML += `${state.config.osMode === 'windows' ? 'virgox-pc\\prince' : 'root'}\n`;
+      // A page has no OS user. What it can honestly name is the account session,
+      // and it used to print root or virgox-pc\prince — neither of which exists
+      // on any machine the page is running on.
+      const who = vxcCurrentUser();
+      output.innerHTML += `account:  ${escapeHtml(who.email || 'not signed in')}
+origin:   ${escapeHtml(location.origin)}
+OS user:  not applicable — a web page has no user on the host machine\n`;
     } else if (lower === 'id') {
-      output.innerHTML += `uid=0(root) gid=0(root) groups=0(root)\n`;
+      // uid=0(root) gid=0(root) was the most obviously false line in the shell:
+      // this document is not running as root anywhere.
+      const who = vxcCurrentUser();
+      output.innerHTML += `uid/gid:   not applicable — a web document has no POSIX identity
+account:   ${escapeHtml(who.email || 'not signed in')}
+origin:    ${escapeHtml(location.origin)}
+host:      ${escapeHtml(location.host)}\n`;
     } else if (lower === 'uname' || lower === 'uname -a') {
-      output.innerHTML += `Linux localhost 6.17.0-PRoot-Distro #1 SMP PREEMPT_DYNAMIC Fri Oct 10 2025 aarch64 GNU/Linux\n`;
+      // The old line named a kernel build and an architecture. Neither is
+      // reachable from a page, so both are now stated as unreachable.
+      const f = platformFacts();
+      output.innerHTML += `VirgoX Cloud PC document on ${escapeHtml(fact(f.platform))}
+Kernel:     not applicable — no kernel is reachable from a web page
+Machine:    not applicable — this is a browser tab, not a host
+User agent: ${escapeHtml(fact(f.ua))}\n`;
     } else if (lower === 'date') {
       output.innerHTML += `${new Date().toUTCString()}\n`;
     } else if (lower === 'uptime') {
-      output.innerHTML += ` ${new Date().toLocaleTimeString()} up 24 days, 16:45,  1 user,  load average: 0.12, 0.08, 0.04\n`;
+      // "up 24 days, 16:45, load average 0.12" was entirely invented. The only
+      // clock a tab genuinely has is performance.now() since navigation.
+      const f = platformFacts();
+      output.innerHTML += ` ${new Date().toLocaleTimeString()} up ${fmtDuration(f.pageAgeMs)},  1 document open, page age from performance.now()\n`;
     } else if (lower === 'neofetch' || lower === 'specs') {
-      output.innerHTML += `       ⚡⚡⚡⚡⚡⚡⚡⚡⚡          Prince@virgox-pc
+      // The ASCII is decoration. Every value beside it is a live reading. The lines
+      // that named a "Motorola FogOS Cloud Workstation (120Hz Mode)", a
+      // "6.17.0-PRoot-Distro aarch64" kernel and "Prince@virgox-pc" are gone,
+      // because the page is on none of those machines.
+      const f = platformFacts();
+      const est = await storageEstimate();
+      const line = (k, v) => (k + ':').padEnd(12, ' ') + escapeHtml(v);
+      output.innerHTML += `       ⚡⚡⚡⚡⚡⚡⚡⚡⚡          ${escapeHtml(f.host || 'unnamed host')}
      ⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡        ----------------
-    ⚡⚡⚡  VIRGOX  ⚡⚡⚡       OS: Windows 11 Pro 24H2 (Ubuntu 26.04 PRoot Subsystem)
-   ⚡⚡⚡   CYBER   ⚡⚡⚡      Host: Motorola FogOS Cloud Workstation (120Hz Mode)
-  ⚡⚡⚡     OS     ⚡⚡⚡     Kernel: 6.17.0-PRoot-Distro aarch64
- ⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡   Uptime: 24 days, 16 hours, 45 mins
-  ⚡⚡⚡            ⚡⚡⚡     Shell: Windows Terminal (PowerShell / Bash 5.2.21)
-   ⚡⚡⚡          ⚡⚡⚡      Resolution: 1600x720 (Phone 20:9 Touch Optimized)
-    ⚡⚡⚡        ⚡⚡⚡       DE: Windows 11 Fluent Glass / Mica Compositor
-     ⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡        WM: Desktop Window Manager (120 FPS Synchronized)
-       ⚡⚡⚡⚡⚡⚡⚡           CPU: Snapdragon Octa-Core Turbo (32 Threads)
-                             GPU: Mesa LLVMpipe (120 FPS Hardware Synchronized)
-                             Memory: 14820MiB / 65536MiB (64 GB ZRAM Turbo Pool)
-                             Disk: 5.0 TB High-Speed Storage (/dev/loop0)\n`;
+    ⚡⚡⚡  VIRGOX  ⚡⚡⚡       ${line('Shell', 'browser tab (Windows 11 Fluent theme)')}
+   ⚡⚡⚡   CLOUD   ⚡⚡⚡      ${line('OS', 'a web document — no host OS')}
+  ⚡⚡⚡     PC     ⚡⚡⚡     ${line('Platform', fact(f.platform))}
+ ⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡   ${line('Uptime', fmtDuration(f.pageAgeMs))}
+  ⚡⚡⚡            ⚡⚡⚡     ${line('CPU', fact(f.logicalCores, 'logical cores'))}
+   ⚡⚡⚡          ⚡⚡⚡      ${line('GPU', f.gpu.renderer || f.gpu.reason || NOT_EXPOSED)}
+    ⚡⚡⚡        ⚡⚡⚡       ${line('Device class', f.deviceMemoryGb === null ? NOT_EXPOSED : 'up to ' + f.deviceMemoryGb + ' GB')}
+     ⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡        ${line('JS heap', f.jsHeapUsedBytes === null ? NOT_EXPOSED : fmtBytes(f.jsHeapUsedBytes) + ' / ' + fmtBytes(f.jsHeapLimitBytes))}
+       ⚡⚡⚡⚡⚡⚡⚡⚡           ${line('Storage', est && Number.isFinite(est.quota) ? fmtBytes(est.usage || 0) + ' / ' + fmtBytes(est.quota) + ' allowance' : NOT_EXPOSED)}
+                             ${line('Resolution', f.screenWidth && f.screenHeight ? f.screenWidth + 'x' + f.screenHeight + ' @ ' + f.dpr + 'x' : NOT_EXPOSED)}
+                             ${line('Touch points', fact(f.maxTouchPoints))}
+                             ${line('Connection', f.effectiveType ? f.effectiveType + ' · ' + f.downlinkMbps + ' Mb/s · ' + f.rttMs + ' ms' : NOT_EXPOSED)}
+                             ${line('Account', vxcCurrentUser().email || 'not signed in')}\n`;
     } else if (lower === 'free' || lower === 'free -h') {
-      output.innerHTML += `               total        used        free      shared  buff/cache   available
-Mem:            64Gi        14Gi        48Gi       256Mi       1.8Gi        49Gi
-Swap:           32Gi          0B        32Gi\n`;
+      // "Mem: 64Gi / Swap: 32Gi" described a machine that does not exist. What a
+      // page really has is a JS heap, and only where performance.memory exists.
+      const f = platformFacts();
+      const heap = f.jsHeapUsedBytes === null
+        ? NOT_EXPOSED + ' (performance.memory unavailable in this browser)'
+        : fmtBytes(f.jsHeapUsedBytes) + ' of ' + fmtBytes(f.jsHeapLimitBytes);
+      const dev = f.deviceMemoryGb === null
+        ? NOT_EXPOSED
+        : 'up to ' + f.deviceMemoryGb + ' GB';
+      output.innerHTML += `JS heap in use:  ${escapeHtml(heap)}
+Device class:     ${escapeHtml(dev)}
+Physical RAM:     ${NOT_EXPOSED} — a web page cannot read host RAM
+
+The table this replaced reported a total, a used figure and a swap size. None of
+the three was measured — they were typed in, so they are gone rather than
+guessed at.\n`;
     } else if (lower === 'df' || lower === 'df -h') {
-      output.innerHTML += `Filesystem      Size  Used Avail Use% Mounted on
-/dev/loop0      5.0T  240G  4.8T   5% /
-tmpfs            32G     0   32G   0% /dev/shm\n`;
+      // /dev/loop0 at 5.0T with 4.8T free was a made-up disk. The only quota that
+      // exists for a page is navigator.storage.estimate(), and it describes a
+      // browser allowance for this origin — not a disk.
+      const est = await storageEstimate();
+      if (!est || !Number.isFinite(est.quota)) {
+        output.innerHTML += `navigator.storage.estimate() is not available in this browser, so there is
+no storage figure to report. ${NOT_EXPOSED}\n`;
+      } else {
+        const used = est.usage || 0;
+        const breakdown = est.usageDetails
+          ? Object.keys(est.usageDetails).map(k => k + ' ' + fmtBytes(est.usageDetails[k])).join(', ')
+          : '';
+        output.innerHTML += `Browser storage allowance for ${escapeHtml(location.origin)}
+
+Total:      ${fmtBytes(est.quota)}
+Used:       ${fmtBytes(used)}
+Available:  ${fmtBytes(Math.max(0, est.quota - used))}${breakdown ? '\nBreakdown: ' + escapeHtml(breakdown) : ''}
+This is what the browser will allow this origin to store. It is not a disk: the
+block-device line this replaced was invented, so it is gone rather than
+recalculated.\n`;
+      }
     } else if (lower.startsWith('ls')) {
-      if (termCwd.includes('VirgoX-Cloud-Computer')) {
-        output.innerHTML += `app.js      index.html  manifest.json  pc.html   playstore.html
-server.py   s.json      style.css      scripts/  desktop-shortcuts/\n`;
-      } else {
-        output.innerHTML += `Desktop/    Downloads/    VirgoX-Cloud-Computer/    ROM-Builds/    scripts/\n`;
-      }
+      // A page cannot walk a local directory, so the old listing of Desktop/,
+      // ROM-Builds/ and friends was decoration. This lists the files the app
+      // really loads, with sizes read live, and says so.
+      const rows = await siteFileIndex();
+      const names = rows.filter(r => r.ok).map(r => r.name);
+      const missing = rows.filter(r => !r.ok);
+      output.innerHTML += `Files loaded by this app (sizes read live via HEAD):
+${escapeHtml(names.join('  '))}${missing.length ? '\nNot deployed: ' + escapeHtml(missing.map(r => r.name + ' (' + r.status + ')').join('  ')) : ''}
+
+No local directory is listed: a browser has no filesystem access. \`dir\` shows
+the same list with sizes and dates.\n`;
     } else if (lower.startsWith('ps')) {
-      output.innerHTML += `  PID TTY          TIME CMD
-    1 ?        00:00:01 systemd
-  888 ?        00:01:24 python3 server.py
- 1248 pts/1    00:00:00 bash
- 1320 pts/1    00:00:00 ps\n`;
+      // The old table invented PIDs 1/888/1248/1320 and a python3 server.py. There
+      // is no process table behind a page. What genuinely exists is this
+      // document's own resource timeline, so that is what it prints.
+      const res = performance.getEntriesByType('resource');
+      output.innerHTML += res.length
+        ? ` NAME                                  TYPE      SIZE    DURATION
+${res.slice(-14).map(e => {
+             const kb = e.transferSize || e.encodedBodySize || 0;
+             return ' ' + e.name.replace(location.origin, '').slice(0, 36).padEnd(37)
+               + (e.initiatorType || 'other').padEnd(9)
+               + (kb ? (kb > 1024 ? (kb / 1024).toFixed(1) + 'KB' : kb + 'B') : '-').padStart(7)
+               + '  ' + e.duration.toFixed(0) + 'ms';
+           }).join('\n')}
+
+${res.length} resource(s) fetched by this page, from the real Resource Timing API.
+There is no process table behind a web page. The process list this replaced,
+with its hand-written process IDs, was invented.\n`
+        : `No resources recorded yet on this page. There is no process table behind
+a web page. The process list this replaced, with its hand-written process IDs, was
+invented.\n`;
     } else if (lower.startsWith('apt')) {
-      output.innerHTML += `Reading package lists... Done\nBuilding dependency tree... Done\nReading state information... Done\nAll packages are up to date.\n`;
+      // "Reading package lists... All packages are up to date." was a canned
+      // response to a package manager that does not exist here.
+      output.innerHTML += `apt is not available: there is no shell and no package manager behind this
+page. Installing software from a browser tab is not something this can honestly
+do, so it will not pretend to.
+
+The one real tool here is \`vxc\` — \`vxc auth login\` performs a real OAuth 2.0
+device flow against server/auth-service.js.\n`;
     } else if (lower.startsWith('python3') || lower.startsWith('python')) {
-      if (lower.includes('-v')) {
-        output.innerHTML += `Python 3.12.3 (main, Apr 10 2024, 05:33:42) [GCC 13.2.0] on linux\n`;
-      } else {
-        output.innerHTML += `Python 3.12.3 active. Type exit() to leave or use python3 -c 'code'.\n`;
-      }
+      // "Python 3.12.3 (main, Apr 10 2024) [GCC 13.2.0] on linux" named an
+      // interpreter and a compiler that are not present. There is no Python here.
+      output.innerHTML += `python3 is not available: no interpreter is running behind this page. The version
+banner this replaced named an interpreter and a compiler that were typed in, not
+detected.
+
+For real code execution, run it on your own machine and point a terminal at it,
+or open Code Studio in the taskbar, which is an editor and not a runtime.\n`;
     } else if (lower === 'vxc' || lower.startsWith('vxc ')) {
       await runVxcCommand(cmd.replace(/^\s*vxc\s*/i, ''), output, termBody);
     } else {
-      output.innerHTML += `Executed: ${escapeHtml(cmd)} (Local fallback active — Connect bridge port 8888 for live execution)\n`;
+      // This used to read "Executed: <cmd> (Local fallback active — Connect
+      // bridge port 8888 for live execution)", which claimed a command had run
+      // when nothing had. Nothing runs an unknown command: this says so.
+      output.innerHTML += `${escapeHtml(cmd)}: command not recognised. There is no shell behind
+this page, so nothing was executed and no bridge is being waited on.
+
+\`help\` lists what this terminal really answers. \`vxc auth login\` performs a real
+OAuth 2.0 device flow against server/auth-service.js.\n`;
     }
   }
 
-  function getFilesHtml() {
-    const isWin = state.config.osMode === 'windows';
-    return `
-      <div class="cyber-files-view">
-        <div class="files-sidebar">
-          <div class="files-sidebar-item active">${isWin ? '⭐ Quick access' : '📁 Quick Access'}</div>
-          <div class="files-sidebar-item">${isWin ? '☁️ OneDrive' : '💽 Local Disk (5TB)'}</div>
-          <div class="files-sidebar-item">${isWin ? '💻 This PC (C:)' : '🐧 Linux Root (/)'}</div>
-          <div class="files-sidebar-item">${isWin ? '🐧 Linux Subsystem' : '📦 VirgoX-Files'}</div>
-          <div class="files-sidebar-item">⬇️ Downloads</div>
-          <div class="files-sidebar-item">📁 Documents</div>
-          <div class="files-sidebar-item">🖼️ Pictures</div>
-        </div>
-        <div class="files-main-content">
-          <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
-            <span>Location: <strong>${isWin ? 'This PC > Local Disk (C:) > Users > Prince' : '/config/Desktop/VirgoX-Files/'}</strong></span>
-            <span style="color:${isWin ? '#60a5fa' : 'var(--neon-green)'}; font-weight:700;">4.8 TB Free of 5.0 TB</span>
-          </div>
-          <div class="files-grid-view">
-            <div class="files-grid-item" onclick="alert('Folder: ${isWin ? 'C:\\\\Program Files (x86)' : 'ROM-Builds'}')">
-              <span style="font-size:2rem;">📁</span>
-              <span style="font-size:0.75rem; color:#fff;">Program Files</span>
-            </div>
-            <div class="files-grid-item" onclick="alert('Folder: ${isWin ? 'C:\\\\Windows\\\\System32' : 'Downloads'}')">
-              <span style="font-size:2rem;">📁</span>
-              <span style="font-size:0.75rem; color:#fff;">Windows</span>
-            </div>
-            <div class="files-grid-item" onclick="alert('Folder: ${isWin ? 'C:\\\\Users\\\\Prince\\\\Downloads' : 'Projects'}')">
-              <span style="font-size:2rem;">📁</span>
-              <span style="font-size:0.75rem; color:#fff;">Downloads</span>
-            </div>
-            <div class="files-grid-item" onclick="alert('Folder: ${isWin ? 'C:\\\\VirgoX-Files (5.0 TB Storage Pool)' : 'VirgoX-Files'}')">
-              <span style="font-size:2rem;">📦</span>
-              <span style="font-size:0.75rem; color:#fff;">VirgoX-Files</span>
-            </div>
-            <div class="files-grid-item" onclick="openAppWindow('editor')">
-              <span style="font-size:2rem;">🐍</span>
-              <span style="font-size:0.75rem; color:#fff;">server.py</span>
-            </div>
-            <div class="files-grid-item" onclick="openAppWindow('editor')">
-              <span style="font-size:2rem;">📜</span>
-              <span style="font-size:0.75rem; color:#fff;">app.js</span>
-            </div>
-            <div class="files-grid-item" onclick="alert('VirgoX Security Secrets: Protected Token Store')">
-              <span style="font-size:2rem;">🔑</span>
-              <span style="font-size:0.75rem; color:#fff;">s.json</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-  }
 
   function getBrowserHtml() {
     return `
@@ -2800,24 +3124,24 @@ server.py   s.json      style.css      scripts/  desktop-shortcuts/\n`;
 
   // Microsoft Store Web Hub
   const MS_STORE_APPS = [
-    { id: 'vscode', name: 'Visual Studio Code', pub: 'Microsoft Corporation', cat: 'dev', icon: '💻', rating: '4.9', desc: 'Code editing refined. Built-in Git, terminal, intelligent code completion and extensions.', action: 'editor', btnText: 'Open Code Studio' },
-    { id: 'browser', name: 'Chromium Web Browser', pub: 'Google & Open Source', cat: 'apps', icon: '🌐', rating: '4.8', desc: 'Fast, secure web browsing with multi-tab support and developer tools.', action: 'browser', btnText: 'Open Browser' },
-    { id: 'terminal', name: 'Terminal CLI (Root Bash)', pub: 'GNU Linux & PRoot', cat: 'dev', icon: '⚡', rating: '5.0', desc: 'Full interactive Linux root shell with apt package manager and 64GB virtual RAM pool.', action: 'terminal', btnText: 'Open Terminal' },
-    { id: 'photopea', name: 'Adobe Photoshop (Photopea Pro)', pub: 'Ivan Kutskir', cat: 'media', icon: '🎨', rating: '4.9', desc: 'Professional image editor supporting PSD, AI, RAW, layers and 4K export.', action: 'photopea', btnText: 'Open Studio' },
-    { id: 'shotcut', name: 'Shotcut 4K Video Editor', pub: 'Meltytech LLC', cat: 'media', icon: '🎬', rating: '4.7', desc: 'Cross-platform multi-track 4K video editor with hardware acceleration.', action: 'shotcut', btnText: 'Open Video Studio' },
-    { id: 'steam', name: 'Steam Gaming Platform', pub: 'Valve Corporation', cat: 'gaming', icon: '🎮', rating: '4.9', desc: 'Access the world of PC gaming, cloud synchronization and community hubs.', action: 'steam', btnText: 'Open Steam' },
-    { id: 'blender', name: 'Blender 5.0.1 3D Suite', pub: 'Blender Foundation', cat: 'gaming', icon: '🚀', rating: '5.0', desc: 'Open-source 3D creation suite: modeling, sculpting, Cycles real-time raytracing, VFX.', action: 'blender', btnText: 'Open Blender' },
-    { id: 'unreal', name: 'Unreal Engine 6 Hub', pub: 'Epic Games', cat: 'gaming', icon: '⚡', rating: '4.9', desc: 'Next-gen real-time 3D creation tool with Nanite, Lumen and virtual production.', action: 'unreal', btnText: 'Open Hub' },
-    { id: 'files', name: 'This PC — File Explorer (5TB)', pub: 'VirgoX Storage', cat: 'apps', icon: '📁', rating: '5.0', desc: '5.0 TB High-speed storage pool mounted at /dev/loop0 for ultra-fast read/write.', action: 'files', btnText: 'Open Storage' },
-    { id: 'taskmgr', name: 'Task Manager (64GB RAM)', pub: 'VirgoX Kernel', cat: 'apps', icon: '📊', rating: '4.9', desc: 'Real-time performance monitoring of 32 CPU threads, 64GB ZRAM, and 120 FPS display.', action: 'taskmgr', btnText: 'Open Taskmgr' },
-    { id: 'spotify', name: 'Spotify Music & Podcasts', pub: 'Spotify AB', cat: 'media', icon: '🎵', rating: '4.8', desc: 'Millions of songs, curated playlists, and podcast episodes in high fidelity.', action: 'url', url: 'https://open.spotify.com', btnText: 'Open Spotify' },
-    { id: 'discord', name: 'Discord Communities', pub: 'Discord Inc.', cat: 'apps', icon: '💬', rating: '4.7', desc: 'Talk, chat, hang out, and stay close with your friends and communities.', action: 'url', url: 'https://discord.com/app', btnText: 'Open Discord' },
-    { id: 'whatsapp', name: 'WhatsApp Web', pub: 'Meta Platforms', cat: 'apps', icon: '📱', rating: '4.6', desc: 'Simple, reliable, private messaging and calling right in your cloud computer.', action: 'url', url: 'https://web.whatsapp.com', btnText: 'Open WhatsApp' },
-    { id: 'python', name: 'Python 3.12 Developer Tools', pub: 'Python Software Foundation', cat: 'dev', icon: '🐍', rating: '5.0', desc: 'Interpreted, interactive, object-oriented programming language with pip package installer.', action: 'cmd', cmd: 'python3 -V', btnText: 'Test Python' },
-    { id: 'git', name: 'Git Distributed SCM', pub: 'Software Freedom Conservancy', cat: 'dev', icon: '📦', rating: '5.0', desc: 'Fast version control system designed to handle everything from small to large projects.', action: 'cmd', cmd: 'git status', btnText: 'Git Status' },
-    { id: 'powertoys', name: 'Microsoft PowerToys Suite', pub: 'Microsoft Corporation', cat: 'apps', icon: '🛠️', rating: '4.8', desc: 'Set of utilities for power users to tune and streamline Windows & Linux desktop experience.', action: 'toast', msg: 'PowerToys is pre-integrated into VirgoX Window Manager!', btnText: 'Installed' },
-    { id: 'vlc', name: 'VLC Media Player', pub: 'VideoLAN', cat: 'media', icon: '🟧', rating: '4.8', desc: 'Free and open source cross-platform multimedia player that plays most multimedia files.', action: 'url', url: 'https://www.videolan.org/vlc/', btnText: 'Get VLC' },
-    { id: 'm365', name: 'Microsoft 365 Cloud Office', pub: 'Microsoft Corporation', cat: 'media', icon: '📄', rating: '4.7', desc: 'Word, Excel, PowerPoint, OneNote in one secure cloud workspace.', action: 'url', url: 'https://www.office.com', btnText: 'Open Office' }
+    { id: 'vscode', name: 'Visual Studio Code', cat: 'dev', icon: '💻', desc: "Microsoft's editor, at vscode.dev. It sets frame-ancestors 'none', so this page shows you the real header that blocks it and links out.", action: 'editor', btnText: 'Open Code Studio' },
+    { id: 'browser', name: 'Web Browser', cat: 'apps', icon: '🌐', desc: 'A real frame pointed at a real site, with a live probe for sites that refuse to be framed.', action: 'browser', btnText: 'Open Browser' },
+    { id: 'terminal', name: 'Terminal CLI (Root Bash)', cat: 'dev', icon: '⚡', desc: 'A real terminal over this page. Every reading comes from a live browser API, and anything the browser withholds is printed as \'not exposed\'. apt and python3 are not implemented, because there is no shell here to run them.', action: 'terminal', btnText: 'Open Terminal' },
+    { id: 'photopea', name: 'Photopea', cat: 'media', icon: '🎨', desc: 'The real photopea.com, framed live. It is an independent editor by Ivan Kutskir — it is not Adobe Photoshop, and this page does not ship a licence for anything.', action: 'photopea', btnText: 'Open Studio' },
+    { id: 'shotcut', name: 'FFmpeg WASM Converter', cat: 'media', icon: '🎬', desc: 'Real ffmpeg compiled to WebAssembly, running in this tab. It converts the file you pick, on this machine, with no upload.', action: 'shotcut', btnText: 'Open Converter' },
+    { id: 'steam', name: 'Steam Gaming Platform', pub: 'Valve Corporation', cat: 'gaming', icon: '🎮', desc: 'Access the world of PC gaming, cloud synchronization and community hubs.', action: 'steam', btnText: 'Open Steam' },
+    { id: 'blender', name: 'Blender', cat: 'graphics', icon: '🚀', desc: 'Opens the real Blender site in a new tab. This page does not bundle Blender, so there is no version number to quote and no 3D engine to pretend at.', action: 'blender', btnText: 'Open Blender' },
+    { id: 'unreal', name: 'Unreal Engine', cat: 'gaming', icon: '⚡', desc: 'Epic\'s engine. There is no web build to frame, so this links to the real thing rather than showing a hub that only ever popped an alert.', action: 'url', url: 'https://www.unrealengine.com/download', btnText: 'Get Unreal Engine' },
+    { id: 'files', name: 'File Explorer', cat: 'apps', icon: '📁', desc: 'Browses the files this app actually ships, with every size read live via HEAD, plus the real storage allowance from navigator.storage.estimate().', action: 'files', btnText: 'Open Storage' },
+    { id: 'taskmgr', name: 'Task Manager', cat: 'apps', icon: '📊', desc: 'Reads navigator.hardwareConcurrency, the JS heap, live storage and a measured frame rate straight off the platform.', action: 'taskmgr', btnText: 'Open Taskmgr' },
+    { id: 'spotify', name: 'Spotify Music & Podcasts', pub: 'Spotify AB', cat: 'media', icon: '🎵', desc: 'Millions of songs, curated playlists, and podcast episodes in high fidelity.', action: 'url', url: 'https://open.spotify.com', btnText: 'Open Spotify' },
+    { id: 'discord', name: 'Discord Communities', pub: 'Discord Inc.', cat: 'apps', icon: '💬', desc: 'Talk, chat, hang out, and stay close with your friends and communities.', action: 'url', url: 'https://discord.com/app', btnText: 'Open Discord' },
+    { id: 'whatsapp', name: 'WhatsApp Web', pub: 'Meta Platforms', cat: 'apps', icon: '📱', desc: 'Simple, reliable, private messaging and calling right in your cloud computer.', action: 'url', url: 'https://web.whatsapp.com', btnText: 'Open WhatsApp' },
+    { id: 'python', name: 'Python', cat: 'dev', icon: '🐍', desc: 'Opens the terminal at a Python prompt — which will tell you plainly that no interpreter is running behind this page. Use it on your own machine instead.', action: 'cmd', cmd: 'python3', btnText: 'Ask the terminal' },
+    { id: 'git', name: 'Git', cat: 'dev', icon: '📦', desc: 'There is no repository in this tab. Clone and install from a real machine; the code for this page lives on GitHub.', action: 'url', url: 'https://github.com/darkvirgoyt-beep/VirgoX-Cloud-Computer', btnText: 'Open the repository' },
+    { id: 'powertoys', name: 'PowerToys', cat: 'apps', icon: '🛠️', desc: 'A real Windows utility from Microsoft. It is not installed here and this page will not claim it is — it installs on your own machine.', action: 'url', url: 'https://learn.microsoft.com/windows/powertoys/', btnText: 'Get PowerToys' },
+    { id: 'vlc', name: 'Media Player', cat: 'media', icon: '🟧', desc: 'Plays a file you pick with the codecs your browser already has, locally — nothing is uploaded. VLC itself is a native app; use the link for the real thing.', action: 'vlc', btnText: 'Open Media Player' },
+    { id: 'm365', name: 'Microsoft 365 Cloud Office', pub: 'Microsoft Corporation', cat: 'media', icon: '📄', desc: 'Word, Excel, PowerPoint, OneNote in one secure cloud workspace.', action: 'url', url: 'https://www.office.com', btnText: 'Open Office' }
   ];
 
   function getMsStoreHtml() {
@@ -2841,7 +3165,7 @@ server.py   s.json      style.css      scripts/  desktop-shortcuts/\n`;
         <div class="ms-store-hero">
           <div>
             <div style="font-size:1.05rem; font-weight:800; color:#fff;">Featured: Essential Apps for Cloud PC</div>
-            <div style="font-size:0.75rem; color:#dbeafe; margin-top:2px;">Pre-configured for 64 GB Virtual RAM, Snapdragon Turbo, and 120 FPS Synchronization.</div>
+            <div style="font-size:0.75rem; color:#dbeafe; margin-top:2px;">Reads this machine live: <span data-pf="cores"></span> · <span data-pf="deviceMemory"></span> · <span data-pf="gpu"></span></div>
           </div>
           <button class="cyber-btn sm neon-green" onclick="openAppWindow('terminal')">⚡ Launch Root Terminal</button>
         </div>
@@ -2975,24 +3299,39 @@ server.py   s.json      style.css      scripts/  desktop-shortcuts/\n`;
           </div>
 
           <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:12px; margin-bottom:12px;">
+            <div style="font-weight:700; color:#60a5fa; margin-bottom:8px;">Background</div>
+            <p style="font-size:0.72rem; color:#94a3b8; margin:0 0 8px 0; line-height:1.5;">
+              Four images are deployed on this origin. The picker is built from that list, and each
+              one is a real file, so this is a real image swap rather than a preview of nothing.
+            </p>
+            <div id="wallpaper-picker" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(84px, 1fr)); gap:8px;"></div>
+          </div>
+
+          <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:12px; margin-bottom:12px;">
             <div style="font-weight:700; color:#60a5fa; margin-bottom:8px;">Device Specifications</div>
             <div style="display:grid; grid-template-columns:120px 1fr; gap:6px; font-size:0.75rem;">
-              <span style="color:#aaa;">Device Name:</span> <span>VIRGOX-WIN11-PC</span>
-              <span style="color:#aaa;">Processor:</span> <span>Snapdragon Octa-Core Turbo (32 Threads) @ 4.20 GHz</span>
-              <span style="color:#aaa;">Installed RAM:</span> <span>64.0 GB (63.8 GB usable) ZRAM Pool</span>
-              <span style="color:#aaa;">Storage:</span> <span>5.0 TB Ultra Storage (/dev/loop0)</span>
-              <span style="color:#aaa;">System type:</span> <span>64-bit operating system, ARM64-based processor</span>
-              <span style="color:#aaa;">Pen and touch:</span> <span>Touch support with multi-gesture high precision</span>
+              <span style="color:#aaa;">Page host:</span> <span data-pf="host"></span>
+              <span style="color:#aaa;">Processor:</span> <span data-pf="cores"></span>
+              <span style="color:#aaa;">Page age:</span> <span data-pf="uptime"></span>
+              <span style="color:#aaa;">Device class:</span> <span data-pf="deviceMemory"></span>
+              <span style="color:#aaa;">JS heap:</span> <span data-pf="heap"></span>
+              <span style="color:#aaa;">Graphics:</span> <span data-pf="gpu"></span>
+              <span style="color:#aaa;">Display:</span> <span data-pf="screen"></span>
+              <span style="color:#aaa;">Storage:</span> <span data-pf="quota"></span>
+              <span style="color:#aaa;">Connection:</span> <span data-pf="connection"></span>
+              <span style="color:#aaa;">Pen and touch:</span> <span data-pf="touch"></span> touch points
             </div>
           </div>
 
           <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:12px; margin-bottom:12px;">
             <div style="font-weight:700; color:#34d399; margin-bottom:8px;">Windows Specifications</div>
             <div style="display:grid; grid-template-columns:120px 1fr; gap:6px; font-size:0.75rem;">
-              <span style="color:#aaa;">Edition:</span> <span>Windows 11 Pro</span>
-              <span style="color:#aaa;">Version:</span> <span>24H2</span>
-              <span style="color:#aaa;">OS Build:</span> <span>26100.1882</span>
-              <span style="color:#aaa;">Experience:</span> <span>Windows Feature Experience Pack 1000.26100.32.0</span>
+              <span style="color:#aaa;">Shell:</span> <span>Windows 11 Fluent — a theme drawn in this page, not an installed OS</span>
+              <span style="color:#aaa;">Host OS:</span> <span>not applicable — this is a web document</span>
+              <span style="color:#aaa;">User agent:</span> <span data-pf="ua"></span>
+              <span style="color:#aaa;">Platform:</span> <span data-pf="platform"></span>
+              <span style="color:#aaa;">Origin:</span> <span data-pf="origin"></span>
+              <span style="color:#aaa;">Account:</span> <span data-pf="account"></span>
             </div>
           </div>
 
@@ -3059,32 +3398,6 @@ function getExternalAppHtml(o) {
  */
 
 
-function mountGpuProbe(win) {
-  const el = win.querySelector('#vxc-gpu');
-  if (!el) return;
-  let out;
-  try {
-    const gl = document.createElement('canvas').getContext('webgl2')
-            || document.createElement('canvas').getContext('webgl');
-    if (!gl) {
-      out = 'WebGL unavailable in this browser';
-    } else {
-      // Some browsers mask this to a generic string. That is still the truthful
-      // answer, so we report whatever we are given rather than substituting a
-      // plausible-looking GPU.
-      const dbg = gl.getExtension('WEBGL_debug_renderer_info');
-      const r = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
-      const v = dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR);
-      const ver = gl.getParameter(gl.VERSION);
-      const lose = gl.getExtension('WEBGL_lose_context');
-      if (lose) lose.loseContext();
-      out = [r, v, ver].filter(Boolean).join('  ·  ');
-    }
-  } catch (e) {
-    out = 'WebGL blocked by this browser';
-  }
-  el.textContent = out;
-}
 
 /* Task Manager, reading live platform APIs.
  *
@@ -3281,8 +3594,8 @@ function getCodeHtml() {
 import os, sys, time
 
 print("⚡ Running inside VirgoX Cloud PC...")
-print(f"Memory: 64 GB Virtual RAM Pool Active")
-print(f"Display: 120 FPS Synchronized Mesa 3D Pipeline")
+print("logical cores:", navigator.hardwareConcurrency)   // real, where the browser exposes it
+print("user agent:", navigator.userAgent)             // real, always
 print("All systems operational.")
 </textarea>
       </div>
@@ -3300,7 +3613,7 @@ print("All systems operational.")
       if (termWin) {
         const out = termWin.querySelector('#term-output-stream');
         if (out) {
-          out.innerHTML += `\n<span style="color:var(--neon-green);">[Code Studio Execute]</span> python3 -c "${textArea.value.replace(/\n/g, '; ')}"\n⚡ Running inside VirgoX Cloud PC...\nMemory: 64 GB Virtual RAM Pool Active\nDisplay: 120 FPS Synchronized Mesa 3D Pipeline\nAll systems operational.\n`;
+          out.innerHTML += `\n<span style="color:var(--neon-green);">[Code Studio]</span> echo ${escapeHtml(textArea.value.replace(/\n/g, '; '))}\n⚠ This panel is a text editor. It does not execute anything — there is no runtime behind a browser tab, so the status banner it used to print — a memory pool and a frame rate, both invented — is gone rather than recalculated.\nRead the file, then run it where you have a real runtime.\n`;
           const termBody = termWin.querySelector('#native-term-body');
           if (termBody) termBody.scrollTop = termBody.scrollHeight;
         }
@@ -3312,26 +3625,19 @@ print("All systems operational.")
 
   
 
-  function getBlenderHtml_OLD() {
-    return `
-      <div style="padding:20px; color:#fff; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
-        <span style="font-size:3rem; margin-bottom:8px;">🚀</span>
-        <h3 style="color:var(--neon-green); margin:0 0 6px 0;">Blender 5.0.1 3D Creation Suite</h3>
-        <p style="color:#aaa; font-size:0.85rem; max-width:400px; margin:0 0 14px 0;">Cycles raytracing & EEVEE Next realtime renderer. 32-thread CPU parallel baking active.</p>
-        <button class="cyber-btn sm neon-green" onclick="alert('Blender 5.0 workspace initialized.')">🚀 NEW 3D SCENE</button>
-      </div>
-    `;
-  }
 
   function getUnrealHtml() {
     return `
-      <div style="padding:20px; color:#fff; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
-        <span style="font-size:3rem; margin-bottom:8px;">⚡</span>
-        <h3 style="color:var(--neon-amber); margin:0 0 6px 0;">Unreal Engine 6 Hub</h3>
-        <p style="color:#aaa; font-size:0.85rem; max-width:400px; margin:0 0 14px 0;">Next-Gen real-time 3D photorealistic engine. Nanite & Lumen multithreaded shaders ready.</p>
-        <button class="cyber-btn sm neon-amber" onclick="alert('Unreal Engine 6 project hub ready.')">⚡ LAUNCH PROJECT</button>
-      </div>
-    `;
+      <div class="ext-app">
+        <div class="ext-app-icon">&#9889;</div>
+        <h3 class="ext-app-name">Unreal Engine</h3>
+        <p class="ext-app-why">Epic ships no web build, so there is nothing to put in this frame. The old panel here was a hub whose only control was <code>alert('Unreal Engine 6 project hub ready.')</code> — a button that announced a readiness that did not exist.</p>
+        <div class="ext-app-blocked">No embeddable build exists &mdash; not blocked by us.</div>
+        <div class="ext-gpu" id="vxc-gpu">Reading GPU&hellip;</div>
+        <a class="ext-app-btn" href="https://www.unrealengine.com/download" target="_blank" rel="noopener noreferrer">Get Unreal Engine</a>
+        <a class="ext-app-btn ghost" href="https://dev.epicgames.com/documentation/en-us/unreal-engine" target="_blank" rel="noopener noreferrer">Documentation</a>
+        <div class="ext-app-url">https://www.unrealengine.com/download</div>
+      </div>`;
   }
 
   // Zoom Handling
@@ -3581,6 +3887,56 @@ print("All systems operational.")
     }
   }
 
+ 
+ 
+  /* The four wallpapers are real files on this origin, added in the desktop
+   * commit, so switching between them is a real image swap. Their names are the
+   * filenames; nothing here claims they are "official Microsoft" artwork. */
+  const WIN11_WALLPAPERS = {
+    flow:        { name: 'Flow',        file: 'assets/win11_flow.jpg',        bg: '#0d1527' },
+    bloom_light: { name: 'Bloom light', file: 'assets/win11_bloom_light.jpg', bg: '#d8e5f7' },
+    sunrise:     { name: 'Sunrise',     file: 'assets/win11_sunrise.jpg',     bg: '#1c1824' },
+    bloom_dark:  { name: 'Bloom dark',  file: 'assets/win11_bloom_dark.jpg',  bg: '#060913' },
+  };
+
+  function setDesktopWallpaper(id) {
+    if (!WIN11_WALLPAPERS[id]) id = 'flow';
+    state.config.wallpaper = id;
+    saveConfig();
+    const nativeDesk = document.getElementById('native-cyber-desktop');
+    if (nativeDesk && state.config.osMode === 'windows') {
+      nativeDesk.style.setProperty('background-image', 'url("' + WIN11_WALLPAPERS[id].file + '")', 'important');
+      nativeDesk.style.setProperty('background-color', WIN11_WALLPAPERS[id].bg, 'important');
+    }
+    renderWallpaperPicker();
+  }
+
+  function cycleDesktopWallpaper() {
+    const keys = Object.keys(WIN11_WALLPAPERS);
+    const i = keys.indexOf(state.config.wallpaper || 'flow');
+    setDesktopWallpaper(keys[(i + 1) % keys.length]);
+  }
+
+  window.setDesktopWallpaper = setDesktopWallpaper;
+  window.cycleDesktopWallpaper = cycleDesktopWallpaper;
+
+  /* The picker is rebuilt from that same table, so a wallpaper that is not
+   * deployed cannot appear as an option. */
+  function renderWallpaperPicker() {
+    const host = document.getElementById('wallpaper-picker');
+    if (!host) return;
+    const cur = state.config.wallpaper || 'flow';
+    host.innerHTML = Object.keys(WIN11_WALLPAPERS).map(id => `
+      <button class="cyber-btn xs ${id === cur ? 'neon-green' : ''}" data-wallpaper="${id}"
+        style="height:auto; padding:8px 4px; display:flex; flex-direction:column; align-items:center; gap:4px;">
+        <span style="width:100%; height:34px; border-radius:5px; background:url('${WIN11_WALLPAPERS[id].file}') center/cover; border:1px solid rgba(255,255,255,0.14);"></span>
+        <span style="font-size:0.62rem;">${escapeHtml(WIN11_WALLPAPERS[id].name)}</span>
+      </button>`).join('');
+    host.querySelectorAll('[data-wallpaper]').forEach(btn => {
+      btn.addEventListener('click', () => setDesktopWallpaper(btn.getAttribute('data-wallpaper')));
+    });
+  }
+
   function applyDesktopOsTheme() {
     const isWin = state.config.osMode === 'windows';
     const nativeDesk = document.getElementById('native-cyber-desktop');
@@ -3592,7 +3948,9 @@ print("All systems operational.")
 
     if (isWin) {
       nativeDesk.classList.add('os-win11');
-
+      const wall = WIN11_WALLPAPERS[state.config.wallpaper] || WIN11_WALLPAPERS.flow;
+      nativeDesk.style.setProperty('background-image', 'url("' + wall.file + '")', 'important');
+      nativeDesk.style.setProperty('background-color', wall.bg, 'important');
       if (taskbar) {
         taskbar.classList.add('win11');
         taskbar.innerHTML = `
@@ -3699,11 +4057,11 @@ print("All systems operational.")
               </div>
               <div class="win11-app-item" data-start-app="vlc">
                 <div class="win11-app-icon">${WIN11_ICONS.vlc}</div>
-                <div class="win11-app-name">VLC Player</div>
+                <div class="win11-app-name">Media Player</div>
               </div>
               <div class="win11-app-item" data-start-app="blender">
                 <div class="win11-app-icon">${WIN11_ICONS.blender}</div>
-                <div class="win11-app-name">Blender 5.0</div>
+                <div class="win11-app-name">Blender</div>
               </div>
               <div class="win11-app-item" data-start-app="unreal">
                 <div class="win11-app-icon">${WIN11_ICONS.unreal}</div>
@@ -3722,7 +4080,7 @@ print("All systems operational.")
                 <div style="width:24px; height:24px; display:flex; align-items:center; justify-content:center;">${WIN11_ICONS.files}</div>
                 <div>
                   <div style="color:#fff; font-weight:600;">This PC — Local Disk (C:)</div>
-                  <div style="color:#94a3b8; font-size:0.68rem;">5.0 TB High-Speed Storage Pool (/dev/loop0)</div>
+                  <div style="color:#94a3b8; font-size:0.68rem;"><span data-pf="quota"></span></div>
                 </div>
               </div>
               <div class="win11-rec-row" data-start-app="chrome" style="display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:6px; cursor:pointer; background:rgba(255,255,255,0.03);">
@@ -3736,7 +4094,7 @@ print("All systems operational.")
                 <div style="width:24px; height:24px; display:flex; align-items:center; justify-content:center;">${WIN11_ICONS.terminal}</div>
                 <div>
                   <div style="color:#fff; font-weight:600;">Windows Terminal (PowerShell)</div>
-                  <div style="color:#94a3b8; font-size:0.68rem;">Live PRoot-Distro Subsystem connected</div>
+                  <div style="color:#94a3b8; font-size:0.68rem;">A real terminal over this page — no subsystem is emulated behind it</div>
                 </div>
               </div>
             </div>
@@ -3778,10 +4136,10 @@ print("All systems operational.")
           { id: 'settings', name: 'Settings', icon: WIN11_ICONS.settings },
           { id: 'taskmgr', name: 'Task Manager', icon: WIN11_ICONS.taskmgr },
           { id: 'photopea', name: 'Photoshop', icon: WIN11_ICONS.photoshop },
-          { id: 'shotcut', name: 'Clipchamp', icon: WIN11_ICONS.video },
+          { id: 'shotcut', name: 'Video Converter', icon: WIN11_ICONS.video },
           { id: 'steam', name: 'Xbox & Steam', icon: WIN11_ICONS.steam },
-          { id: 'vlc', name: 'VLC Media', icon: WIN11_ICONS.vlc },
-          { id: 'blender', name: 'Blender 5.0', icon: WIN11_ICONS.blender },
+          { id: 'vlc', name: 'Media Player', icon: WIN11_ICONS.vlc },
+          { id: 'blender', name: 'Blender', icon: WIN11_ICONS.blender },
           { id: 'unreal', name: 'Unreal Engine', icon: WIN11_ICONS.unreal }
         ];
         WIN_APPS.forEach(app => {
@@ -3842,15 +4200,15 @@ print("All systems operational.")
             <button class="cyber-btn sm" data-start-app="chrome" style="text-align:left; justify-content:flex-start;">🌐 Google Chrome Browser</button>
             <button class="cyber-btn sm" data-start-app="terminal" style="text-align:left; justify-content:flex-start;">💻 Terminal CLI (Root Bash)</button>
             <button class="cyber-btn sm" data-start-app="msstore" style="text-align:left; justify-content:flex-start;">🛍️ Microsoft Store (Web Hub)</button>
-            <button class="cyber-btn sm" data-start-app="files" style="text-align:left; justify-content:flex-start;">📁 This PC (5.0 TB Storage)</button>
+            <button class="cyber-btn sm" data-start-app="files" style="text-align:left; justify-content:flex-start;">📁 This PC</button>
             <button class="cyber-btn sm" data-start-app="editor" style="text-align:left; justify-content:flex-start;">📝 Code Studio Editor</button>
-            <button class="cyber-btn sm" data-start-app="taskmgr" style="text-align:left; justify-content:flex-start;">📊 Task Manager (64GB RAM)</button>
+            <button class="cyber-btn sm" data-start-app="taskmgr" style="text-align:left; justify-content:flex-start;">📊 Task Manager</button>
             <button class="cyber-btn sm" data-start-app="steam" style="text-align:left; justify-content:flex-start;">🎮 Steam Gaming Platform</button>
-            <button class="cyber-btn sm" data-start-app="vlc" style="text-align:left; justify-content:flex-start;">🟧 VLC Media Player</button>
-            <button class="cyber-btn sm" data-start-app="blender" style="text-align:left; justify-content:flex-start;">🚀 Blender 5.0.1 3D Studio</button>
-            <button class="cyber-btn sm" data-start-app="unreal" style="text-align:left; justify-content:flex-start;">⚡ Unreal Engine 6 Hub</button>
+            <button class="cyber-btn sm" data-start-app="vlc" style="text-align:left; justify-content:flex-start;">🟧 Media Player</button>
+            <button class="cyber-btn sm" data-start-app="blender" style="text-align:left; justify-content:flex-start;">🚀 Blender</button>
+            <button class="cyber-btn sm" data-start-app="unreal" style="text-align:left; justify-content:flex-start;">⚡ Unreal Engine</button>
             <button class="cyber-btn sm" data-start-app="photopea" style="text-align:left; justify-content:flex-start;">🎨 Photoshop Studio (Photopea)</button>
-            <button class="cyber-btn sm" data-start-app="shotcut" style="text-align:left; justify-content:flex-start;">🎬 Shotcut 4K Video Editor</button>
+            <button class="cyber-btn sm" data-start-app="shotcut" style="text-align:left; justify-content:flex-start;">🎬 FFmpeg WASM Converter</button>
           </div>
           <div style="display:flex; justify-content:space-between; align-items:center; padding-top:8px; border-top:1px solid rgba(255,255,255,0.1);">
             <button id="btn-start-settings" class="cyber-btn xs neon-cyan">⚙️ Settings</button>
@@ -3868,10 +4226,10 @@ print("All systems operational.")
           { id: 'editor', name: 'Code Studio', icon: '📝' },
           { id: 'taskmgr', name: 'Task Manager', icon: '📊' },
           { id: 'photopea', name: 'Photoshop', icon: '🎨' },
-          { id: 'shotcut', name: 'Video Studio', icon: '🎬' },
+          { id: 'shotcut', name: 'Video Converter', icon: '🎬' },
           { id: 'steam', name: 'Steam Hub', icon: '🎮' },
-          { id: 'vlc', name: 'VLC Media', icon: '🟧' },
-          { id: 'blender', name: 'Blender 5.0', icon: '🚀' },
+          { id: 'vlc', name: 'Media Player', icon: '🟧' },
+          { id: 'blender', name: 'Blender', icon: '🚀' },
           { id: 'unreal', name: 'Unreal Engine', icon: '⚡' },
           { id: 'settings', name: 'Stream Config', icon: '⚙️' }
         ];
@@ -4805,25 +5163,37 @@ print("All systems operational.")
     function handleLocalCopilotFallback(text) {
       const lower = text.toLowerCase();
       if (lower.includes('status') || lower.includes('check') || lower.includes('ram')) {
-        const rep = `**⚡ VirgoX Cloud Architecture:**\n- Pipeline: 120 FPS Ultra-Smooth Synchronization\n- Virtual RAM: 64 GB Allocated (ZRAM Turbo)\n- Storage: Unlimited Hybrid Cloud Storage\n- Touch Mode: ${state.isScreenTrackpadActive ? '🖱️ Trackpad Active' : '👆 Direct Touch Active'}`;
+        const rr = realityLine();
+        const rep = `**⚡ What this page is actually running on:**
+
+- Shell: a browser tab wearing a Windows 11 Fluent theme
+- Logical cores: ${rr.cpu}
+- Graphics: ${rr.gpu}
+- Device class: ${rr.mem}
+- Display: ${rr.screen}
+- Open for: ${fmtDuration(rr.f.pageAgeMs)}
+- Signed in as: ${vxcCurrentUser().email || 'nobody'}
+
+There is no accelerated render pipeline, no large pooled allocation and no "unlimited hybrid cloud
+storage" behind this page. The old version of this answer listed all three.`;
         appendMsg('VirgoX Jarvis AI', rep, true);
-        speakJarvis('System architecture running at 120 FPS with 64 gigabytes virtual RAM.');
+        speakJarvis('That is what the browser is actually reporting.');
       } else if (lower.includes('blender')) {
         sendAction('launch', { app: 'blender' });
-        appendMsg('VirgoX Jarvis AI', '🎨 Launched **Blender 5.0.1** on your Cloud Desktop!', true);
-        speakJarvis('Launching Blender 5.0 now.');
+        appendMsg('VirgoX Jarvis AI', '🎨 Opening **Blender** in a new tab — this page does not bundle it.', true);
+        speakJarvis('Opening Blender.');
       } else if (lower.includes('unreal') || lower.includes('ue6')) {
         sendAction('launch', { app: 'unreal_engine' });
-        appendMsg('VirgoX Jarvis AI', '⚡ Initialized **Unreal Engine 6 Hub** on your Cloud Desktop!', true);
-        speakJarvis('Opening Unreal Engine 6 environment.');
+        appendMsg('VirgoX Jarvis AI', '⚡ Opening **Unreal Engine** — it has no web build, so this links to the real thing.', true);
+        speakJarvis('Unreal has no web build.');
       } else if (lower.includes('epic')) {
         sendAction('launch', { app: 'epic_games' });
         appendMsg('VirgoX Jarvis AI', '🎮 Launched **Epic Games Launcher** on your Cloud Desktop!', true);
         speakJarvis('Launching Epic Games Launcher.');
       } else if (lower.includes('vlc')) {
         sendAction('launch', { app: 'vlc' });
-        appendMsg('VirgoX Jarvis AI', '🎬 Launched **VLC Media Player** on your Cloud Desktop!', true);
-        speakJarvis('Opening VLC Media Player.');
+        appendMsg('VirgoX Jarvis AI', '🎬 **Media Player** ready — pick a file; it plays in this tab and is never uploaded.', true);
+        speakJarvis('Media player ready.');
       } else if (lower.includes('edge')) {
         sendAction('launch', { app: 'edge' });
         appendMsg('VirgoX Jarvis AI', '🌐 Launched **Microsoft Edge** on your Cloud Desktop!', true);
@@ -4982,13 +5352,16 @@ print("All systems operational.")
         memoryContainer.innerHTML = `
           <div class="memory-card">
             <div class="card-header"><span class="session-badge" style="background:rgba(0,242,254,0.15); border-color:#00e5ff; color:#00e5ff;">⚡ CLOUD PC HARDWARE SPECS</span></div>
-            <h4 class="card-title">High-Speed Cloud Workstation</h4>
+            <h4 class="card-title">What this page is really running on</h4>
             <table class="cyber-table">
-              <tr><td><strong>RAM Engine</strong></td><td>64 GB High-Performance Virtual RAM (ZRAM)</td></tr>
-              <tr><td><strong>Display Sync</strong></td><td>120 FPS Synchronized Low-Latency</td></tr>
-              <tr><td><strong>GPU Acceleration</strong></td><td>Mesa LLVMpipe 3D Multithreaded</td></tr>
-              <tr><td><strong>OS Platform</strong></td><td>Ubuntu Linux LTS Desktop (Webtop GUI)</td></tr>
-              <tr><td><strong>Preinstalled Suites</strong></td><td>Blender 5.0, Unreal 6, Steam, Photopea, Shotcut 4K</td></tr>
+              <tr><td><strong>What this is</strong></td><td>a browser tab, not a cloud workstation</td></tr>
+              <tr><td><strong>Logical cores</strong></td><td><span data-pf="cores"></span></td></tr>
+              <tr><td><strong>Device class</strong></td><td><span data-pf="deviceMemory"></span></td></tr>
+              <tr><td><strong>JS heap</strong></td><td><span data-pf="heap"></span></td></tr>
+              <tr><td><strong>Graphics</strong></td><td><span data-pf="gpu"></span></td></tr>
+              <tr><td><strong>Storage</strong></td><td><span data-pf="quota"></span></td></tr>
+              <tr><td><strong>Connection</strong></td><td><span data-pf="connection"></span></td></tr>
+              <tr><td><strong>What actually opens</strong></td><td>real sites in a real frame — Google, Photopea, FFmpeg WASM, VS Code, Steam where it allows framing</td></tr>
             </table>
           </div>
 
@@ -5013,20 +5386,19 @@ print("All systems operational.")
         } catch (e) { }
       }
 
-      const phone = (mem.target_devices && mem.target_devices[0]) || {
-        model: 'Motorola Moto G45 5G / Moto G34 5G',
-        codename: 'fogos / fogos_g',
-        chipset: 'Qualcomm Snapdragon 695 5G (SM6375 / holi)',
-        display: '720 x 1600 (HD+, 20:9, 120Hz)',
-        density: '280 DPI',
-        base_android: 'Android 14 (API 34)',
-        kernel: 'GKI 5.4 / holi-qgki_defconfig (Image with LZ4 ramdisk)'
-      };
+      // This used to fall back to a hardcoded "Motorola Moto G45 5G / fogos"
+      // spec sheet. If the bridge cannot be reached there is no device to
+      // describe, so it says so rather than describing one from memory.
+      const phone = (mem.target_devices && mem.target_devices[0]) || null;
+      if (!phone) {
+        phoneBox.innerHTML = '<div style="color:#fca5a5; font-size:0.8rem; line-height:1.5;">'
+          + 'No target device reported. The bridge at <code>' + escapeHtml(String(state.config.bridgeUrl || location.origin))
+          + '</code> did not return one, so there is no spec sheet to show. '
+          + 'The old panel filled this space with a hardcoded Moto G45 listing.</div>';
+      } else {
 
-      const userNotes = mem.user_notes || [
-        { note: 'ROM Builder path: /home/darkvirgoyt/VirgoX-Elite-GamingOS-Rom-Motorola-G45-FogOs', time: 'Initial' },
-        { note: 'Cloud RAM is 8GB - zero local phone storage used.', time: 'Initial' }
-      ];
+      // No invented notes. If the bridge has none, it says there are none.
+      const userNotes = Array.isArray(mem.user_notes) ? mem.user_notes : [];
 
       memoryContainer.innerHTML = `
         <div class="memory-card">
@@ -5042,24 +5414,32 @@ print("All systems operational.")
         </div>
 
         <div class="memory-card">
-          <div class="card-header"><span class="session-badge">⚡ CLOUD PC ARCHITECTURE</span></div>
-          <h4 class="card-title">VirgoX Cloud Desktop Suite</h4>
+          <div class="card-header"><span class="session-badge">⚡ WHAT THIS PAGE IS RUNNING ON</span></div>
+          <h4 class="card-title">Read live from the browser</h4>
           <table class="cyber-table">
-            <tr><td><strong>Host OS</strong></td><td>Ubuntu 24.04 LTS (Cloud Shell)</td></tr>
-            <tr><td><strong>Container</strong></td><td>XFCE4 Webtop (virgox-desktop)</td></tr>
-            <tr><td><strong>RAM / CPU</strong></td><td>8 GB RAM / 2 vCPUs (Intel Xeon)</td></tr>
-            <tr><td><strong>Input Driver</strong></td><td>Sub-millisecond UDP Native X11</td></tr>
-            <tr><td><strong>Storage Mount</strong></td><td><code>/home/darkvirgoyt</code> -> <code>/config/Desktop/VirgoX-Files</code></td></tr>
+            <tr><td><strong>Host OS</strong></td><td>not applicable — a web document, not a machine</td></tr>
+            <tr><td><strong>Logical cores</strong></td><td><span data-pf="cores"></span></td></tr>
+            <tr><td><strong>Device class</strong></td><td><span data-pf="deviceMemory"></span></td></tr>
+            <tr><td><strong>JS heap</strong></td><td><span data-pf="heap"></span></td></tr>
+            <tr><td><strong>Graphics</strong></td><td><span data-pf="gpu"></span></td></tr>
+            <tr><td><strong>Storage</strong></td><td><span data-pf="quota"></span></td></tr>
+            <tr><td><strong>Origin</strong></td><td><span data-pf="origin"></span></td></tr>
           </table>
+          <p style="font-size:0.72rem; color:#94a3b8; margin-top:8px; line-height:1.5;">
+            The panel this replaced claimed "Ubuntu 24.04 LTS (Cloud Shell)", "XFCE4 Webtop
+            (virgox-desktop)", "8 GB RAM / 2 vCPUs (Intel Xeon)" and "sub-millisecond UDP Native X11".
+            None of that was read from anywhere.
+          </p>
         </div>
 
         <div class="memory-card notes-card">
-          <div class="card-header"><span class="session-badge">📝 PERSISTENT NOTES (${userNotes.length})</span></div>
+          <div class="card-header"><span class="session-badge">📝 NOTES FROM THE BRIDGE (${userNotes.length})</span></div>
           <ul class="notes-list">
             ${userNotes.map(n => `<li><span class="note-text">${n.note}</span><span class="note-time">${n.time}</span></li>`).join('')}
           </ul>
         </div>
       `;
+      }
     }
 
     // Save Note button
@@ -5227,8 +5607,8 @@ print("All systems operational.")
           setTimeout(() => inputLoginPass.focus(), 100);
         }
       } else if (viewName === 'token') {
-        if (authTitle) authTitle.textContent = 'COMMERCIAL CLIENT ACCESS & S.JSON';
-        if (authSubtitle) authSubtitle.textContent = 'Enter Client License Token or Auth Secret (/storage/emulated/0/boot/s.json)';
+        if (authTitle) authTitle.textContent = 'CLIENT TOKEN ACCESS';
+        if (authSubtitle) authSubtitle.textContent = 'Paste a token issued by the bridge. No token file is read by this page.';
         if (authLockIcon) authLockIcon.textContent = '🎫';
         if (viewToken) viewToken.classList.remove('hidden');
         if (inputToken) {
@@ -6495,8 +6875,11 @@ print("All systems operational.")
       if (data.status === 'ok') {
         const totalEl = document.getElementById('backup-total-storage');
         const availEl = document.getElementById('backup-avail-storage');
-        if (totalEl) totalEl.textContent = data.total || '5.0 TB';
-        if (availEl) availEl.textContent = data.available || '4.8 TB';
+        // These used to fall back to a made-up capacity and a made-up free
+        // figure when the bridge was unreachable, so an absent answer was
+        // displayed as a real disk. An absent answer now stays absent.
+        if (totalEl) totalEl.textContent = data.total || NOT_EXPOSED;
+        if (availEl) availEl.textContent = data.available || NOT_EXPOSED;
       }
     } catch (e) {}
 
@@ -6653,6 +7036,11 @@ print("All systems operational.")
         }
       });
     }
+
+    // The landing page is injected by assets/workstation.core.js as a template
+    // literal, so its data-pf spans exist by the time init runs. Without this
+    // the figures stay at their shipped fallback text instead of being read.
+    hydratePlatformFacts(document);
 
     window.loadBackupAndPrivacy();
   }
