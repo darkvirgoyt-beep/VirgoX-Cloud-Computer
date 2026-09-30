@@ -26,6 +26,8 @@
 
 const http = require('http');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 const PORT = Number(process.env.PORT) || 8787;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -195,6 +197,18 @@ async function handleDeviceCode(req, res) {
 
 async function handleApprove(req, res) {
   const body = await readAny(req);
+
+  // Approval is an authenticated act. Before this existed, the identity came out
+  // of the request body or defaulted to VXC_DEFAULT_EMAIL, so any page could
+  // approve any code as anyone. It now has to be a real signed-in account.
+  const session = sessionFor(req);
+  if (!session) {
+    return send(res, 401, {
+      error: 'not_signed_in',
+      error_description: 'Sign in to your VirgoX account before approving this device.',
+    });
+  }
+
   const userCode = String(body.user_code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   const grant = grants.get(userCode);
 
@@ -222,7 +236,7 @@ async function handleApprove(req, res) {
 
   grant.approved = true;
   grant.approved_at = Date.now();
-  grant.email = body.email || process.env.VXC_DEFAULT_EMAIL || 'prince@virgox.local';
+  grant.email = session.email;   // from the session, never from the request
 
   send(res, 200, {
     approved: true,
@@ -354,6 +368,174 @@ async function handleSessionRevoke(req, res) {
 
 /* ------------------------------------------------------------------- routing */
 
+/* ------------------------------------------------------------------ accounts
+ *
+ * The device-approval page used to have no idea who was approving. handleApprove
+ * took the email straight out of the request body, or fell back to
+ * VXC_DEFAULT_EMAIL, which meant anyone who could reach the page could claim any
+ * identity they liked. That is not a login.
+ *
+ * Accounts are real: scrypt-hashed passwords, a random per-user salt, and a
+ * constant-time comparison. They live in a JSON file so an account stays valid
+ * across restarts — you sign in with the same one every time.
+ */
+
+const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
+const accounts = new Map();     // email -> { email, salt, hash, created_at }
+const sessions = new Map();     // token  -> { token, email, created_at, expires_at }
+const SESSION_TTL = 30 * 24 * 3600 * 1000; // 30 days
+
+const DATA_FILE = process.env.VXC_DATA_FILE
+  || path.join(__dirname, '..', 'data', 'accounts.json');
+
+function loadAccounts() {
+  try {
+    const raw = fs.readFileSync(DATA_FILE, 'utf8');
+    for (const rec of JSON.parse(raw)) {
+      if (rec && rec.email && rec.salt && rec.hash) accounts.set(rec.email, rec);
+    }
+    console.log(`  loaded ${accounts.size} account(s) from ${DATA_FILE}`);
+  } catch (e) {
+    if (e.code !== 'ENOENT') console.log(`  could not read ${DATA_FILE}: ${e.message}`);
+    console.log('  no accounts file yet — the first sign-in creates one');
+  }
+}
+
+function saveAccounts() {
+  fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
+  // 0600: the file holds password hashes, it does not belong world-readable.
+  fs.writeFileSync(DATA_FILE, JSON.stringify([...accounts.values()], null, 2), { mode: 0o600 });
+}
+
+const hashPassword = (password, salt) =>
+  crypto.scryptSync(password, salt, 64, SCRYPT_PARAMS).toString('base64');
+
+function validEmail(e) {
+  return typeof e === 'string' && /^[^\s@]{1,64}@[^\s@]{1,190}\.[a-z]{2,}$/i.test(e.trim());
+}
+
+/* Refuse the weakest passwords outright rather than storing them. */
+function passwordProblem(p) {
+  if (typeof p !== 'string') return 'Password is required.';
+  if (p.length < 10) return 'Use at least 10 characters.';
+  if (p.length > 200) return 'That password is too long.';
+  const classes = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/].filter(r => r.test(p)).length;
+  if (classes < 3) return 'Mix lower case, upper case, numbers and symbols — at least three of the four.';
+  return null;
+}
+
+function bearer(req) {
+  const h = req.headers.authorization || '';
+  const m = /^Bearer\s+(.+)$/i.exec(h.trim());
+  if (m) return m[1];
+  // Fall back to a query param so the browser page can pass it in a link-free way
+  // via the Authorization header; kept explicit rather than cookie-based so there
+  // is no CSRF surface on a service exposed cross-origin.
+  return null;
+}
+
+function sessionFor(req) {
+  const tok = bearer(req);
+  if (!tok) return null;
+  const s = sessions.get(tok);
+  if (!s) return null;
+  if (s.expires_at <= Date.now()) { sessions.delete(tok); return null; }
+  return s;
+}
+
+/* Simple fixed-window throttle on password guessing. */
+const attempts = new Map(); // key -> { n, until }
+function throttleKey(req, email) {
+  return (req.socket.remoteAddress || 'unknown') + '|' + String(email).toLowerCase();
+}
+function tooManyAttempts(req, email) {
+  const a = attempts.get(throttleKey(req, email));
+  return !!(a && a.until > Date.now());
+}
+function noteFailure(req, email) {
+  const k = throttleKey(req, email);
+  const a = attempts.get(k) || { n: 0, until: 0 };
+  a.n++;
+  if (a.n >= 5) { a.until = Date.now() + Math.min(300_000, a.n * 15_000); a.n = 0; }
+  attempts.set(k, a);
+}
+function clearFailures(req, email) { attempts.delete(throttleKey(req, email)); }
+
+function newSession(email) {
+  const token = 'vxs_' + crypto.randomBytes(32).toString('base64url');
+  sessions.set(token, { token, email, created_at: Date.now(), expires_at: Date.now() + SESSION_TTL });
+  return token;
+}
+
+async function handleRegister(req, res) {
+  const b = await readAny(req);
+  const email = String(b.email || '').trim().toLowerCase();
+  const password = b.password;
+
+  if (!validEmail(email)) {
+    return send(res, 400, { error: 'invalid_email', error_description: 'That does not look like an email address.' });
+  }
+  const problem = passwordProblem(password);
+  if (problem) return send(res, 400, { error: 'weak_password', error_description: problem });
+  if (accounts.has(email)) {
+    return send(res, 409, { error: 'email_taken', error_description: 'That email already has an account. Sign in instead.' });
+  }
+
+  const salt = crypto.randomBytes(16).toString('base64');
+  accounts.set(email, {
+    email,
+    salt,
+    hash: hashPassword(password, salt),
+    created_at: new Date().toISOString(),
+  });
+  saveAccounts();
+
+  const token = newSession(email);
+  send(res, 201, { token, email, token_type: 'Bearer', expires_in: Math.floor(SESSION_TTL / 1000) });
+}
+
+async function handleLogin(req, res) {
+  const b = await readAny(req);
+  const email = String(b.email || '').trim().toLowerCase();
+  const password = b.password;
+
+  if (!email || typeof password !== 'string') {
+    return send(res, 400, { error: 'invalid_request', error_description: 'Email and password are both required.' });
+  }
+  if (tooManyAttempts(req, email)) {
+    return send(res, 429, { error: 'too_many_attempts', error_description: 'Too many tries. Wait a minute and go again.' });
+  }
+
+  const rec = accounts.get(email);
+  // Hash against a dummy record when the user is missing so a wrong email and a
+  // wrong password take the same time. Otherwise you can enumerate accounts.
+  const salt = rec ? rec.salt : 'not-a-real-salt';
+  const attempt = hashPassword(password, salt);
+  const ok = rec && crypto.timingSafeEqual(
+    Buffer.from(attempt, 'base64'), Buffer.from(rec.hash, 'base64'));
+
+  if (!ok) {
+    noteFailure(req, email);
+    return send(res, 401, { error: 'invalid_credentials', error_description: 'Email or password is wrong.' });
+  }
+
+  clearFailures(req, email);
+  const token = newSession(email);
+  send(res, 200, { token, email: rec.email, token_type: 'Bearer', expires_in: Math.floor(SESSION_TTL / 1000) });
+}
+
+async function handleMe(req, res) {
+  const s = sessionFor(req);
+  if (!s) return send(res, 401, { error: 'not_signed_in', error_description: 'No session.' });
+  send(res, 200, { email: s.email, created_at: s.created_at, expires_at: s.expires_at });
+}
+
+async function handleLogout(req, res) {
+  const tok = bearer(req);
+  if (tok) sessions.delete(tok);
+  send(res, 200, { signed_out: true });
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const path = url.pathname.replace(/\/+$/, '') || '/';
@@ -382,6 +564,10 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && path === '/device/code') return await handleDeviceCode(req, res);
     if (req.method === 'POST' && path === '/device/approve') return await handleApprove(req, res);
     if (req.method === 'POST' && path === '/token') return await handleToken(req, res);
+    if (req.method === 'POST' && path === '/account/register') return await handleRegister(req, res);
+    if (req.method === 'POST' && path === '/account/login') return await handleLogin(req, res);
+    if (req.method === 'GET' && path === '/account/me') return await handleMe(req, res);
+    if (req.method === 'POST' && path === '/account/logout') return await handleLogout(req, res);
     if (req.method === 'POST' && path === '/session/push') return await handleSessionPush(req, res);
     if (req.method === 'GET' && path === '/session/claim') return await handleSessionClaim(req, res);
     if (req.method === 'POST' && path === '/session/revoke') return await handleSessionRevoke(req, res);
@@ -395,8 +581,11 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+loadAccounts();
+
 server.listen(PORT, HOST, () => {
   console.log(`virgox auth service listening on http://${HOST}:${PORT}`);
+  console.log(`  accounts: ${accounts.size} (${DATA_FILE})`);
   console.log(`  device codes expire in ${TTL_SECONDS}s, clients poll every ${INTERVAL}s`);
   if (!process.env.VXC_PUBLIC_URL) {
     console.log('  note: set VXC_PUBLIC_URL when behind a proxy so verification_uri is correct');

@@ -14,7 +14,7 @@
 
 set -u
 
-VXC_VERSION="1.1.0"
+VXC_VERSION="1.2.0"
 
 # ---- config ---------------------------------------------------------------
 
@@ -348,7 +348,7 @@ cmd_login() {
   printf '%s\n' ""
   printf '  %sCopy this one-time code:%s  %s%s%s\n' "$C_DIM" "$C_OFF" "$C_BLD$C_GRN" "$user_code" "$C_OFF"
   printf '%s\n' ""
-  printf '  %sOpen this link on any phone or computer:%s\n' "$C_DIM" "$C_OFF"
+  printf '  %sOpen this link on any phone or computer, then sign in:%s\n' "$C_DIM" "$C_OFF"
   printf '\n    %s%s%s\n\n' "$C_BLU" "$verify_uri" "$C_OFF"
   printf '  %sWaiting for approval — expires in %s min. Ctrl-C to cancel.%s\n\n' \
     "$C_DIM" "$((expires_in / 60))" "$C_OFF"
