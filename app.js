@@ -1916,6 +1916,10 @@
     if (appId === 'msstore' || appId === 'ms_store' || appId === 'microsoft_store') initMsStoreActions(win);
     if (appId === 'editor' || appId === 'notepad') initEditorActions(win);
     if (appId === 'settings' || appId === 'windows_settings') initSettingsActions(win);
+    if (appId === 'blender') initBlenderActions(win);
+    if (appId === 'steam') initSteamActions(win);
+    if (appId === 'shotcut' || appId === 'video_editor') initVideoEditorActions(win);
+    if (appId === 'unreal' || appId === 'unreal_engine') initUnrealActions(win);
 
     updateTaskbarChips();
     bringToFront(win);
@@ -2290,59 +2294,6 @@ server.py   s.json      style.css      scripts/  desktop-shortcuts/\n`;
     } else {
       output.innerHTML += `Executed: ${cmd} (Local fallback active — Connect bridge port 8888 for live execution)\n`;
     }
-  }
-
-  function getFilesHtml() {
-    const isWin = state.config.osMode === 'windows';
-    return `
-      <div class="cyber-files-view">
-        <div class="files-sidebar">
-          <div class="files-sidebar-item active">${isWin ? '⭐ Quick access' : '📁 Quick Access'}</div>
-          <div class="files-sidebar-item">${isWin ? '☁️ OneDrive' : '💽 Local Disk (5TB)'}</div>
-          <div class="files-sidebar-item">${isWin ? '💻 This PC (C:)' : '🐧 Linux Root (/)'}</div>
-          <div class="files-sidebar-item">${isWin ? '🐧 Linux Subsystem' : '📦 VirgoX-Files'}</div>
-          <div class="files-sidebar-item">⬇️ Downloads</div>
-          <div class="files-sidebar-item">📁 Documents</div>
-          <div class="files-sidebar-item">🖼️ Pictures</div>
-        </div>
-        <div class="files-main-content">
-          <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
-            <span>Location: <strong>${isWin ? 'This PC > Local Disk (C:) > Users > Prince' : '/config/Desktop/VirgoX-Files/'}</strong></span>
-            <span style="color:${isWin ? '#60a5fa' : 'var(--neon-green)'}; font-weight:700;">4.8 TB Free of 5.0 TB</span>
-          </div>
-          <div class="files-grid-view">
-            <div class="files-grid-item" onclick="alert('Folder: ${isWin ? 'C:\\\\Program Files (x86)' : 'ROM-Builds'}')">
-              <span style="font-size:2rem;">📁</span>
-              <span style="font-size:0.75rem; color:#fff;">Program Files</span>
-            </div>
-            <div class="files-grid-item" onclick="alert('Folder: ${isWin ? 'C:\\\\Windows\\\\System32' : 'Downloads'}')">
-              <span style="font-size:2rem;">📁</span>
-              <span style="font-size:0.75rem; color:#fff;">Windows</span>
-            </div>
-            <div class="files-grid-item" onclick="alert('Folder: ${isWin ? 'C:\\\\Users\\\\Prince\\\\Downloads' : 'Projects'}')">
-              <span style="font-size:2rem;">📁</span>
-              <span style="font-size:0.75rem; color:#fff;">Downloads</span>
-            </div>
-            <div class="files-grid-item" onclick="alert('Folder: ${isWin ? 'C:\\\\VirgoX-Files (5.0 TB Storage Pool)' : 'VirgoX-Files'}')">
-              <span style="font-size:2rem;">📦</span>
-              <span style="font-size:0.75rem; color:#fff;">VirgoX-Files</span>
-            </div>
-            <div class="files-grid-item" onclick="openAppWindow('editor')">
-              <span style="font-size:2rem;">🐍</span>
-              <span style="font-size:0.75rem; color:#fff;">server.py</span>
-            </div>
-            <div class="files-grid-item" onclick="openAppWindow('editor')">
-              <span style="font-size:2rem;">📜</span>
-              <span style="font-size:0.75rem; color:#fff;">app.js</span>
-            </div>
-            <div class="files-grid-item" onclick="alert('VirgoX Security Secrets: Protected Token Store')">
-              <span style="font-size:2rem;">🔑</span>
-              <span style="font-size:0.75rem; color:#fff;">s.json</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
   }
 
   function getBrowserHtml() {
@@ -2733,90 +2684,598 @@ server.py   s.json      style.css      scripts/  desktop-shortcuts/\n`;
     `;
   }
 
+  // ==========================================================================
+  // 📝 Windows 11 Notepad Studio
+  // ==========================================================================
   function getEditorHtml() {
     return `
-      <div style="display:flex; flex-direction:column; height:100%;">
-        <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 12px; background:#0c101d; border-bottom:1px solid rgba(0,229,255,0.3);">
-          <div style="display:flex; gap:8px;">
-            <button class="cyber-btn xs active">server.py</button>
-            <button class="cyber-btn xs">app.js</button>
-            <button class="cyber-btn xs">start_services.sh</button>
-          </div>
-          <button id="btn-editor-run" class="cyber-btn xs neon-green">▶ RUN CODE</button>
+      <div class="win11-notepad-app" style="display:flex; flex-direction:column; height:100%; font-family:'Segoe UI Variable', 'Segoe UI', sans-serif; background:#202020; color:#fff;">
+        <!-- Notepad Menu Bar -->
+        <div style="display:flex; align-items:center; gap:16px; padding:4px 12px; background:rgba(255,255,255,0.03); border-bottom:1px solid rgba(255,255,255,0.08); font-size:0.75rem;">
+          <div style="cursor:pointer; padding:2px 6px; border-radius:4px;" class="np-menu-item" id="np-btn-new">File</div>
+          <div style="cursor:pointer; padding:2px 6px; border-radius:4px;" class="np-menu-item" id="np-btn-save">Save</div>
+          <div style="cursor:pointer; padding:2px 6px; border-radius:4px;" class="np-menu-item" id="np-btn-run" style="color:var(--neon-green); font-weight:700;">▶ Run Code</div>
+          <div style="flex:1;"></div>
+          <span style="font-size:0.7rem; color:#888;" id="np-file-status">Untitled.txt — Saved</span>
         </div>
-        <textarea id="editor-text-area" spellcheck="false" style="flex:1; background:#04060c; color:#a5f3fc; font-family:var(--font-mono); font-size:0.82rem; padding:12px; border:none; resize:none; outline:none; line-height:1.5;"># ⚡ VirgoX Cloud Computer Engine
-import os, sys, time
+        <!-- Editor Core -->
+        <div style="flex:1; position:relative; display:flex;">
+          <textarea id="editor-text-area" spellcheck="false" style="width:100%; height:100%; background:#191919; color:#f1f5f9; font-family:'Cascadia Code', Consolas, monospace; font-size:0.85rem; padding:12px; border:none; resize:none; outline:none; line-height:1.55;"># =======================================================
+# ⚡ VirgoX Cloud Workstation — Windows 11 Pro 24H2
+# User: Prince (Administrator)
+# Platform: Linux localhost 6.17.0 Mesa 3D Pipeline
+# =======================================================
 
-print("⚡ Running inside VirgoX Cloud PC...")
-print(f"Memory: 64 GB Virtual RAM Pool Active")
-print(f"Display: 120 FPS Synchronized Mesa 3D Pipeline")
-print("All systems operational.")
+import os
+import sys
+
+def system_status():
+    print("🚀 Initializing VirgoX High-Performance Cloud PC...")
+    print(f"OS Architecture : {os.uname().machine}")
+    print(f"Kernel Build    : {os.uname().release}")
+    print("RAM Pool        : 64 GB Virtual Dedicated Engine")
+    print("Direct3D / Vulkan: LLVMpipe 120 FPS Synced")
+    print("Status          : ALL SYSTEMS VERIFIED AND READY.")
+
+if __name__ == '__main__':
+    system_status()
 </textarea>
+        </div>
+        <!-- Status Bar -->
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:3px 14px; background:#181818; border-top:1px solid rgba(255,255,255,0.06); font-size:0.7rem; color:#888;">
+          <div id="np-cursor-pos">Ln 1, Col 1</div>
+          <div style="display:flex; gap:16px;">
+            <span>100%</span>
+            <span>Windows (CRLF)</span>
+            <span>UTF-8</span>
+          </div>
+        </div>
       </div>
     `;
   }
 
   function initEditorActions(win) {
-    const runBtn = win.querySelector('#btn-editor-run');
     const textArea = win.querySelector('#editor-text-area');
-    if (!runBtn || !textArea) return;
+    const runBtn = win.querySelector('#np-btn-run');
+    const saveBtn = win.querySelector('#np-btn-save');
+    const newBtn = win.querySelector('#np-btn-new');
+    const statusEl = win.querySelector('#np-file-status');
+    const cursorEl = win.querySelector('#np-cursor-pos');
+    if (!textArea) return;
 
-    runBtn.addEventListener('click', () => {
-      openAppWindow('terminal');
-      const termWin = openWindows['terminal'];
-      if (termWin) {
-        const out = termWin.querySelector('#term-output-stream');
-        if (out) {
-          out.innerHTML += `\n<span style="color:var(--neon-green);">[Code Studio Execute]</span> python3 -c "${textArea.value.replace(/\n/g, '; ')}"\n⚡ Running inside VirgoX Cloud PC...\nMemory: 64 GB Virtual RAM Pool Active\nDisplay: 120 FPS Synchronized Mesa 3D Pipeline\nAll systems operational.\n`;
-          const termBody = termWin.querySelector('#native-term-body');
-          if (termBody) termBody.scrollTop = termBody.scrollHeight;
-        }
-      }
+    textArea.addEventListener('input', () => {
+      if (statusEl) statusEl.textContent = 'Untitled.txt — Modified';
     });
+
+    textArea.addEventListener('keyup', () => {
+      if (!cursorEl) return;
+      const text = textArea.value.substring(0, textArea.selectionStart);
+      const lines = text.split('\n');
+      const curLine = lines.length;
+      const curCol = lines[lines.length - 1].length + 1;
+      cursorEl.textContent = `Ln ${curLine}, Col ${curCol}`;
+    });
+
+    if (newBtn) {
+      newBtn.addEventListener('click', () => {
+        textArea.value = '';
+        if (statusEl) statusEl.textContent = 'Untitled.txt — Saved';
+        textArea.focus();
+      });
+    }
+
+    if (saveBtn) {
+      saveBtn.addEventListener('click', () => {
+        const blob = new Blob([textArea.value], { type: 'text/plain;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'VirgoX_Note.txt';
+        a.click();
+        if (statusEl) statusEl.textContent = 'VirgoX_Note.txt — Saved locally';
+      });
+    }
+
+    if (runBtn) {
+      runBtn.addEventListener('click', () => {
+        openAppWindow('terminal');
+        const termWin = openWindows['terminal'];
+        if (termWin) {
+          const out = termWin.querySelector('#term-output-stream');
+          if (out) {
+            out.innerHTML += `\n<span style="color:var(--neon-green);">[Python Studio Execute]</span> python3 -c "${textArea.value.replace(/"/g, '\\"').replace(/\n/g, '; ')}"\n🚀 Initializing VirgoX High-Performance Cloud PC...\nOS Architecture : aarch64\nKernel Build    : 6.17.0-PRoot-Distro\nRAM Pool        : 64 GB Virtual Dedicated Engine\nDirect3D / Vulkan: LLVMpipe 120 FPS Synced\nStatus          : ALL SYSTEMS VERIFIED AND READY.\n`;
+            const termBody = termWin.querySelector('#native-term-body');
+            if (termBody) termBody.scrollTop = termBody.scrollHeight;
+          }
+        }
+      });
+    }
   }
 
-  function getVideoEditorHtml() {
-    return `
-      <div style="padding:20px; color:#fff; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
-        <span style="font-size:3rem; margin-bottom:8px;">🎬</span>
-        <h3 style="color:var(--neon-purple); margin:0 0 6px 0;">Shotcut 4K Studio Editor</h3>
-        <p style="color:#aaa; font-size:0.85rem; max-width:400px; margin:0 0 14px 0;">Multi-track 4K video editor with hardware color grading and timeline synchronization (Mesa LLVMpipe 120 FPS).</p>
-        <button class="cyber-btn sm neon-purple" onclick="alert('Video Studio initialized with 64GB virtual RAM allocation.')">🎬 START NEW PROJECT</button>
-      </div>
-    `;
-  }
-
+  // ==========================================================================
+  // 🎮 Valve Steam Client
+  // ==========================================================================
   function getSteamHtml() {
     return `
-      <div style="padding:20px; color:#fff; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
-        <span style="font-size:3rem; margin-bottom:8px;">🎮</span>
-        <h3 style="color:var(--neon-cyan); margin:0 0 6px 0;">Valve Steam Gaming Client</h3>
-        <p style="color:#aaa; font-size:0.85rem; max-width:400px; margin:0 0 14px 0;">32-bit & 64-bit multi-arch acceleration engine. Proton 9.0 compatibility layer online.</p>
-        <button class="cyber-btn sm neon-cyan" onclick="alert('Steam Client online. Ready to launch titles.')">🎮 OPEN LIBRARY</button>
+      <div class="steam-win-app" style="display:flex; flex-direction:column; height:100%; background:#171d25; color:#c6d4df; font-family:'Segoe UI', sans-serif;">
+        <!-- Steam Top Bar -->
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 14px; background:#1b2838; border-bottom:1px solid #101822;">
+          <div style="display:flex; align-items:center; gap:16px;">
+            <div style="font-weight:900; font-size:1.1rem; color:#fff; letter-spacing:1px; display:flex; align-items:center; gap:6px;">
+              <span style="color:#66c0f4;">●</span> STEAM
+            </div>
+            <div style="display:flex; gap:12px; font-size:0.8rem; font-weight:600; text-transform:uppercase;">
+              <span style="color:#66c0f4; border-bottom:2px solid #66c0f4; padding-bottom:2px; cursor:pointer;">STORE</span>
+              <span style="color:#aaa; cursor:pointer;" id="steam-tab-library">LIBRARY</span>
+              <span style="color:#aaa; cursor:pointer;">COMMUNITY</span>
+              <span style="color:#aaa; cursor:pointer;">PRINCE</span>
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px; font-size:0.75rem;">
+            <span style="color:#66c0f4;">Wallet: ₹2,450.00</span>
+            <div style="width:26px; height:26px; border-radius:50%; overflow:hidden; border:1px solid #66c0f4;">
+              <img src="${PRINCE_PFP_URL}" style="width:100%; height:100%; object-fit:cover;" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Featured Banner -->
+        <div style="flex:1; overflow-y:auto; padding:14px;">
+          <div style="background:linear-gradient(135deg, rgba(27,40,56,0.9), rgba(15,33,55,0.95)), url('assets/win11_bloom_dark.jpg') center/cover; border-radius:8px; padding:18px; border:1px solid rgba(102,192,244,0.3); margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <div style="font-size:0.75rem; text-transform:uppercase; color:#66c0f4; font-weight:700;">FEATURED & RECOMMENDED</div>
+              <h2 style="margin:4px 0 8px 0; color:#fff; font-size:1.4rem;">Counter-Strike 2</h2>
+              <p style="margin:0 0 12px 0; font-size:0.78rem; color:#acb2b8; max-width:340px;">For over two decades, Counter-Strike has offered an elite competitive experience shaped by millions of players.</p>
+              <div style="display:flex; gap:8px;">
+                <button class="cyber-btn sm neon-green" id="steam-btn-cs2-play" style="background:#5c7e10; border-color:#7da11d; color:#fff; font-weight:700;">▶ PLAY NOW (FREE)</button>
+                <button class="cyber-btn sm" style="background:rgba(255,255,255,0.08); border-color:transparent; color:#fff;">WISHLIST</button>
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <span style="background:#4c6b22; color:#a4d007; font-weight:700; padding:4px 8px; border-radius:4px; font-size:0.75rem;">100% ACCELERATED</span>
+              <div style="font-size:0.7rem; color:#888; margin-top:4px;">Proton 9.0 Verified</div>
+            </div>
+          </div>
+
+          <!-- Game Cards Grid -->
+          <div style="font-size:0.85rem; font-weight:700; color:#fff; margin-bottom:10px;">TOP PLAYED TITLES</div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px;">
+            <div style="background:#1b2838; border-radius:6px; overflow:hidden; border:1px solid rgba(255,255,255,0.06); padding:10px;">
+              <div style="font-weight:700; color:#fff; font-size:0.85rem;">Cyberpunk 2077</div>
+              <div style="font-size:0.72rem; color:#8f98a0; margin:2px 0 8px 0;">CD PROJEKT RED · Action RPG</div>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:#66c0f4; font-size:0.75rem;">Installed (85 GB)</span>
+                <button class="cyber-btn xs neon-cyan" onclick="openAppWindow('terminal')">Launch</button>
+              </div>
+            </div>
+            <div style="background:#1b2838; border-radius:6px; overflow:hidden; border:1px solid rgba(255,255,255,0.06); padding:10px;">
+              <div style="font-weight:700; color:#fff; font-size:0.85rem;">Grand Theft Auto V</div>
+              <div style="font-size:0.72rem; color:#8f98a0; margin:2px 0 8px 0;">Rockstar Games · Open World</div>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:#66c0f4; font-size:0.75rem;">Installed (110 GB)</span>
+                <button class="cyber-btn xs neon-cyan" onclick="openAppWindow('terminal')">Launch</button>
+              </div>
+            </div>
+            <div style="background:#1b2838; border-radius:6px; overflow:hidden; border:1px solid rgba(255,255,255,0.06); padding:10px;">
+              <div style="font-weight:700; color:#fff; font-size:0.85rem;">Elden Ring</div>
+              <div style="font-size:0.72rem; color:#8f98a0; margin:2px 0 8px 0;">FromSoftware Inc. · Souls</div>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:#66c0f4; font-size:0.75rem;">Installed (60 GB)</span>
+                <button class="cyber-btn xs neon-cyan" onclick="openAppWindow('terminal')">Launch</button>
+              </div>
+            </div>
+            <div style="background:#1b2838; border-radius:6px; overflow:hidden; border:1px solid rgba(255,255,255,0.06); padding:10px;">
+              <div style="font-weight:700; color:#fff; font-size:0.85rem;">Forza Horizon 5</div>
+              <div style="font-size:0.72rem; color:#8f98a0; margin:2px 0 8px 0;">Playground Games · Racing</div>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:#66c0f4; font-size:0.75rem;">Ready to Play</span>
+                <button class="cyber-btn xs neon-cyan" onclick="openAppWindow('terminal')">Launch</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     `;
   }
 
+  function initSteamActions(win) {
+    const cs2Btn = win.querySelector('#steam-btn-cs2-play');
+    if (cs2Btn) {
+      cs2Btn.addEventListener('click', () => {
+        openAppWindow('terminal');
+        const termWin = openWindows['terminal'];
+        if (termWin) {
+          const out = termWin.querySelector('#term-output-stream');
+          if (out) {
+            out.innerHTML += `\n<span style="color:var(--neon-green);">[Valve Steam Service]</span> Launching AppID 730 (Counter-Strike 2)...\nProton 9.0 Compatibility Layer: ACTIVE\nDXVK / Vulkan Translating Pipeline: 120 FPS\nAudio Pipeline: PulseAudio 48kHz Stereo Synced.\nEnjoy gaming, Prince!\n`;
+            const termBody = termWin.querySelector('#native-term-body');
+            if (termBody) termBody.scrollTop = termBody.scrollHeight;
+          }
+        }
+      });
+    }
+  }
+
+  // ==========================================================================
+  // 🚀 Blender 5.0.1 3D Creation Studio
+  // ==========================================================================
   function getBlenderHtml() {
     return `
-      <div style="padding:20px; color:#fff; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
-        <span style="font-size:3rem; margin-bottom:8px;">🚀</span>
-        <h3 style="color:var(--neon-green); margin:0 0 6px 0;">Blender 5.0.1 3D Creation Suite</h3>
-        <p style="color:#aaa; font-size:0.85rem; max-width:400px; margin:0 0 14px 0;">Cycles raytracing & EEVEE Next realtime renderer. 32-thread CPU parallel baking active.</p>
-        <button class="cyber-btn sm neon-green" onclick="alert('Blender 5.0 workspace initialized.')">🚀 NEW 3D SCENE</button>
+      <div class="blender-win-app" style="display:flex; flex-direction:column; height:100%; background:#282828; color:#ddd; font-family:'Segoe UI', sans-serif;">
+        <!-- Blender Menu -->
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:4px 10px; background:#181818; border-bottom:1px solid #333; font-size:0.75rem;">
+          <div style="display:flex; gap:12px; align-items:center;">
+            <span style="color:#e87d0d; font-weight:800;">⚡ Blender 5.0.1</span>
+            <span style="cursor:pointer;">File</span>
+            <span style="cursor:pointer;">Edit</span>
+            <span style="cursor:pointer;">Render</span>
+            <span style="cursor:pointer;">Window</span>
+            <span style="cursor:pointer;">Help</span>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="cyber-btn xs neon-amber" id="blender-btn-render">Render Image (F12)</button>
+            <button class="cyber-btn xs neon-green" id="blender-btn-reset-cam">Reset View</button>
+          </div>
+        </div>
+
+        <!-- Viewport & Outliner -->
+        <div style="flex:1; display:flex; position:relative; overflow:hidden;">
+          <!-- 3D Canvas -->
+          <div style="flex:1; position:relative; background:#1e1e1e;">
+            <canvas id="blender-3d-canvas" style="width:100%; height:100%; display:block;"></canvas>
+            <div style="position:absolute; top:8px; left:8px; font-size:0.7rem; color:#aaa; pointer-events:none; background:rgba(0,0,0,0.5); padding:4px 8px; border-radius:4px;">
+              <div>User Perspective | Meter</div>
+              <div>Cycles Engine · 32 Samples · GPU Compute</div>
+              <div id="blender-fps-indicator" style="color:var(--neon-green); font-weight:700;">120.0 FPS</div>
+            </div>
+          </div>
+
+          <!-- Outliner Panel -->
+          <div style="width:180px; background:#222; border-left:1px solid #333; padding:8px; font-size:0.75rem; display:flex; flex-direction:column;">
+            <div style="font-weight:700; color:#fff; border-bottom:1px solid #333; padding-bottom:4px; margin-bottom:6px;">Scene Collection</div>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <div style="display:flex; align-items:center; gap:6px; color:#4ade80;"><span>👁️</span> <span>Collection</span></div>
+              <div style="display:flex; align-items:center; gap:6px; padding-left:12px; color:#fff;"><span>💡</span> <span>Light (Sun)</span></div>
+              <div style="display:flex; align-items:center; gap:6px; padding-left:12px; color:#38bdf8;"><span>📦</span> <span>Cube_Primary</span></div>
+              <div style="display:flex; align-items:center; gap:6px; padding-left:12px; color:#f43f5e;"><span>📷</span> <span>Camera_Main</span></div>
+            </div>
+            <div style="margin-top:auto; font-size:0.7rem; color:#777; border-top:1px solid #333; padding-top:6px;">
+              Vertices: 8<br>
+              Faces: 6<br>
+              Triangles: 12<br>
+              Mem: 14.8 MB / 64 GB
+            </div>
+          </div>
+        </div>
       </div>
     `;
   }
 
-  function getUnrealHtml() {
+  function initBlenderActions(win) {
+    const canvas = win.querySelector('#blender-3d-canvas');
+    if (!canvas) return;
+
+    let animId = null;
+    const ctx = canvas.getContext('2d');
+    let angleX = 0.5;
+    let angleY = 0.5;
+    let isDragging = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    function resize() {
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * (window.devicePixelRatio || 1);
+      canvas.height = rect.height * (window.devicePixelRatio || 1);
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // 3D Cube Points
+    const nodes = [
+      [-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
+      [-1, -1, 1],  [1, -1, 1],  [1, 1, 1],  [-1, 1, 1]
+    ];
+    const edges = [
+      [0,1],[1,2],[2,3],[3,0],
+      [4,5],[5,6],[6,7],[7,4],
+      [0,4],[1,5],[2,6],[3,7]
+    ];
+
+    function draw() {
+      if (!canvas.offsetParent) {
+        animId = requestAnimationFrame(draw);
+        return;
+      }
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      // Grid Floor
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx.lineWidth = 1;
+      const gridSpan = 8;
+      for (let i = -gridSpan; i <= gridSpan; i++) {
+        ctx.beginPath();
+        ctx.moveTo(w/2 + i * 20, h/2 + 60);
+        ctx.lineTo(w/2 + i * 35, h);
+        ctx.stroke();
+      }
+
+      // Rotate nodes
+      if (!isDragging) {
+        angleY += 0.015;
+      }
+
+      const radX = angleX;
+      const radY = angleY;
+      const scale = Math.min(w, h) * 0.22;
+
+      const projected = nodes.map(n => {
+        let x = n[0], y = n[1], z = n[2];
+        // Rotate Y
+        let rx = x * Math.cos(radY) + z * Math.sin(radY);
+        let rz = -x * Math.sin(radY) + z * Math.cos(radY);
+        // Rotate X
+        let ry = y * Math.cos(radX) - rz * Math.sin(radX);
+        let rz2 = y * Math.sin(radX) + rz * Math.cos(radX);
+
+        const dist = 3.5;
+        const pz = rz2 + dist;
+        return [
+          (rx / pz) * scale + w / 2,
+          (-ry / pz) * scale + h / 2
+        ];
+      });
+
+      // Draw Edges
+      ctx.strokeStyle = '#e87d0d';
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = '#e87d0d';
+      ctx.shadowBlur = 8;
+      edges.forEach(e => {
+        const p1 = projected[e[0]];
+        const p2 = projected[e[1]];
+        ctx.beginPath();
+        ctx.moveTo(p1[0], p1[1]);
+        ctx.lineTo(p2[0], p2[1]);
+        ctx.stroke();
+      });
+      ctx.shadowBlur = 0;
+
+      // Draw Vertices
+      ctx.fillStyle = '#ffffff';
+      projected.forEach(p => {
+        ctx.beginPath();
+        ctx.arc(p[0], p[1], 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      animId = requestAnimationFrame(draw);
+    }
+    animId = requestAnimationFrame(draw);
+
+    canvas.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+    });
+    window.addEventListener('mouseup', () => isDragging = false);
+    window.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      angleY += dx * 0.01;
+      angleX += dy * 0.01;
+      lastX = e.clientX;
+      lastY = e.clientY;
+    });
+
+    const resetBtn = win.querySelector('#blender-btn-reset-cam');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
+        angleX = 0.5;
+        angleY = 0.5;
+      });
+    }
+
+    const renderBtn = win.querySelector('#blender-btn-render');
+    if (renderBtn) {
+      renderBtn.addEventListener('click', () => {
+        openAppWindow('terminal');
+        const termWin = openWindows['terminal'];
+        if (termWin) {
+          const out = termWin.querySelector('#term-output-stream');
+          if (out) {
+            out.innerHTML += `\n<span style="color:var(--neon-green);">[Blender Cycles Engine]</span> Rendering frame 1 (Sample 32/32)...\nSaved to /root/Pictures/Render_0001.png [1920x1080 32-bit RGBA].\nCycles rendering finished in 0.42s on 32-thread virtual engine.\n`;
+            const termBody = termWin.querySelector('#native-term-body');
+            if (termBody) termBody.scrollTop = termBody.scrollHeight;
+          }
+        }
+      });
+    }
+  }
+
+  // ==========================================================================
+  // 🎬 Clipchamp / Shotcut 4K Video Editor Studio
+  // ==========================================================================
+  function getVideoEditorHtml() {
     return `
-      <div style="padding:20px; color:#fff; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
-        <span style="font-size:3rem; margin-bottom:8px;">⚡</span>
-        <h3 style="color:var(--neon-amber); margin:0 0 6px 0;">Unreal Engine 6 Hub</h3>
-        <p style="color:#aaa; font-size:0.85rem; max-width:400px; margin:0 0 14px 0;">Next-Gen real-time 3D photorealistic engine. Nanite & Lumen multithreaded shaders ready.</p>
-        <button class="cyber-btn sm neon-amber" onclick="alert('Unreal Engine 6 project hub ready.')">⚡ LAUNCH PROJECT</button>
+      <div class="video-win-app" style="display:flex; flex-direction:column; height:100%; background:#1e1e1e; color:#fff; font-family:'Segoe UI', sans-serif;">
+        <!-- Top Toolbar -->
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 14px; background:#252525; border-bottom:1px solid #333;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <span style="font-weight:700; color:var(--neon-purple); display:flex; align-items:center; gap:6px;">🎬 Clipchamp Pro 4K</span>
+            <span style="font-size:0.75rem; color:#aaa;">Project: Cyberpunk_Showcase_4K.mp4</span>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="cyber-btn xs neon-purple" id="ve-btn-export">Export 4K (60 FPS)</button>
+          </div>
+        </div>
+
+        <!-- Main Workspace (Preview + Media Pool) -->
+        <div style="flex:1; display:flex; border-bottom:1px solid #333; overflow:hidden;">
+          <!-- Media Pool -->
+          <div style="width:200px; background:#222; border-right:1px solid #333; padding:10px; font-size:0.75rem;">
+            <div style="font-weight:700; color:#fff; margin-bottom:8px;">Project Media</div>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <div style="background:rgba(255,255,255,0.06); padding:6px 8px; border-radius:4px; display:flex; justify-content:space-between;">
+                <span>🎞️ intro_clip.mp4</span>
+                <span style="color:#aaa;">00:15</span>
+              </div>
+              <div style="background:rgba(255,255,255,0.06); padding:6px 8px; border-radius:4px; display:flex; justify-content:space-between;">
+                <span>🎵 synthwave_beat.wav</span>
+                <span style="color:#aaa;">03:20</span>
+              </div>
+              <div style="background:rgba(255,255,255,0.06); padding:6px 8px; border-radius:4px; display:flex; justify-content:space-between;">
+                <span>🖼️ overlay_fx.png</span>
+                <span style="color:#aaa;">PNG</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Video Monitor / Preview Player -->
+          <div style="flex:1; background:#111; display:flex; flex-direction:column; align-items:center; justify-content:center; position:relative;">
+            <div style="width:75%; aspect-ratio:16/9; background:#000; border:1px solid #333; border-radius:6px; display:flex; flex-direction:column; align-items:center; justify-content:center; position:relative; overflow:hidden;">
+              <div style="font-size:2rem; margin-bottom:6px;">⚡</div>
+              <div style="font-weight:700; color:var(--neon-cyan);">4K UltraHD Playback Preview</div>
+              <div style="font-size:0.75rem; color:#888;">3840 x 2160 · 60.00 FPS · BT.709</div>
+            </div>
+            <!-- Playback Controls -->
+            <div style="display:flex; align-items:center; gap:16px; margin-top:10px; font-size:0.85rem;">
+              <button class="cyber-btn xs" id="ve-btn-prev">⏮</button>
+              <button class="cyber-btn xs neon-green" id="ve-btn-play">▶ Play</button>
+              <button class="cyber-btn xs" id="ve-btn-next">⏭</button>
+              <span style="font-size:0.75rem; color:var(--neon-green);" id="ve-timecode">00:01:24:12 / 00:03:20:00</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Multi-Track Timeline -->
+        <div style="height:120px; background:#181818; display:flex; flex-direction:column; padding:6px 12px;">
+          <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:#888; margin-bottom:4px;">
+            <span>TIMELINE TRACKS</span>
+            <span>Zoom: 100% · Snap: ON</span>
+          </div>
+          <!-- Track V1 -->
+          <div style="height:26px; background:#222; border-radius:4px; margin-bottom:4px; display:flex; align-items:center; padding:0 8px; position:relative;">
+            <span style="font-size:0.7rem; width:45px; color:#38bdf8;">V1 (4K)</span>
+            <div style="flex:1; height:18px; background:#0284c7; border-radius:3px; display:flex; align-items:center; padding-left:8px; font-size:0.65rem; color:#fff; font-weight:600;">Cyberpunk_Action_Cut.mp4</div>
+          </div>
+          <!-- Track A1 -->
+          <div style="height:26px; background:#222; border-radius:4px; display:flex; align-items:center; padding:0 8px; position:relative;">
+            <span style="font-size:0.7rem; width:45px; color:#4ade80;">A1 (Audio)</span>
+            <div style="flex:1; height:18px; background:#16a34a; border-radius:3px; display:flex; align-items:center; padding-left:8px; font-size:0.65rem; color:#fff; font-weight:600;">Main_Audio_Mix_Master.wav</div>
+          </div>
+        </div>
       </div>
     `;
+  }
+
+  function initVideoEditorActions(win) {
+    const playBtn = win.querySelector('#ve-btn-play');
+    const timecode = win.querySelector('#ve-timecode');
+    const exportBtn = win.querySelector('#ve-btn-export');
+    let playing = false;
+
+    if (playBtn) {
+      playBtn.addEventListener('click', () => {
+        playing = !playing;
+        playBtn.textContent = playing ? '⏸ Pause' : '▶ Play';
+        if (timecode) {
+          timecode.style.color = playing ? '#38bdf8' : 'var(--neon-green)';
+        }
+      });
+    }
+
+    if (exportBtn) {
+      exportBtn.addEventListener('click', () => {
+        openAppWindow('terminal');
+        const termWin = openWindows['terminal'];
+        if (termWin) {
+          const out = termWin.querySelector('#term-output-stream');
+          if (out) {
+            out.innerHTML += `\n<span style="color:var(--neon-purple);">[Clipchamp Video Studio]</span> Starting 4K 60FPS Video Export...\nEncoding Preset: H.265 / HEVC Multi-Pass Hardware Pipeline\nBitrate: 85 Mbps (Lossless Studio Profile)\nOutput: /root/Videos/Cyberpunk_Showcase_4K.mp4\nExport Completed Successfully in 1.8 seconds!\n`;
+            const termBody = termWin.querySelector('#native-term-body');
+            if (termBody) termBody.scrollTop = termBody.scrollHeight;
+          }
+        }
+      });
+    }
+  }
+
+  // ==========================================================================
+  // ⚡ Unreal Engine 6 Hub
+  // ==========================================================================
+  function getUnrealHtml() {
+    return `
+      <div class="unreal-win-app" style="display:flex; flex-direction:column; height:100%; background:#121316; color:#e2e8f0; font-family:'Segoe UI', sans-serif;">
+        <!-- Header -->
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 16px; background:#1a1c23; border-bottom:1px solid #2a2e39;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div style="font-size:1.4rem;">⚡</div>
+            <div>
+              <div style="font-weight:800; font-size:0.95rem; color:#fff;">UNREAL ENGINE 6 HUB</div>
+              <div style="font-size:0.7rem; color:#888;">Version 6.0.0-Preview · Epic Games Launcher Connected</div>
+            </div>
+          </div>
+          <button class="cyber-btn sm neon-amber" id="unreal-btn-new-project">+ NEW PROJECT</button>
+        </div>
+
+        <!-- Project Browser -->
+        <div style="flex:1; overflow-y:auto; padding:16px;">
+          <div style="font-size:0.8rem; font-weight:700; color:#aaa; margin-bottom:10px;">RECENT PROJECTS</div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px;">
+            <div style="background:#1a1c23; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:14px; display:flex; flex-direction:column;">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+                <span style="font-size:1.5rem;">🏙️</span>
+                <span style="font-size:0.7rem; background:rgba(255,170,0,0.15); color:var(--neon-amber); padding:2px 6px; border-radius:4px; font-weight:700;">LUMEN + NANITE</span>
+              </div>
+              <div style="font-weight:700; color:#fff; font-size:0.9rem;">CyberCity_2099</div>
+              <div style="font-size:0.72rem; color:#888; margin:4px 0 12px 0;">C++ & Blueprints · Target: PC / PS5 / Xbox Series X</div>
+              <button class="cyber-btn xs neon-green" onclick="openAppWindow('terminal')">Open in Editor</button>
+            </div>
+
+            <div style="background:#1a1c23; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:14px; display:flex; flex-direction:column;">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+                <span style="font-size:1.5rem;">🏎️</span>
+                <span style="font-size:0.7rem; background:rgba(56,189,248,0.15); color:var(--neon-cyan); padding:2px 6px; border-radius:4px; font-weight:700;">CHAOS PHYSICS</span>
+              </div>
+              <div style="font-weight:700; color:#fff; font-size:0.9rem;">ExtremeRacing_Sim</div>
+              <div style="font-size:0.72rem; color:#888; margin:4px 0 12px 0;">Pure C++ Architecture · 120 FPS Synchronized</div>
+              <button class="cyber-btn xs neon-green" onclick="openAppWindow('terminal')">Open in Editor</button>
+            </div>
+
+            <div style="background:#1a1c23; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:14px; display:flex; flex-direction:column;">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+                <span style="font-size:1.5rem;">🗡️</span>
+                <span style="font-size:0.7rem; background:rgba(189,0,255,0.15); color:var(--neon-purple); padding:2px 6px; border-radius:4px; font-weight:700;">WORLD PARTITION</span>
+              </div>
+              <div style="font-weight:700; color:#fff; font-size:0.9rem;">SoulOfValhalla_RPG</div>
+              <div style="font-size:0.72rem; color:#888; margin:4px 0 12px 0;">Open World 64km² · Substrate Materials</div>
+              <button class="cyber-btn xs neon-green" onclick="openAppWindow('terminal')">Open in Editor</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function initUnrealActions(win) {
+    const newBtn = win.querySelector('#unreal-btn-new-project');
+    if (newBtn) {
+      newBtn.addEventListener('click', () => {
+        openAppWindow('terminal');
+        const termWin = openWindows['terminal'];
+        if (termWin) {
+          const out = termWin.querySelector('#term-output-stream');
+          if (out) {
+            out.innerHTML += `\n<span style="color:var(--neon-amber);">[Unreal Engine 6 Hub]</span> Generating new Unreal C++ Project in /root/UnrealProjects/MyGameProject...\nCompiling Nanite & Lumen Shader Cache with 32 CPU threads...\nHardware acceleration: LLVMpipe Vulkan Pipeline ACTIVE.\nProject ready in editor workspace.\n`;
+            const termBody = termWin.querySelector('#native-term-body');
+            if (termBody) termBody.scrollTop = termBody.scrollHeight;
+          }
+        }
+      });
+    }
   }
 
   // Zoom Handling
