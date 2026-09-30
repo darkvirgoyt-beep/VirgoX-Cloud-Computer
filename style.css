@@ -3868,3 +3868,68 @@ html, body, .viewport-container, .screen-wrapper, .screen-touchpad-overlay {
   color: #fff;
   font-weight: 600;
 }
+
+/* ---- external-app + live-metrics panels (real replacements for the fakes) ---- */
+
+.ext-app {
+  padding: 24px 20px;
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.86rem;
+  color: var(--text-primary, #e8e8e8);
+}
+.ext-app-icon { font-size: 2.6rem; line-height: 1; }
+.ext-app-name { margin: 0; font-size: 1.15rem; font-weight: 650; }
+.ext-app-why { margin: 0; max-width: 46ch; color: var(--text-secondary, #b0b0b0); line-height: 1.5; }
+.ext-app-blocked {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(255, 159, 10, 0.10);
+  border: 1px solid rgba(255, 159, 10, 0.35);
+  color: #d9a441;
+  font-size: 0.78rem;
+}
+.ext-app-blocked code { font-family: var(--font-mono, monospace); }
+.ext-app-btn {
+  display: inline-block;
+  padding: 9px 16px;
+  min-height: 40px;
+  border-radius: 6px;
+  background: #0f6cbd;
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+.ext-app-btn:hover { background: #1a8ad4; }
+.ext-app-btn.ghost { background: rgba(255, 255, 255, 0.08); }
+.ext-app-btn.ghost:hover { background: rgba(255, 255, 255, 0.14); }
+.ext-app-url { font-family: var(--font-mono, monospace); font-size: 0.74rem; color: var(--text-muted, #888); word-break: break-all; }
+.ext-gpu {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.78rem;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  max-width: 100%;
+  word-break: break-word;
+}
+
+.tm { padding: 14px; height: 100%; overflow-y: auto; box-sizing: border-box; color: var(--text-primary, #e8e8e8); }
+.tm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.tm-card { padding: 10px 12px; border-radius: 8px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.10); }
+.tm-k { font-size: 0.7rem; letter-spacing: 0.06em; color: var(--text-muted, #999); }
+.tm-v { font-size: 1.2rem; font-weight: 700; margin: 2px 0; }
+.tm-s { font-size: 0.7rem; color: var(--text-secondary, #aaa); }
+.tm-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.tm-table th, .tm-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+.tm-table th { color: var(--text-secondary, #bbb); font-weight: 600; }
+.tm-table td:first-child { color: var(--text-secondary, #bbb); }
+.tm-wrap { font-family: var(--font-mono, monospace); word-break: break-all; font-size: 0.7rem; }
+.tm-note { font-size: 0.72rem; color: var(--text-muted, #888); margin-top: 14px; line-height: 1.5; }

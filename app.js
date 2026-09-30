@@ -2037,11 +2037,12 @@
         content: getEditorHtml()
       },
       taskmgr: {
-        title: 'Task Manager (64 GB Virtual RAM • 120 FPS)',
+        title: 'Task Manager — live platform metrics',
         icon: WIN11_ICONS.taskmgr,
         width: Math.min(500, window.innerWidth - 30),
         height: 340,
-        content: getTaskmgrHtml()
+        content: getTaskmgrHtml(),
+        onMount: mountTaskmgr
       },
       settings: {
         title: 'Settings — Windows 11 Pro System',
@@ -2058,35 +2059,42 @@
         content: getSettingsHtml()
       },
       photopea: {
-        title: 'Adobe Photoshop Studio (Photopea Pro)',
+        title: 'Photopea — Image Editor',
         icon: WIN11_ICONS.photoshop,
         width: Math.min(620, window.innerWidth - 20),
         height: 400,
         content: `<iframe src="https://www.photopea.com" style="width:100%; height:100%; border:none;"></iframe>`
       },
       photoshop: {
-        title: 'Adobe Photoshop Studio (Photopea Pro)',
+        title: 'Photopea — Image Editor',
         icon: WIN11_ICONS.photoshop,
         width: Math.min(620, window.innerWidth - 20),
         height: 400,
         content: `<iframe src="https://www.photopea.com" style="width:100%; height:100%; border:none;"></iframe>`
       },
       shotcut: {
-        title: 'Clipchamp / Shotcut 4K Video Editor Studio',
+        title: 'ffmpeg.wasm — Video Converter',
         icon: WIN11_ICONS.video,
         width: Math.min(540, window.innerWidth - 30),
         height: 350,
         content: getVideoEditorHtml()
       },
+      vscode: {
+        title: 'Visual Studio Code',
+        icon: WIN11_ICONS.code || '💻',
+        width: Math.min(560, window.innerWidth - 30),
+        height: 380,
+        content: getCodeHtml()
+      },
       video_editor: {
-        title: 'Clipchamp / Shotcut 4K Video Editor Studio',
+        title: 'ffmpeg.wasm — Video Converter',
         icon: WIN11_ICONS.video,
         width: Math.min(540, window.innerWidth - 30),
         height: 350,
         content: getVideoEditorHtml()
       },
       steam: {
-        title: 'Steam Gaming Platform',
+        title: 'Steam',
         icon: WIN11_ICONS.steam,
         width: Math.min(540, window.innerWidth - 30),
         height: 350,
@@ -2100,11 +2108,12 @@
         content: getVlcHtml()
       },
       blender: {
-        title: 'Blender 5.0.1 3D Creation Suite',
+        title: 'Blender',
         icon: WIN11_ICONS.blender,
         width: Math.min(540, window.innerWidth - 30),
         height: 350,
-        content: getBlenderHtml()
+        content: getBlenderHtml(),
+        onMount: mountGpuProbe
       },
       unreal: {
         title: 'Unreal Engine 6 Hub',
@@ -2165,6 +2174,14 @@
 
     windowsLayer.appendChild(win);
     openWindows[appId] = win;
+
+    // Post-injection hook. cfg.content is injected with innerHTML, so any inline
+    // <script> inside it is inert — only inline on* attributes survive. A window
+    // that needs live behaviour registers it here instead of shipping a script
+    // tag that will never run.
+    if (typeof cfg.onMount === 'function') {
+      try { cfg.onMount(win); } catch (e) { console.warn('onMount failed for', appId, e); }
+    }
 
     // Bring to front on click
     win.addEventListener('mousedown', () => bringToFront(win));
@@ -3012,53 +3029,242 @@ server.py   s.json      style.css      scripts/  desktop-shortcuts/\n`;
     }
   }
 
-  function getTaskmgrHtml() {
-    return `
-      <div style="padding:14px; color:#fff; height:100%; overflow-y:auto; font-family:var(--font-mono); font-size:0.8rem;">
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px; margin-bottom:16px;">
-          <div style="background:rgba(0,229,255,0.08); border:1px solid rgba(0,229,255,0.3); border-radius:6px; padding:8px 10px;">
-            <div style="color:var(--neon-cyan); font-weight:700;">CPU USAGE</div>
-            <div style="font-size:1.3rem; font-weight:800; margin:2px 0;">14%</div>
-            <div style="font-size:0.7rem; color:#aaa;">32 Cores @ 4.20 GHz</div>
-          </div>
-          <div style="background:rgba(0,255,102,0.08); border:1px solid rgba(0,255,102,0.3); border-radius:6px; padding:8px 10px;">
-            <div style="color:var(--neon-green); font-weight:700;">VIRTUAL RAM</div>
-            <div style="font-size:1.3rem; font-weight:800; margin:2px 0;">14.8 / 64 GB</div>
-            <div style="font-size:0.7rem; color:#aaa;">ZRAM Engine Active</div>
-          </div>
-          <div style="background:rgba(189,0,255,0.08); border:1px solid rgba(189,0,255,0.3); border-radius:6px; padding:8px 10px;">
-            <div style="color:var(--neon-purple); font-weight:700;">FRAME PIPELINE</div>
-            <div style="font-size:1.3rem; font-weight:800; margin:2px 0;">120 FPS</div>
-            <div style="font-size:0.7rem; color:#aaa;">Hardware Synchronized</div>
-          </div>
-          <div style="background:rgba(255,170,0,0.08); border:1px solid rgba(255,170,0,0.3); border-radius:6px; padding:8px 10px;">
-            <div style="color:var(--neon-amber); font-weight:700;">DISK STORAGE</div>
-            <div style="font-size:1.3rem; font-weight:800; margin:2px 0;">4.8 TB Free</div>
-            <div style="font-size:0.7rem; color:#aaa;">5.0 TB Pool (/dev/loop0)</div>
-          </div>
-        </div>
-        <table style="width:100%; border-collapse:collapse; font-size:0.75rem; text-align:left;">
-          <thead>
-            <tr style="border-bottom:1px solid rgba(0,229,255,0.4); color:var(--neon-cyan);">
-              <th style="padding:4px 6px;">PID</th>
-              <th style="padding:4px 6px;">Process Name</th>
-              <th style="padding:4px 6px;">CPU %</th>
-              <th style="padding:4px 6px;">RAM</th>
-              <th style="padding:4px 6px;">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);"><td>101</td><td>virgox-kernel-turbo</td><td>4.2%</td><td>1.2 GB</td><td style="color:#4ade80;">Active</td></tr>
-            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);"><td>204</td><td>mesa-llvmpipe-3d</td><td>3.8%</td><td>3.4 GB</td><td style="color:#4ade80;">Running</td></tr>
-            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);"><td>322</td><td>server.py (Bridge 8888)</td><td>0.1%</td><td>64 MB</td><td style="color:#4ade80;">Listening</td></tr>
-            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);"><td>489</td><td>pulseaudio-120hz</td><td>0.4%</td><td>88 MB</td><td style="color:#4ade80;">Synced</td></tr>
-            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);"><td>612</td><td>zram-engine-manager</td><td>0.8%</td><td>512 MB</td><td style="color:#4ade80;">Accelerated</td></tr>
-            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);"><td>884</td><td>jarvis-ai-copilot</td><td>1.2%</td><td>240 MB</td><td style="color:#4ade80;">Ready</td></tr>
-          </tbody>
-        </table>
-      </div>
-    `;
+  /* Panels for apps that genuinely cannot render inside this window.
+ *
+ * Checked against the live servers rather than guessed:
+ *   store.steampowered.com  -> X-Frame-Options: DENY
+ *   vscode.dev              -> Content-Security-Policy: frame-ancestors 'none'
+ * Neither will ever appear in an iframe regardless of what we send, so the
+ * honest move is to say so and hand over a link that works, instead of staging
+ * a convincing mock with an alert() button. That is what these replaced.
+ */
+function getExternalAppHtml(o) {
+  const u = escapeHtml(o.url);
+  return `
+    <div class="ext-app">
+      <div class="ext-app-icon">${o.icon || '&#128279;'}</div>
+      <h3 class="ext-app-name">${escapeHtml(o.name)}</h3>
+      <p class="ext-app-why">${escapeHtml(o.why)}</p>
+      <div class="ext-app-blocked">Refused by the site's own headers &mdash; <code>${escapeHtml(o.header)}</code></div>
+      <a class="ext-app-btn" href="${u}" target="_blank" rel="noopener noreferrer">Open ${escapeHtml(o.short || o.name)}</a>
+      <div class="ext-app-url">${u}</div>
+    </div>`;
+}
+
+/* Blender ships no browser build. There is no official WebGL or WASM renderer
+ * that runs in a tab, so the old "Blender 5.0.1" panel with "32-thread CPU
+ * parallel baking active" was fiction down to the version number. This shows the
+ * two real things: the GPU string the browser actually reports, and the official
+ * download.
+ */
+
+
+function mountGpuProbe(win) {
+  const el = win.querySelector('#vxc-gpu');
+  if (!el) return;
+  let out;
+  try {
+    const gl = document.createElement('canvas').getContext('webgl2')
+            || document.createElement('canvas').getContext('webgl');
+    if (!gl) {
+      out = 'WebGL unavailable in this browser';
+    } else {
+      // Some browsers mask this to a generic string. That is still the truthful
+      // answer, so we report whatever we are given rather than substituting a
+      // plausible-looking GPU.
+      const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+      const r = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+      const v = dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR);
+      const ver = gl.getParameter(gl.VERSION);
+      const lose = gl.getExtension('WEBGL_lose_context');
+      if (lose) lose.loseContext();
+      out = [r, v, ver].filter(Boolean).join('  ·  ');
+    }
+  } catch (e) {
+    out = 'WebGL blocked by this browser';
   }
+  el.textContent = out;
+}
+
+/* Task Manager, reading live platform APIs.
+ *
+ * Was a table of processes that do not exist (virgox-kernel-turbo, jarvis-ai-copilot,
+ * pulseaudio-120hz) with made-up PIDs and a hardcoded "14.8 / 64 GB" and "120 FPS".
+ * Every field here is read from an API at mount time. Where the browser does not
+ * expose something, it prints "not exposed" — it never invents a number.
+ */
+function getTaskmgrHtml() {
+  return `
+    <div class="tm">
+      <div class="tm-grid">
+        <div class="tm-card"><div class="tm-k">CPU</div><div class="tm-v" id="vxc-tm-cpu">reading</div><div class="tm-s" id="vxc-tm-cores">&nbsp;</div></div>
+        <div class="tm-card"><div class="tm-k">MEMORY</div><div class="tm-v" id="vxc-tm-mem">reading</div><div class="tm-s" id="vxc-tm-ram">&nbsp;</div></div>
+        <div class="tm-card"><div class="tm-k">STORAGE</div><div class="tm-v" id="vxc-tm-store">reading</div><div class="tm-s" id="vxc-tm-quota">&nbsp;</div></div>
+        <div class="tm-card"><div class="tm-k">FRAME RATE</div><div class="tm-v" id="vxc-tm-fps">measuring</div><div class="tm-s">measured over 1s, not declared</div></div>
+      </div>
+      <table class="tm-table">
+        <thead><tr><th>Property</th><th>Reported by</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td>Logical processors</td><td>navigator.hardwareConcurrency</td><td id="vxc-tm-row-cpu">&mdash;</td></tr>
+          <tr><td>Device memory</td><td>navigator.deviceMemory</td><td id="vxc-tm-row-ram">&mdash;</td></tr>
+          <tr><td>JS heap in use</td><td>performance.memory</td><td id="vxc-tm-row-heap">&mdash;</td></tr>
+          <tr><td>Origin storage used</td><td>navigator.storage.estimate</td><td id="vxc-tm-row-store">&mdash;</td></tr>
+          <tr><td>Viewport</td><td>window.innerWidth/Height</td><td id="vxc-tm-row-vp">&mdash;</td></tr>
+          <tr><td>Device pixel ratio</td><td>window.devicePixelRatio</td><td id="vxc-tm-row-dpr">&mdash;</td></tr>
+          <tr><td>Network</td><td>navigator.connection</td><td id="vxc-tm-row-net">&mdash;</td></tr>
+          <tr><td>Online</td><td>navigator.onLine</td><td id="vxc-tm-row-online">&mdash;</td></tr>
+          <tr><td>Open app windows</td><td>this session</td><td id="vxc-tm-row-wins">&mdash;</td></tr>
+          <tr><td>Elements in document</td><td>getElementsByTagName</td><td id="vxc-tm-row-nodes">&mdash;</td></tr>
+          <tr><td>Page uptime</td><td>performance.now</td><td id="vxc-tm-row-up">&mdash;</td></tr>
+          <tr><td>User agent</td><td>navigator.userAgent</td><td id="vxc-tm-row-ua" class="tm-wrap">&mdash;</td></tr>
+        </tbody>
+      </table>
+      <p class="tm-note">This page cannot see your CPU load, other processes, or free disk beyond
+      what the browser exposes. Anything above marked <em>not exposed</em> is a limit of the web
+      platform, not a placeholder.</p>
+    </div>`;
+}
+
+const fmtBytes = (b) => {
+  if (typeof b !== 'number' || !isFinite(b)) return 'not exposed';
+  const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let i = 0;
+  while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
+  return b.toFixed(i ? 1 : 0) + ' ' + u[i];
+};
+
+function mountTaskmgr(win) {
+  const set = (id, v) => { const e = win.querySelector('#' + id); if (e) e.textContent = v; };
+  const NA = 'not exposed';
+
+  const cores = navigator.hardwareConcurrency;
+  set('vxc-tm-cpu', typeof cores === 'number' ? cores + ' threads' : NA);
+  set('vxc-tm-cores', typeof cores === 'number' ? 'hardwareConcurrency' : 'this browser hides it');
+
+  const mem = navigator.deviceMemory;
+  set('vxc-tm-ram', typeof mem === 'number' ? mem + ' GB approx' : 'not exposed');
+  set('vxc-tm-row-cpu', typeof cores === 'number' ? String(cores) : NA);
+  set('vxc-tm-row-ram', typeof mem === 'number' ? mem + ' GB (capped by design)' : NA);
+
+  const pm = performance.memory;
+  if (pm && typeof pm.usedJSHeapSize === 'number') {
+    const used = fmtBytes(pm.usedJSHeapSize);
+    set('vxc-tm-mem', used);
+    set('vxc-tm-row-heap', used + ' of ' + fmtBytes(pm.jsHeapSizeLimit) + ' limit');
+  } else {
+    set('vxc-tm-mem', NA);
+    set('vxc-tm-row-heap', NA + ' (Firefox does not implement this)');
+  }
+
+  if (navigator.storage && navigator.storage.estimate) {
+    navigator.storage.estimate().then((e) => {
+      set('vxc-tm-store', e.usage != null ? fmtBytes(e.usage) : NA);
+      set('vxc-tm-quota', e.quota != null ? 'of ' + fmtBytes(e.quota) + ' granted' : NA);
+      set('vxc-tm-row-store', e.usage != null
+        ? fmtBytes(e.usage) + ' used of ' + fmtBytes(e.quota) + ' quota' : NA);
+    }).catch(() => {
+      set('vxc-tm-store', NA); set('vxc-tm-quota', NA); set('vxc-tm-row-store', NA);
+    });
+  } else {
+    set('vxc-tm-store', NA); set('vxc-tm-quota', NA); set('vxc-tm-row-store', NA);
+  }
+
+  set('vxc-tm-row-vp', window.innerWidth + ' x ' + window.innerHeight);
+  set('vxc-tm-row-dpr', String(window.devicePixelRatio));
+
+  const c = navigator.connection;
+  set('vxc-tm-row-net', c ? [c.effectiveType, c.downlink ? c.downlink + ' Mb/s' : null,
+    c.rtt != null ? c.rtt + ' ms rtt' : null].filter(Boolean).join(' · ') : NA);
+  set('vxc-tm-row-online', String(navigator.onLine));
+  set('vxc-tm-row-wins', String(Object.keys(openWindows || {}).length));
+  set('vxc-tm-row-nodes', String(document.getElementsByTagName('*').length));
+  set('vxc-tm-row-up', (performance.now() / 1000).toFixed(1) + ' s');
+  set('vxc-tm-row-ua', navigator.userAgent);
+
+  // Genuinely measure the refresh rate instead of declaring 120.
+  let frames = 0;
+  const t0 = performance.now();
+  const tick = () => {
+    frames++;
+    const el = performance.now() - t0;
+    if (el < 1000) { requestAnimationFrame(tick); return; }
+    const fps = frames / (el / 1000);
+    set('vxc-tm-fps', fps.toFixed(0) + ' fps');
+    if (fps < 20) set('vxc-tm-fps', fps.toFixed(0) + ' fps (throttled)');
+  };
+  requestAnimationFrame(tick);
+}
+
+function getBlenderHtml() {
+  return `
+    <div class="ext-app">
+      <div class="ext-app-icon">&#129367;</div>
+      <h3 class="ext-app-name">Blender</h3>
+      <p class="ext-app-why">Blender has no embeddable web build, so there is nothing to put in this frame. Rather than fake a viewport, this shows the graphics hardware your browser actually reports and links to the real downloads.</p>
+      <div class="ext-app-blocked">No embeddable build exists &mdash; not blocked by us.</div>
+      <div class="ext-gpu" id="vxc-gpu">Reading GPU&hellip;</div>
+      <a class="ext-app-btn" href="https://www.blender.org/download/" target="_blank" rel="noopener noreferrer">Official downloads</a>
+      <a class="ext-app-btn ghost" href="https://docs.blender.org/manual/en/latest/" target="_blank" rel="noopener noreferrer">Manual</a>
+      <div class="ext-app-url">https://www.blender.org/download/</div>
+    </div>`;
+}
+
+function mountGpuProbe(win) {
+  const el = win.querySelector('#vxc-gpu');
+  if (!el) return;
+  let out;
+  try {
+    const gl = document.createElement('canvas').getContext('webgl2')
+            || document.createElement('canvas').getContext('webgl');
+    if (!gl) {
+      out = 'WebGL unavailable in this browser';
+    } else {
+      // Some browsers mask this behind a generic string. That is still the
+      // truthful answer, so report what we are handed rather than substituting
+      // a plausible-looking GPU.
+      const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+      const r = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+      const v = dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR);
+      const ver = gl.getParameter(gl.VERSION);
+      const lose = gl.getExtension('WEBGL_lose_context');
+      if (lose) lose.loseContext();
+      out = [r, v, ver].filter(Boolean).join('  ·  ');
+    }
+  } catch (e) {
+    out = 'WebGL blocked by this browser';
+  }
+  el.textContent = out;
+}
+
+function getSteamHtml() {
+  return getExternalAppHtml({
+    icon: '&#127918;',
+    name: 'Steam',
+    short: 'the Steam store',
+    url: 'https://store.steampowered.com/',
+    why: 'Steam sends X-Frame-Options: DENY, so it refuses to be embedded by any site. This button opens the real store.',
+    header: 'X-Frame-Options: DENY',
+  });
+}
+
+function getVideoEditorHtml() {
+  // ffmpeg.wasm is a real, working video tool and it frames. Verified: no
+  // X-Frame-Options and no frame-ancestors on the served page. That replaces the
+  // "Shotcut 4K Studio" panel whose only button was alert().
+  return `<iframe src="https://ffmpegwasm.netlify.app/" style="width:100%;height:100%;border:none;background:#111" title="ffmpeg.wasm — video and audio conversion in the browser"></iframe>`;
+}
+
+function getCodeHtml() {
+  return getExternalAppHtml({
+    icon: '&#128187;',
+    name: 'Visual Studio Code',
+    short: 'vscode.dev',
+    url: 'https://vscode.dev/',
+    why: 'vscode.dev sends Content-Security-Policy: frame-ancestors \'none\', so the editor refuses to load inside any frame. Open it in a real tab instead.',
+    header: 'frame-ancestors \'none\'',
+  });
+}
+
 
   function getEditorHtml() {
     return `
@@ -3102,29 +3308,11 @@ print("All systems operational.")
     });
   }
 
-  function getVideoEditorHtml() {
-    return `
-      <div style="padding:20px; color:#fff; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
-        <span style="font-size:3rem; margin-bottom:8px;">🎬</span>
-        <h3 style="color:var(--neon-purple); margin:0 0 6px 0;">Shotcut 4K Studio Editor</h3>
-        <p style="color:#aaa; font-size:0.85rem; max-width:400px; margin:0 0 14px 0;">Multi-track 4K video editor with hardware color grading and timeline synchronization (Mesa LLVMpipe 120 FPS).</p>
-        <button class="cyber-btn sm neon-purple" onclick="alert('Video Studio initialized with 64GB virtual RAM allocation.')">🎬 START NEW PROJECT</button>
-      </div>
-    `;
-  }
+  
 
-  function getSteamHtml() {
-    return `
-      <div style="padding:20px; color:#fff; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
-        <span style="font-size:3rem; margin-bottom:8px;">🎮</span>
-        <h3 style="color:var(--neon-cyan); margin:0 0 6px 0;">Valve Steam Gaming Client</h3>
-        <p style="color:#aaa; font-size:0.85rem; max-width:400px; margin:0 0 14px 0;">32-bit & 64-bit multi-arch acceleration engine. Proton 9.0 compatibility layer online.</p>
-        <button class="cyber-btn sm neon-cyan" onclick="alert('Steam Client online. Ready to launch titles.')">🎮 OPEN LIBRARY</button>
-      </div>
-    `;
-  }
+  
 
-  function getBlenderHtml() {
+  function getBlenderHtml_OLD() {
     return `
       <div style="padding:20px; color:#fff; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
         <span style="font-size:3rem; margin-bottom:8px;">🚀</span>
