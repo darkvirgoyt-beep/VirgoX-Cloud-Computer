@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>VirgoX — Authorise device</title>
-<link rel="stylesheet" href="style.css?v=20261001_02" />
+<link rel="stylesheet" href="style.css?v=20261001_03" />
 <style>
   body {
     margin: 0;
@@ -263,8 +263,30 @@
 (function () {
   'use strict';
 
-  // Keep this in sync with VXC_AUTH.base in app.js.
-  var BASE = 'https://virgox-auth.onrender.com';
+  // This page is a static file with no server to talk to, so it cannot know
+  // where the auth service lives. The service solves that by putting its own
+  // origin in the `auth=` query param of the verification URI it hands back.
+  //
+  // The old hardcoded constant below was a domain that never existed: every
+  // approval was posted into the void while the CLI sat there polling. Anything
+  // that arrives without `auth=` has no service to reach and is told so plainly
+  // rather than appearing to hang.
+  //
+  //   var BASE = 'https://virgox-auth.onrender.com';
+  var FALLBACK_BASE = '';
+  var BASE = (function () {
+    var given = new URLSearchParams(location.search).get('auth');
+    if (!given) return FALLBACK_BASE;
+    // Only ever talk http(s). Reject anything else rather than handing a
+    // javascript: or data: URL to fetch().
+    try {
+      var u = new URL(given);
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') return FALLBACK_BASE;
+      return u.origin;
+    } catch (e) {
+      return FALLBACK_BASE;
+    }
+  })();
 
   var form = document.getElementById('form');
   var input = document.getElementById('code');
@@ -273,7 +295,18 @@
   var warn = document.getElementById('svc-warn');
   var origin = document.getElementById('origin');
 
-  origin.textContent = 'VirgoX Cloud PC · ' + location.host;
+  // Say which service this page is about to authorise against. A code is a
+  // bearer credential for that service; the user should never have to guess
+  // where it is going.
+  origin.textContent = BASE
+    ? 'VirgoX Cloud PC · authorising against ' + BASE
+    : 'VirgoX Cloud PC · no service address in this link';
+
+  // Disabled until there is a full 8-character code. This must come BEFORE the
+  // prefill below: it used to sit after it, so the prefill enabled the button and
+  // this line immediately disabled it again. Landing from the link filled the
+  // code in and left you with a dead button.
+  submit.disabled = true;
 
   // The CLI appends ?code=XXXX-XXXX to the verification URI, so tapping the
   // link it printed lands you here with the code already filled in.
@@ -301,16 +334,23 @@
     submit.disabled = input.value.replace('-', '').length < 8;
   });
 
-  submit.disabled = true;
-
   // Health probe so a dead service is announced before the user types a code.
-  fetch(BASE + '/health', { cache: 'no-store' })
-    .then(function (r) { if (!r.ok) throw new Error('bad status'); })
-    .then(function () { warn.hidden = true; })
-    .catch(function () { warn.hidden = false; });
+  if (BASE) {
+    fetch(BASE + '/health', { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('bad status'); })
+      .then(function () { warn.hidden = true; })
+      .catch(function () { warn.hidden = false; });
+  } else {
+    warn.hidden = false;
+    say('err', 'This link is missing its service address. Run vxc auth login again and use the link it prints.');
+  }
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();
+    if (!BASE) {
+      say('err', 'No auth service to talk to. Re-run vxc auth login and open the link it prints.');
+      return;
+    }
     var code = input.value.replace('-', '').trim();
     if (code.length < 8) { say('err', 'Enter the full 8-character code.'); return; }
 

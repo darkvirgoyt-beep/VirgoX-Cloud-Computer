@@ -174,11 +174,18 @@ async function handleDeviceCode(req, res) {
     email: null,
   });
 
+  // auth.html is a static file with no way to discover us. So the URI we hand
+  // back carries the service origin in `auth=`, and the page reads it. Without
+  // this the page posts to whatever BASE it was hardcoded with and the approval
+  // never lands — the CLI would poll until the code expired.
+  const browserBase = verifyBase;
+
   send(res, 200, {
     device_code: deviceCode,
     user_code: userCode,
     verification_uri: verificationUri,
-    verification_uri_complete: `${verificationUri}?code=${userCode}`,
+    verification_uri_complete:
+      `${verificationUri}?code=${userCode}&auth=${encodeURIComponent(browserBase)}`,
     expires_in: TTL_SECONDS,
     interval: INTERVAL,
   });
