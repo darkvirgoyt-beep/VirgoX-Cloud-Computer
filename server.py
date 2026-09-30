@@ -1291,6 +1291,57 @@ print(json.dumps(apps))
             })
             return
 
+        elif path == "/api/auth/github_exchange":
+            code = payload.get("code", "").strip()
+            if not code:
+                self._respond_error("Missing code parameter")
+                return
+
+            token_url = "https://github.com/login/oauth/access_token"
+            data = json.dumps({
+                "client_id": "Ov23li2jipwEXKXqH55s",
+                "client_secret": "ec861b988a94d083665f90f8c63cf5af03dc3297",
+                "code": code
+            }).encode("utf-8")
+            req = urllib.request.Request(token_url, data=data, headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            })
+            try:
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    res_body = json.loads(resp.read().decode("utf-8"))
+                    access_token = res_body.get("access_token")
+                    if not access_token:
+                        self._respond_error(f"GitHub Auth Error: {res_body.get('error_description', 'Token exchange failed')}", code=401)
+                        return
+
+                    user_req = urllib.request.Request("https://api.github.com/user", headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "User-Agent": "VirgoX-Cloud-PC"
+                    })
+                    with urllib.request.urlopen(user_req, timeout=10) as user_resp:
+                        user_info = json.loads(user_resp.read().decode("utf-8"))
+                        login = user_info.get("login", "")
+                        name = user_info.get("name") or login
+                        avatar = user_info.get("avatar_url", "")
+                        email = user_info.get("email") or f"{login}@users.noreply.github.com"
+                        is_owner = login.lower() in ("darkvirgoyt-beep", "darkvirgoyt")
+                        role = "owner" if is_owner else "guest"
+                        session_token = create_session(email, role=role)
+                        self._respond_ok({
+                            "status": "ok",
+                            "authenticated": True,
+                            "token": session_token,
+                            "github_username": login,
+                            "email": email,
+                            "name": name,
+                            "avatar": avatar,
+                            "role": role
+                        })
+            except Exception as e:
+                self._respond_error(f"GitHub exchange exception: {str(e)}")
+            return
+
         elif path == "/api/auth/master_verify":
             password = payload.get("password", "").strip()
             pass_hash = hashlib.sha256(password.lower().encode("utf-8")).hexdigest()
