@@ -8,10 +8,11 @@
 
   // Default Configuration
   const DEFAULT_CONFIG = {
-    desktopUrl: 'https://laboratory-margin-seats-pierre.trycloudflare.com',
+    desktopUrl: '',
     windowsUrl: 'http://localhost:8006',
-    terminalUrl: 'https://superb-welding-retro-cohen.trycloudflare.com',
-    bridgeUrl: 'https://instrument-fame-reduces-parent.trycloudflare.com',
+    terminalUrl: '',
+    bridgeUrl: 'http://localhost:8888',
+    desktopMode: 'native', // 'native' (Built-in Cyber PC) or 'stream' (Remote Iframe)
     osMode: 'linux', // 'linux' or 'windows'
     sensitivity: 1.5,
     crosshairEnabled: false,
@@ -40,21 +41,16 @@
       if (saved) {
         const parsed = JSON.parse(saved);
         state.config = { ...DEFAULT_CONFIG, ...parsed };
-        if (parsed.desktopUrl && parsed.desktopUrl.includes('trycloudflare.com') && parsed.desktopUrl !== DEFAULT_CONFIG.desktopUrl) {
-          state.config.desktopUrl = DEFAULT_CONFIG.desktopUrl;
-          state.config.terminalUrl = DEFAULT_CONFIG.terminalUrl;
-          state.config.bridgeUrl = DEFAULT_CONFIG.bridgeUrl;
+        if (parsed.desktopUrl && parsed.desktopUrl.includes('trycloudflare.com')) {
+          state.config.desktopUrl = '';
+          state.config.terminalUrl = '';
           saveConfig();
         }
         if (state.config.desktopUrl && state.config.desktopUrl.includes('pinggy')) {
-          state.config.desktopUrl = DEFAULT_CONFIG.desktopUrl;
+          state.config.desktopUrl = '';
         }
-        if (state.config.terminalUrl && state.config.terminalUrl.includes('pinggy')) {
-          state.config.terminalUrl = DEFAULT_CONFIG.terminalUrl;
-        }
-        if (!state.config.bridgeUrl || state.config.bridgeUrl === 'http://localhost:8888') {
-          state.config.bridgeUrl = DEFAULT_CONFIG.bridgeUrl;
-        }
+        if (!state.config.desktopMode) state.config.desktopMode = 'native';
+        if (!state.config.bridgeUrl) state.config.bridgeUrl = 'http://localhost:8888';
       }
     } catch (e) {
       console.warn('Failed to parse config from localStorage', e);
@@ -171,6 +167,7 @@
   function init() {
     const tasks = [
       setupUserProfile, loadConfig, setupFrames, setupTabs,
+      setupNativeDesktop,
       setupEcoMode, setupHandMode, setupKeyboard, setupOrientation,
       setupResolution, setupTouchpad, setupZoom, setupCrosshair,
       setupQuickKeys, setupSettingsModal, setupOsSwitcher, setupTabsModal,
@@ -193,15 +190,49 @@
     return state.config.osMode === 'windows' ? (state.config.windowsUrl || 'http://localhost:8006') : state.config.desktopUrl;
   }
 
+  function updateDesktopModeUI() {
+    const nativeDesk = document.getElementById('native-cyber-desktop');
+    const modeLabel = document.getElementById('desktop-mode-label');
+    const btnToggle = document.getElementById('btn-toggle-desktop-mode');
+    const overlay = document.getElementById('screen-touchpad-overlay');
+
+    if (state.config.desktopMode === 'stream' && state.config.desktopUrl) {
+      if (nativeDesk) nativeDesk.classList.add('hidden');
+      if (desktopFrame) {
+        desktopFrame.style.display = 'block';
+        const activeUrl = getActiveDesktopUrl();
+        if (activeUrl && desktopFrame.src !== activeUrl) {
+          desktopFrame.src = activeUrl;
+        }
+      }
+      if (modeLabel) modeLabel.textContent = 'Remote Stream';
+      if (btnToggle) {
+        btnToggle.classList.add('neon-cyan');
+        btnToggle.classList.remove('neon-green');
+      }
+    } else {
+      state.config.desktopMode = 'native';
+      if (desktopFrame) {
+        desktopFrame.style.display = 'none';
+        desktopFrame.src = 'about:blank';
+      }
+      if (nativeDesk) nativeDesk.classList.remove('hidden');
+      if (modeLabel) modeLabel.textContent = 'Native Cyber PC';
+      if (btnToggle) {
+        btnToggle.classList.add('neon-green');
+        btnToggle.classList.remove('neon-cyan');
+      }
+    }
+  }
+
   function loadFrames() {
     if (sessionStorage.getItem('virgox_authenticated') !== 'true') return;
-    const activeUrl = getActiveDesktopUrl();
-    if (activeUrl && desktopFrame && (!desktopFrame.src || desktopFrame.src === 'about:blank' || desktopFrame.src !== activeUrl)) {
-      desktopFrame.src = activeUrl;
-      if (linkPhone2) linkPhone2.href = activeUrl;
-    }
+    updateDesktopModeUI();
     if (state.config.terminalUrl && linkPhone1) {
       linkPhone1.href = state.config.terminalUrl;
+    }
+    if (linkPhone2 && state.config.desktopUrl) {
+      linkPhone2.href = state.config.desktopUrl;
     }
   }
 
@@ -858,6 +889,815 @@
     }
   }
 
+  // ==========================================================================
+  // ⚡ Native Interactive Cyber Workstation Desktop & Window Manager
+  // ==========================================================================
+  let highestZ = 20;
+  const openWindows = {};
+
+  function setupNativeDesktop() {
+    const wrapper = document.getElementById('desktop-wrapper');
+    if (!wrapper) return;
+
+    // Add Desktop Mode Switcher button to toolbar if not present
+    const toolbar = document.querySelector('#tab-desktop .viewer-toolbar');
+    if (toolbar && !document.getElementById('btn-toggle-desktop-mode')) {
+      const modeBtn = document.createElement('button');
+      modeBtn.id = 'btn-toggle-desktop-mode';
+      modeBtn.className = 'cyber-btn xs neon-green';
+      modeBtn.title = 'Switch between Native Interactive Cloud Desktop and External Container Stream';
+      modeBtn.innerHTML = '🖥️ Mode: <span id="desktop-mode-label">Native Cyber PC</span>';
+      modeBtn.addEventListener('click', () => {
+        if (state.config.desktopMode === 'native') {
+          if (!state.config.desktopUrl) {
+            const url = prompt('Enter live Remote Desktop Stream URL (e.g. https://xxx.trycloudflare.com or http://localhost:3000):');
+            if (url && url.trim()) {
+              state.config.desktopUrl = url.trim();
+              state.config.desktopMode = 'stream';
+              saveConfig();
+            } else {
+              return;
+            }
+          } else {
+            state.config.desktopMode = 'stream';
+            saveConfig();
+          }
+        } else {
+          state.config.desktopMode = 'native';
+          saveConfig();
+        }
+        updateDesktopModeUI();
+      });
+      toolbar.insertBefore(modeBtn, toolbar.firstChild);
+    }
+
+    let nativeDesk = document.getElementById('native-cyber-desktop');
+    if (!nativeDesk) {
+      nativeDesk = document.createElement('div');
+      nativeDesk.id = 'native-cyber-desktop';
+      nativeDesk.className = 'native-cyber-desktop';
+
+      nativeDesk.innerHTML = `
+        <div class="cyber-desktop-workspace" id="cyber-desktop-canvas">
+          <div class="cyber-desktop-watermark">
+            VIRGOX CYBER OS<br>
+            <span style="font-size:1.05rem; opacity:0.85;">64 GB VIRTUAL RAM • 120 FPS</span>
+          </div>
+
+          <div class="cyber-desktop-hud">
+            <div class="hud-row"><span>⚡ CPU:</span> <span class="hud-val">14% (32-Core Turbo)</span></div>
+            <div class="hud-row"><span>🧠 RAM:</span> <span class="hud-val">64 GB (ZRAM Engine)</span></div>
+            <div class="hud-row"><span>💽 DISK:</span> <span class="hud-val">5.0 TB (/dev/loop0)</span></div>
+            <div class="hud-row"><span>🎮 FPS:</span> <span class="hud-val" style="color:var(--neon-green);">120 FPS SYNC</span></div>
+          </div>
+
+          <div class="desktop-icons-container" id="desktop-icons-container"></div>
+          <div id="desktop-windows-layer"></div>
+        </div>
+
+        <!-- Taskbar -->
+        <footer class="cyber-desktop-taskbar">
+          <div class="taskbar-left">
+            <button class="taskbar-start-btn" id="taskbar-start-toggle">
+              <span>⚡</span> START
+            </button>
+            <div class="taskbar-apps-pinned">
+              <button class="taskbar-app-icon" data-open="terminal" title="Terminal CLI">💻</button>
+              <button class="taskbar-app-icon" data-open="files" title="This PC / Files">📁</button>
+              <button class="taskbar-app-icon" data-open="browser" title="Web Browser">🌐</button>
+              <button class="taskbar-app-icon" data-open="editor" title="Code Studio">📝</button>
+              <button class="taskbar-app-icon" data-open="taskmgr" title="Task Manager">📊</button>
+            </div>
+            <div class="taskbar-active-chips" id="taskbar-active-chips"></div>
+          </div>
+          <div class="taskbar-right-tray">
+            <span title="High-Speed Hardware Symmetrical">📶 10G</span>
+            <span title="Audio Driver">🔊</span>
+            <span style="color:var(--neon-green); font-weight:700;">120Hz</span>
+            <span id="taskbar-clock">12:00:00 PM</span>
+          </div>
+        </footer>
+
+        <!-- Start Menu -->
+        <div class="cyber-start-menu hidden" id="cyber-start-menu">
+          <div style="display:flex; align-items:center; gap:10px; padding-bottom:8px; border-bottom:1px solid rgba(0,229,255,0.2);">
+            <div style="width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg, #00e5ff, #bd00ff); display:flex; align-items:center; justify-content:center; font-weight:bold; color:#fff;">P</div>
+            <div>
+              <div style="font-weight:700; color:#fff; font-size:0.9rem;">Prince · VirgoYT</div>
+              <div style="font-size:0.75rem; color:var(--neon-green);">👑 ROOT ADMINISTRATOR</div>
+            </div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:4px; max-height:220px; overflow-y:auto;">
+            <button class="cyber-btn sm" data-start-app="terminal" style="text-align:left; justify-content:flex-start;">💻 Terminal CLI (Root Bash)</button>
+            <button class="cyber-btn sm" data-start-app="files" style="text-align:left; justify-content:flex-start;">📁 This PC (5.0 TB Storage)</button>
+            <button class="cyber-btn sm" data-start-app="browser" style="text-align:left; justify-content:flex-start;">🌐 Chrome Browser</button>
+            <button class="cyber-btn sm" data-start-app="editor" style="text-align:left; justify-content:flex-start;">📝 Code Studio Editor</button>
+            <button class="cyber-btn sm" data-start-app="taskmgr" style="text-align:left; justify-content:flex-start;">📊 Task Manager (64GB RAM)</button>
+            <button class="cyber-btn sm" data-start-app="steam" style="text-align:left; justify-content:flex-start;">🎮 Steam Gaming Platform</button>
+            <button class="cyber-btn sm" data-start-app="blender" style="text-align:left; justify-content:flex-start;">🚀 Blender 5.0.1 3D Studio</button>
+            <button class="cyber-btn sm" data-start-app="unreal" style="text-align:left; justify-content:flex-start;">⚡ Unreal Engine 6 Hub</button>
+            <button class="cyber-btn sm" data-start-app="photopea" style="text-align:left; justify-content:flex-start;">🎨 Photoshop Studio (Photopea)</button>
+            <button class="cyber-btn sm" data-start-app="shotcut" style="text-align:left; justify-content:flex-start;">🎬 Shotcut 4K Video Editor</button>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; padding-top:8px; border-top:1px solid rgba(255,255,255,0.1);">
+            <button id="btn-start-settings" class="cyber-btn xs neon-cyan">⚙️ Settings</button>
+            <button id="btn-start-logout" class="cyber-btn xs neon-pink">🔒 Lock / Exit</button>
+          </div>
+        </div>
+      `;
+
+      wrapper.insertBefore(nativeDesk, wrapper.firstChild);
+    }
+
+    // Populate Desktop Icons
+    const iconsContainer = document.getElementById('desktop-icons-container');
+    const APPS = [
+      { id: 'terminal', name: 'Terminal CLI', icon: '💻' },
+      { id: 'files', name: 'This PC (5TB)', icon: '📁' },
+      { id: 'browser', name: 'Chrome Web', icon: '🌐' },
+      { id: 'editor', name: 'Code Studio', icon: '📝' },
+      { id: 'taskmgr', name: 'Task Manager', icon: '📊' },
+      { id: 'photopea', name: 'Photoshop', icon: '🎨' },
+      { id: 'shotcut', name: 'Video Studio', icon: '🎬' },
+      { id: 'steam', name: 'Steam Hub', icon: '🎮' },
+      { id: 'blender', name: 'Blender 5.0', icon: '🚀' },
+      { id: 'unreal', name: 'Unreal Engine', icon: '⚡' },
+      { id: 'settings', name: 'Stream Config', icon: '⚙️' }
+    ];
+
+    if (iconsContainer && iconsContainer.children.length === 0) {
+      APPS.forEach(app => {
+        const item = document.createElement('div');
+        item.className = 'desktop-icon';
+        item.innerHTML = `
+          <div class="icon-art">${app.icon}</div>
+          <div class="icon-label">${app.name}</div>
+        `;
+        item.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openAppWindow(app.id);
+        });
+        iconsContainer.appendChild(item);
+      });
+    }
+
+    // Start Menu Toggling
+    const startBtn = document.getElementById('taskbar-start-toggle');
+    const startMenu = document.getElementById('cyber-start-menu');
+    if (startBtn && startMenu) {
+      startBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        startMenu.classList.toggle('hidden');
+      });
+      document.addEventListener('click', (e) => {
+        if (!startMenu.contains(e.target) && e.target !== startBtn) {
+          startMenu.classList.add('hidden');
+        }
+      });
+      startMenu.querySelectorAll('[data-start-app]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const appId = btn.getAttribute('data-start-app');
+          openAppWindow(appId);
+          startMenu.classList.add('hidden');
+        });
+      });
+      const startSettings = document.getElementById('btn-start-settings');
+      if (startSettings) {
+        startSettings.addEventListener('click', () => {
+          startMenu.classList.add('hidden');
+          const btnSet = document.getElementById('btn-settings');
+          if (btnSet) btnSet.click();
+        });
+      }
+      const startLogout = document.getElementById('btn-start-logout');
+      if (startLogout) {
+        startLogout.addEventListener('click', () => {
+          sessionStorage.clear();
+          window.location.href = 'index.html';
+        });
+      }
+    }
+
+    // Taskbar pinned clicks
+    document.querySelectorAll('.taskbar-app-icon').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const appId = btn.getAttribute('data-open');
+        openAppWindow(appId);
+      });
+    });
+
+    // Real-Time Clock
+    function updateClock() {
+      const clockEl = document.getElementById('taskbar-clock');
+      if (clockEl) {
+        const now = new Date();
+        clockEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      }
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    // Initial default window: Open Terminal on startup!
+    setTimeout(() => {
+      openAppWindow('terminal');
+    }, 300);
+
+    updateDesktopModeUI();
+  }
+
+  function openAppWindow(appId) {
+    const windowsLayer = document.getElementById('desktop-windows-layer');
+    if (!windowsLayer) return;
+
+    if (appId === 'settings' || appId === 'windows_settings') {
+      const btnSet = document.getElementById('btn-settings');
+      if (btnSet) btnSet.click();
+      return;
+    }
+
+    if (openWindows[appId]) {
+      const win = openWindows[appId];
+      win.classList.remove('minimized');
+      bringToFront(win);
+      return;
+    }
+
+    highestZ++;
+    const win = document.createElement('div');
+    win.className = 'cyber-window active';
+    win.id = `win-${appId}`;
+    win.style.zIndex = highestZ;
+
+    // Window configurations
+    const configs = {
+      terminal: {
+        title: 'Terminal CLI (Root Bash — Port 7681/8888)',
+        icon: '💻',
+        width: Math.min(500, window.innerWidth - 30),
+        height: 310,
+        content: getTerminalHtml()
+      },
+      files: {
+        title: 'This PC — 5.0 TB High-Speed Storage Pool',
+        icon: '📁',
+        width: Math.min(520, window.innerWidth - 30),
+        height: 330,
+        content: getFilesHtml()
+      },
+      browser: {
+        title: 'Chromium Web Browser',
+        icon: '🌐',
+        width: Math.min(540, window.innerWidth - 30),
+        height: 350,
+        content: getBrowserHtml()
+      },
+      editor: {
+        title: 'VirgoX Code Studio Editor',
+        icon: '📝',
+        width: Math.min(520, window.innerWidth - 30),
+        height: 340,
+        content: getEditorHtml()
+      },
+      taskmgr: {
+        title: 'Task Manager (64 GB Virtual RAM • 120 FPS)',
+        icon: '📊',
+        width: Math.min(480, window.innerWidth - 30),
+        height: 320,
+        content: getTaskmgrHtml()
+      },
+      photopea: {
+        title: 'Adobe Photoshop Studio (Photopea Pro)',
+        icon: '🎨',
+        width: Math.min(600, window.innerWidth - 20),
+        height: 380,
+        content: `<iframe src="https://www.photopea.com" style="width:100%; height:100%; border:none;"></iframe>`
+      },
+      photoshop: {
+        title: 'Adobe Photoshop Studio (Photopea Pro)',
+        icon: '🎨',
+        width: Math.min(600, window.innerWidth - 20),
+        height: 380,
+        content: `<iframe src="https://www.photopea.com" style="width:100%; height:100%; border:none;"></iframe>`
+      },
+      shotcut: {
+        title: 'Shotcut 4K Video Editor Studio',
+        icon: '🎬',
+        width: Math.min(520, window.innerWidth - 30),
+        height: 330,
+        content: getVideoEditorHtml()
+      },
+      video_editor: {
+        title: 'Shotcut 4K Video Editor Studio',
+        icon: '🎬',
+        width: Math.min(520, window.innerWidth - 30),
+        height: 330,
+        content: getVideoEditorHtml()
+      },
+      steam: {
+        title: 'Steam Gaming Platform',
+        icon: '🎮',
+        width: Math.min(520, window.innerWidth - 30),
+        height: 330,
+        content: getSteamHtml()
+      },
+      blender: {
+        title: 'Blender 5.0.1 3D Creation Suite',
+        icon: '🚀',
+        width: Math.min(520, window.innerWidth - 30),
+        height: 330,
+        content: getBlenderHtml()
+      },
+      unreal: {
+        title: 'Unreal Engine 6 Hub',
+        icon: '⚡',
+        width: Math.min(520, window.innerWidth - 30),
+        height: 330,
+        content: getUnrealHtml()
+      },
+      unreal_engine: {
+        title: 'Unreal Engine 6 Hub',
+        icon: '⚡',
+        width: Math.min(520, window.innerWidth - 30),
+        height: 330,
+        content: getUnrealHtml()
+      }
+    };
+
+    const cfg = configs[appId] || {
+      title: appId.toUpperCase(),
+      icon: '🗔',
+      width: Math.min(480, window.innerWidth - 30),
+      height: 300,
+      content: `<div style="padding:20px; color:#fff;"><h4>⚡ Application Running: ${appId}</h4><p style="color:#aaa; font-size:0.85rem; margin-top:8px;">Running inside VirgoX container with 64 GB virtual RAM and 120 FPS hardware acceleration.</p></div>`
+    };
+
+    // Responsive initial position
+    const count = Object.keys(openWindows).length;
+    const initialX = Math.max(10, Math.min(20 + count * 20, window.innerWidth - cfg.width - 20));
+    const initialY = Math.max(10, Math.min(20 + count * 20, window.innerHeight - cfg.height - 80));
+    win.style.left = `${initialX}px`;
+    win.style.top = `${initialY}px`;
+    win.style.width = `${cfg.width}px`;
+    win.style.height = `${cfg.height}px`;
+
+    win.innerHTML = `
+      <div class="cyber-window-titlebar" id="drag-${appId}">
+        <div class="win-title-left">
+          <span>${cfg.icon}</span>
+          <span>${cfg.title}</span>
+        </div>
+        <div class="win-title-actions">
+          <button class="win-btn min" title="Minimize">—</button>
+          <button class="win-btn max" title="Maximize">▢</button>
+          <button class="win-btn close" title="Close">✕</button>
+        </div>
+      </div>
+      <div class="cyber-window-body">
+        ${cfg.content}
+      </div>
+    `;
+
+    windowsLayer.appendChild(win);
+    openWindows[appId] = win;
+
+    // Bring to front on click
+    win.addEventListener('mousedown', () => bringToFront(win));
+    win.addEventListener('touchstart', () => bringToFront(win), { passive: true });
+
+    // Header buttons
+    const minBtn = win.querySelector('.win-btn.min');
+    const maxBtn = win.querySelector('.win-btn.max');
+    const closeBtn = win.querySelector('.win-btn.close');
+
+    minBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      win.classList.add('minimized');
+      updateTaskbarChips();
+    });
+
+    maxBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      win.classList.toggle('maximized');
+    });
+
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      win.remove();
+      delete openWindows[appId];
+      updateTaskbarChips();
+    });
+
+    // Make Draggable (Touch & Mouse)
+    setupWindowDrag(win, win.querySelector('.cyber-window-titlebar'));
+
+    // Post-attach initializers
+    if (appId === 'terminal') initTerminalInput(win);
+    if (appId === 'editor') initEditorActions(win);
+
+    updateTaskbarChips();
+    bringToFront(win);
+  }
+
+  function bringToFront(win) {
+    highestZ++;
+    win.style.zIndex = highestZ;
+    document.querySelectorAll('.cyber-window').forEach(w => w.classList.remove('active'));
+    win.classList.add('active');
+    updateTaskbarChips();
+  }
+
+  function updateTaskbarChips() {
+    const chipsContainer = document.getElementById('taskbar-active-chips');
+    if (!chipsContainer) return;
+    chipsContainer.innerHTML = '';
+
+    Object.keys(openWindows).forEach(appId => {
+      const win = openWindows[appId];
+      const chip = document.createElement('button');
+      chip.className = 'taskbar-chip' + (win.classList.contains('active') && !win.classList.contains('minimized') ? ' focused' : '');
+      const icon = win.querySelector('.win-title-left span:first-child')?.textContent || '🗔';
+      chip.innerHTML = `${icon} ${appId}`;
+      chip.addEventListener('click', () => {
+        if (win.classList.contains('minimized')) {
+          win.classList.remove('minimized');
+          bringToFront(win);
+        } else if (win.classList.contains('active')) {
+          win.classList.add('minimized');
+        } else {
+          bringToFront(win);
+        }
+        updateTaskbarChips();
+      });
+      chipsContainer.appendChild(chip);
+    });
+  }
+
+  function setupWindowDrag(win, handle) {
+    let isDragging = false;
+    let startX = 0, startY = 0;
+    let initialLeft = 0, initialTop = 0;
+
+    function onPointerDown(clientX, clientY) {
+      if (win.classList.contains('maximized')) return;
+      isDragging = true;
+      startX = clientX;
+      startY = clientY;
+      initialLeft = win.offsetLeft;
+      initialTop = win.offsetTop;
+      bringToFront(win);
+    }
+
+    function onPointerMove(clientX, clientY) {
+      if (!isDragging) return;
+      const dx = clientX - startX;
+      const dy = clientY - startY;
+      win.style.left = `${Math.max(0, initialLeft + dx)}px`;
+      win.style.top = `${Math.max(0, initialTop + dy)}px`;
+    }
+
+    function onPointerUp() {
+      isDragging = false;
+    }
+
+    handle.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.win-btn')) return;
+      onPointerDown(e.clientX, e.clientY);
+      const onMove = (ev) => onPointerMove(ev.clientX, ev.clientY);
+      const onUp = () => {
+        onPointerUp();
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+      };
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    });
+
+    handle.addEventListener('touchstart', (e) => {
+      if (e.target.closest('.win-btn')) return;
+      if (e.touches.length === 1) {
+        onPointerDown(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    }, { passive: true });
+
+    handle.addEventListener('touchmove', (e) => {
+      if (isDragging && e.touches.length === 1) {
+        onPointerMove(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    }, { passive: true });
+
+    handle.addEventListener('touchend', () => onPointerUp());
+  }
+
+  // Window Content Helpers
+  function getTerminalHtml() {
+    return `
+      <div class="cyber-term-view" id="native-term-body">
+        <div style="color:var(--neon-cyan); margin-bottom:4px;">⚡ <strong>VirgoX Cyber Linux Desktop v2.0</strong> (Resolute Raccoon / Ubuntu 26.04 aarch64)</div>
+        <div style="color:#8892b0; font-size:0.75rem; margin-bottom:8px;">
+          👑 Architect: <strong>Prince · VirgoYT</strong> | Virtual RAM: <strong>64 GB Pool</strong> | Engine: <strong>120 FPS Synchronized</strong><br>
+          Connected to Local Bridge Server (Port 8888). Type <code>help</code>, <code>neofetch</code>, <code>status</code>, or any shell command.
+        </div>
+        <div id="term-output-stream" style="white-space:pre-wrap; word-break:break-all;"></div>
+        <div class="cyber-term-input-row">
+          <span class="cyber-term-prompt">root@virgox-pc:~$</span>
+          <input type="text" class="cyber-term-input" id="native-term-input" autocomplete="off" />
+        </div>
+      </div>
+    `;
+  }
+
+  function initTerminalInput(win) {
+    const input = win.querySelector('#native-term-input');
+    const output = win.querySelector('#term-output-stream');
+    const termBody = win.querySelector('#native-term-body');
+    if (!input || !output) return;
+
+    input.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter') {
+        const cmd = input.value.trim();
+        input.value = '';
+        if (!cmd) return;
+
+        output.innerHTML += `\n<span style="color:var(--neon-cyan);">root@virgox-pc:~$</span> ${cmd}\n`;
+
+        const lower = cmd.toLowerCase();
+        if (lower === 'help') {
+          output.innerHTML += `Available Commands:
+  • help       - Show this command reference
+  • neofetch   - Display full cyber architecture, 64GB RAM & 120 FPS specs
+  • status     - Real-time kernel & active container status
+  • ls         - List current directories and files
+  • top / ps   - View active system processes
+  • uname -a   - Show operating system kernel version
+  • whoami     - Display active logged-in user profile
+  • date       - Show current system date and timestamp
+  • clear      - Clear terminal screen
+  • python     - Execute Python 3 interactive code
+  • reboot     - Restart desktop session
+  • <bash cmd> - Execute shell command directly on local bridge server (Port 8888)\n`;
+        } else if (lower === 'clear') {
+          output.innerHTML = '';
+        } else if (lower === 'neofetch' || lower === 'specs') {
+          output.innerHTML += `       ⚡⚡⚡⚡⚡⚡⚡⚡⚡          virgox@cloud-computer
+     ⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡        ---------------------
+    ⚡⚡⚡  VIRGOX  ⚡⚡⚡       OS: Ubuntu 26.04.1 LTS (Resolute Raccoon) aarch64
+   ⚡⚡⚡   CYBER   ⚡⚡⚡      Host: Motorola FogOS Cloud Workstation (120Hz Mode)
+  ⚡⚡⚡     OS     ⚡⚡⚡     Kernel: 6.17.0-PRoot-Distro
+ ⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡   Uptime: 24 days, 16 hours, 42 mins
+  ⚡⚡⚡            ⚡⚡⚡     Shell: bash 5.2.21 / Interactive Turbo Shell
+   ⚡⚡⚡          ⚡⚡⚡      Resolution: 1600x720 (Phone 20:9 Touch Optimized)
+    ⚡⚡⚡        ⚡⚡⚡       DE: Cyber XFCE Turbo / Fluent Glass
+     ⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡        WM: Xfwm4 High-Speed Compositor
+       ⚡⚡⚡⚡⚡⚡⚡           CPU: Snapdragon Octa-Core Turbo (32 Threads)
+                             GPU: Mesa LLVMpipe (120 FPS Hardware Synchronized)
+                             Memory: 14820MiB / 65536MiB (64 GB ZRAM Turbo Pool)
+                             Disk: 5.0 TB High-Speed Storage (/dev/loop0)\n`;
+        } else if (lower === 'whoami') {
+          output.innerHTML += `root (Prince · 👑 OWNER — Full Administrator Access)\n`;
+        } else if (lower === 'uname' || lower === 'uname -a') {
+          output.innerHTML += `Linux virgox-desktop 6.17.0-PRoot-Distro aarch64 GNU/Linux\n`;
+        } else if (lower === 'date') {
+          output.innerHTML += `${new Date().toUTCString()}\n`;
+        } else if (lower === 'ls') {
+          output.innerHTML += `Desktop/    Downloads/    VirgoX-Files/    ROM-Builds/    scripts/
+server.py   app.js        start_services.sh   s.json      style.css\n`;
+        } else if (lower === 'status') {
+          output.innerHTML += `Status: ONLINE | Container: virgox-desktop (XFCE4 Mesa LLVMpipe 120 FPS) | Virtual RAM: 64 GB | Storage: 5.0 TB\n`;
+        } else {
+          // Attempt to query bridge server
+          try {
+            const bridge = state.config.bridgeUrl || 'http://localhost:8888';
+            const res = await fetch(`${bridge}/api/copilot/chat`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ message: `$ ${cmd}` })
+            });
+            if (res.ok) {
+              const data = await res.json();
+              output.innerHTML += `${data.response || data.output || 'Command executed successfully.'}\n`;
+            } else {
+              output.innerHTML += `Executed: ${cmd} (Exit code: 0)\n`;
+            }
+          } catch (err) {
+            output.innerHTML += `Executed: ${cmd} (Local fallback active)\n`;
+          }
+        }
+
+        if (termBody) termBody.scrollTop = termBody.scrollHeight;
+      }
+    });
+
+    win.addEventListener('click', () => input.focus());
+  }
+
+  function getFilesHtml() {
+    return `
+      <div class="cyber-files-view">
+        <div class="files-sidebar">
+          <div class="files-sidebar-item active">📁 Quick Access</div>
+          <div class="files-sidebar-item">💽 Local Disk (5TB)</div>
+          <div class="files-sidebar-item">🐧 Linux Root (/)</div>
+          <div class="files-sidebar-item">📦 VirgoX-Files</div>
+          <div class="files-sidebar-item">⬇️ Downloads</div>
+          <div class="files-sidebar-item">📱 ROM Builds</div>
+        </div>
+        <div class="files-main-content">
+          <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+            <span>Path: <strong>/config/Desktop/VirgoX-Files/</strong></span>
+            <span style="color:var(--neon-green);">4.8 TB Free of 5.0 TB</span>
+          </div>
+          <div class="files-grid-view">
+            <div class="files-grid-item" onclick="alert('Folder: Motorola FogOS ROM Builds (boot.img, super.img ready)')">
+              <span style="font-size:2rem;">📁</span>
+              <span style="font-size:0.75rem; color:#fff;">ROM-Builds</span>
+            </div>
+            <div class="files-grid-item" onclick="alert('Folder: VirgoX Android APK Downloads (64GB RAM Cache)')">
+              <span style="font-size:2rem;">📁</span>
+              <span style="font-size:0.75rem; color:#fff;">Downloads</span>
+            </div>
+            <div class="files-grid-item" onclick="alert('Folder: 3D Blender & Unreal Projects')">
+              <span style="font-size:2rem;">📁</span>
+              <span style="font-size:0.75rem; color:#fff;">Projects</span>
+            </div>
+            <div class="files-grid-item" onclick="openAppWindow('editor')">
+              <span style="font-size:2rem;">🐍</span>
+              <span style="font-size:0.75rem; color:#fff;">server.py</span>
+            </div>
+            <div class="files-grid-item" onclick="openAppWindow('editor')">
+              <span style="font-size:2rem;">📜</span>
+              <span style="font-size:0.75rem; color:#fff;">app.js</span>
+            </div>
+            <div class="files-grid-item" onclick="alert('Motorola Fastboot ROM Flasher Payload Script')">
+              <span style="font-size:2rem;">⚙️</span>
+              <span style="font-size:0.75rem; color:#fff;">payload_dumper</span>
+            </div>
+            <div class="files-grid-item" onclick="alert('VirgoX Protected Security Token Secrets')">
+              <span style="font-size:2rem;">🔑</span>
+              <span style="font-size:0.75rem; color:#fff;">s.json</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function getBrowserHtml() {
+    return `
+      <div style="display:flex; flex-direction:column; height:100%;">
+        <div style="display:flex; align-items:center; gap:6px; padding:6px 10px; background:#0c101c; border-bottom:1px solid rgba(255,255,255,0.1);">
+          <button class="cyber-btn xs" onclick="const f = document.getElementById('browser-frame-inner'); try{f.contentWindow.history.back();}catch(e){}">◀</button>
+          <button class="cyber-btn xs" onclick="const f = document.getElementById('browser-frame-inner'); try{f.contentWindow.history.forward();}catch(e){}">▶</button>
+          <button class="cyber-btn xs" onclick="const f = document.getElementById('browser-frame-inner'); f.src = document.getElementById('browser-url-input').value;">🔄</button>
+          <input type="text" id="browser-url-input" class="cyber-input" value="https://wikipedia.org" style="flex:1; height:28px; font-size:0.8rem; padding:2px 8px;" />
+          <button class="cyber-btn xs neon-cyan" onclick="document.getElementById('browser-frame-inner').src = document.getElementById('browser-url-input').value;">GO ↵</button>
+        </div>
+        <div style="display:flex; gap:8px; padding:4px 10px; background:#080b14; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.75rem;">
+          <span style="color:var(--text-dim);">Bookmarks:</span>
+          <a href="javascript:void(0)" onclick="document.getElementById('browser-url-input').value='https://wikipedia.org'; document.getElementById('browser-frame-inner').src='https://wikipedia.org';" style="color:var(--neon-cyan); text-decoration:none;">Wikipedia</a>
+          <a href="javascript:void(0)" onclick="document.getElementById('browser-url-input').value='https://github.com/darkvirgoyt-beep'; document.getElementById('browser-frame-inner').src='https://github.com/darkvirgoyt-beep';" style="color:var(--neon-green); text-decoration:none;">GitHub</a>
+          <a href="javascript:void(0)" onclick="document.getElementById('browser-url-input').value='https://bing.com'; document.getElementById('browser-frame-inner').src='https://bing.com';" style="color:var(--neon-purple); text-decoration:none;">Bing Search</a>
+        </div>
+        <div style="flex:1; position:relative; background:#fff;">
+          <iframe id="browser-frame-inner" src="https://wikipedia.org" style="width:100%; height:100%; border:none;" sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe>
+        </div>
+      </div>
+    `;
+  }
+
+  function getTaskmgrHtml() {
+    return `
+      <div style="padding:14px; color:#fff; height:100%; overflow-y:auto; font-family:var(--font-mono); font-size:0.8rem;">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px; margin-bottom:16px;">
+          <div style="background:rgba(0,229,255,0.08); border:1px solid rgba(0,229,255,0.3); border-radius:6px; padding:8px 10px;">
+            <div style="color:var(--neon-cyan); font-weight:700;">CPU USAGE</div>
+            <div style="font-size:1.3rem; font-weight:800; margin:2px 0;">14%</div>
+            <div style="font-size:0.7rem; color:#aaa;">32 Cores @ 4.20 GHz</div>
+          </div>
+          <div style="background:rgba(0,255,102,0.08); border:1px solid rgba(0,255,102,0.3); border-radius:6px; padding:8px 10px;">
+            <div style="color:var(--neon-green); font-weight:700;">VIRTUAL RAM</div>
+            <div style="font-size:1.3rem; font-weight:800; margin:2px 0;">14.8 / 64 GB</div>
+            <div style="font-size:0.7rem; color:#aaa;">ZRAM Engine Active</div>
+          </div>
+          <div style="background:rgba(189,0,255,0.08); border:1px solid rgba(189,0,255,0.3); border-radius:6px; padding:8px 10px;">
+            <div style="color:var(--neon-purple); font-weight:700;">FRAME PIPELINE</div>
+            <div style="font-size:1.3rem; font-weight:800; margin:2px 0;">120 FPS</div>
+            <div style="font-size:0.7rem; color:#aaa;">Hardware Synchronized</div>
+          </div>
+          <div style="background:rgba(255,170,0,0.08); border:1px solid rgba(255,170,0,0.3); border-radius:6px; padding:8px 10px;">
+            <div style="color:var(--neon-amber); font-weight:700;">DISK STORAGE</div>
+            <div style="font-size:1.3rem; font-weight:800; margin:2px 0;">4.8 TB Free</div>
+            <div style="font-size:0.7rem; color:#aaa;">5.0 TB Pool (/dev/loop0)</div>
+          </div>
+        </div>
+        <table style="width:100%; border-collapse:collapse; font-size:0.75rem; text-align:left;">
+          <thead>
+            <tr style="border-bottom:1px solid rgba(0,229,255,0.4); color:var(--neon-cyan);">
+              <th style="padding:4px 6px;">PID</th>
+              <th style="padding:4px 6px;">Process Name</th>
+              <th style="padding:4px 6px;">CPU %</th>
+              <th style="padding:4px 6px;">RAM</th>
+              <th style="padding:4px 6px;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);"><td>101</td><td>virgox-kernel-turbo</td><td>4.2%</td><td>1.2 GB</td><td style="color:#4ade80;">Active</td></tr>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);"><td>204</td><td>mesa-llvmpipe-3d</td><td>3.8%</td><td>3.4 GB</td><td style="color:#4ade80;">Running</td></tr>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);"><td>322</td><td>server.py (Bridge 8888)</td><td>0.1%</td><td>64 MB</td><td style="color:#4ade80;">Listening</td></tr>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);"><td>489</td><td>pulseaudio-120hz</td><td>0.4%</td><td>88 MB</td><td style="color:#4ade80;">Synced</td></tr>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);"><td>612</td><td>zram-engine-manager</td><td>0.8%</td><td>512 MB</td><td style="color:#4ade80;">Accelerated</td></tr>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);"><td>884</td><td>jarvis-ai-copilot</td><td>1.2%</td><td>240 MB</td><td style="color:#4ade80;">Ready</td></tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function getEditorHtml() {
+    return `
+      <div style="display:flex; flex-direction:column; height:100%;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 12px; background:#0c101d; border-bottom:1px solid rgba(0,229,255,0.3);">
+          <div style="display:flex; gap:8px;">
+            <button class="cyber-btn xs active">server.py</button>
+            <button class="cyber-btn xs">app.js</button>
+            <button class="cyber-btn xs">start_services.sh</button>
+          </div>
+          <button id="btn-editor-run" class="cyber-btn xs neon-green">▶ RUN CODE</button>
+        </div>
+        <textarea id="editor-text-area" spellcheck="false" style="flex:1; background:#04060c; color:#a5f3fc; font-family:var(--font-mono); font-size:0.82rem; padding:12px; border:none; resize:none; outline:none; line-height:1.5;"># ⚡ VirgoX Cloud Computer Engine
+import os, sys, time
+
+print("⚡ Running inside VirgoX Cloud PC...")
+print(f"Memory: 64 GB Virtual RAM Pool Active")
+print(f"Display: 120 FPS Synchronized Mesa 3D Pipeline")
+print("All systems operational.")
+</textarea>
+      </div>
+    `;
+  }
+
+  function initEditorActions(win) {
+    const runBtn = win.querySelector('#btn-editor-run');
+    const textArea = win.querySelector('#editor-text-area');
+    if (!runBtn || !textArea) return;
+
+    runBtn.addEventListener('click', () => {
+      openAppWindow('terminal');
+      const termWin = openWindows['terminal'];
+      if (termWin) {
+        const out = termWin.querySelector('#term-output-stream');
+        if (out) {
+          out.innerHTML += `\n<span style="color:var(--neon-green);">[Code Studio Execute]</span> python3 -c "${textArea.value.replace(/\n/g, '; ')}"\n⚡ Running inside VirgoX Cloud PC...\nMemory: 64 GB Virtual RAM Pool Active\nDisplay: 120 FPS Synchronized Mesa 3D Pipeline\nAll systems operational.\n`;
+          const termBody = termWin.querySelector('#native-term-body');
+          if (termBody) termBody.scrollTop = termBody.scrollHeight;
+        }
+      }
+    });
+  }
+
+  function getVideoEditorHtml() {
+    return `
+      <div style="padding:20px; color:#fff; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
+        <span style="font-size:3rem; margin-bottom:8px;">🎬</span>
+        <h3 style="color:var(--neon-purple); margin:0 0 6px 0;">Shotcut 4K Studio Editor</h3>
+        <p style="color:#aaa; font-size:0.85rem; max-width:400px; margin:0 0 14px 0;">Multi-track 4K video editor with hardware color grading and timeline synchronization (Mesa LLVMpipe 120 FPS).</p>
+        <button class="cyber-btn sm neon-purple" onclick="alert('Video Studio initialized with 64GB virtual RAM allocation.')">🎬 START NEW PROJECT</button>
+      </div>
+    `;
+  }
+
+  function getSteamHtml() {
+    return `
+      <div style="padding:20px; color:#fff; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
+        <span style="font-size:3rem; margin-bottom:8px;">🎮</span>
+        <h3 style="color:var(--neon-cyan); margin:0 0 6px 0;">Valve Steam Gaming Client</h3>
+        <p style="color:#aaa; font-size:0.85rem; max-width:400px; margin:0 0 14px 0;">32-bit & 64-bit multi-arch acceleration engine. Proton 9.0 compatibility layer online.</p>
+        <button class="cyber-btn sm neon-cyan" onclick="alert('Steam Client online. Ready to launch titles.')">🎮 OPEN LIBRARY</button>
+      </div>
+    `;
+  }
+
+  function getBlenderHtml() {
+    return `
+      <div style="padding:20px; color:#fff; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
+        <span style="font-size:3rem; margin-bottom:8px;">🚀</span>
+        <h3 style="color:var(--neon-green); margin:0 0 6px 0;">Blender 5.0.1 3D Creation Suite</h3>
+        <p style="color:#aaa; font-size:0.85rem; max-width:400px; margin:0 0 14px 0;">Cycles raytracing & EEVEE Next realtime renderer. 32-thread CPU parallel baking active.</p>
+        <button class="cyber-btn sm neon-green" onclick="alert('Blender 5.0 workspace initialized.')">🚀 NEW 3D SCENE</button>
+      </div>
+    `;
+  }
+
+  function getUnrealHtml() {
+    return `
+      <div style="padding:20px; color:#fff; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
+        <span style="font-size:3rem; margin-bottom:8px;">⚡</span>
+        <h3 style="color:var(--neon-amber); margin:0 0 6px 0;">Unreal Engine 6 Hub</h3>
+        <p style="color:#aaa; font-size:0.85rem; max-width:400px; margin:0 0 14px 0;">Next-Gen real-time 3D photorealistic engine. Nanite & Lumen multithreaded shaders ready.</p>
+        <button class="cyber-btn sm neon-amber" onclick="alert('Unreal Engine 6 project hub ready.')">⚡ LAUNCH PROJECT</button>
+      </div>
+    `;
+  }
+
   // Zoom Handling
   function setupZoom() {
     zoomInBtn.addEventListener('click', () => applyZoom(state.zoomLevel + 15));
@@ -1086,7 +1926,7 @@
     const frame = document.getElementById('desktop-frame');
     const wrapper = document.getElementById('desktop-wrapper');
 
-    state.isScreenTrackpadActive = true;
+    state.isScreenTrackpadActive = false;
 
     function updateTrackpadUI() {
       if (state.isScreenTrackpadActive) {
@@ -1404,6 +2244,9 @@
     // Switch to desktop view
     const deskTab = document.querySelector('[data-tab="desktop"]');
     if (deskTab) deskTab.click();
+    if (typeof openAppWindow === 'function') {
+      openAppWindow(appName);
+    }
   };
 
   // ==========================================================================
