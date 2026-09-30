@@ -13,7 +13,7 @@
     terminalUrl: '',
     bridgeUrl: 'http://localhost:8888',
     desktopMode: 'native', // 'native' (Built-in Cyber PC) or 'stream' (Remote Iframe)
-    osMode: 'linux', // 'linux' or 'windows'
+    osMode: 'windows', // 'windows' (Official Windows 11 Pro) or 'linux'
     sensitivity: 1.5,
     crosshairEnabled: false,
     ecoMode: true
@@ -50,6 +50,7 @@
           state.config.desktopUrl = '';
         }
         if (!state.config.desktopMode) state.config.desktopMode = 'native';
+        if (!state.config.osMode) state.config.osMode = 'windows';
         if (!state.config.bridgeUrl) state.config.bridgeUrl = 'http://localhost:8888';
       }
     } catch (e) {
@@ -1100,6 +1101,9 @@
     updateClock();
     setInterval(updateClock, 1000);
 
+    // Apply Windows 11 / Linux styling immediately
+    applyDesktopOsTheme();
+
     // Initial default window: Open Terminal on startup!
     setTimeout(() => {
       openAppWindow('terminal');
@@ -1237,6 +1241,13 @@
         width: Math.min(520, window.innerWidth - 30),
         height: 330,
         content: getUnrealHtml()
+      },
+      settings: {
+        title: state.config.osMode === 'windows' ? 'Settings — Windows 11 Pro System' : 'System Settings & Config',
+        icon: '⚙️',
+        width: Math.min(540, window.innerWidth - 20),
+        height: 380,
+        content: getSettingsHtml()
       }
     };
 
@@ -1312,6 +1323,7 @@
     if (appId === 'browser') initBrowserActions(win);
     if (appId === 'msstore' || appId === 'microsoft_store') initMsStoreActions(win);
     if (appId === 'editor') initEditorActions(win);
+    if (appId === 'settings') initSettingsActions(win);
 
     updateTaskbarChips();
     bringToFront(win);
@@ -1411,24 +1423,43 @@
   let termCwd = '/root';
   const termHistory = [];
   let historyIdx = -1;
+  let activeShellType = 'pwsh'; // 'pwsh', 'cmd', 'bash'
 
   function getTerminalPrompt(cwd) {
+    if (state.config.osMode === 'windows') {
+      const winPath = cwd === '/root' ? 'C:\\Users\\Prince' : (cwd.startsWith('/root/') ? 'C:\\Users\\Prince\\' + cwd.slice(6).replace(/\//g, '\\') : 'C:' + cwd.replace(/\//g, '\\'));
+      if (activeShellType === 'cmd') {
+        return `${winPath}>`;
+      }
+      return `PS ${winPath}>`;
+    }
     const p = cwd === '/root' ? '~' : cwd;
     return `root@virgox-pc:${p}#`;
   }
 
   function getTerminalHtml() {
+    const isWin = state.config.osMode === 'windows';
     return `
-      <div class="cyber-term-view" id="native-term-body">
-        <div style="color:var(--neon-cyan); margin-bottom:4px;">⚡ <strong>VirgoX Cyber Linux Desktop v2.0</strong> (Resolute Raccoon / Ubuntu 26.04 aarch64)</div>
-        <div style="color:#8892b0; font-size:0.75rem; margin-bottom:8px;">
-          👑 Architect: <strong>Prince · VirgoYT</strong> | Virtual RAM: <strong>64 GB Pool</strong> | Engine: <strong>120 FPS Synchronized</strong><br>
-          Connected to Real Linux Subprocess (PRoot-Distro / Port 8888). Type any command: <code>neofetch</code>, <code>ls -la</code>, <code>pwd</code>, <code>whoami</code>, <code>apt</code>, <code>python3</code>, <code>clear</code>.
+      <div style="display:flex; flex-direction:column; height:100%;">
+        ${isWin ? `
+        <div class="win11-term-tabbar" id="win11-term-tabbar">
+          <div class="win11-term-tab ${activeShellType === 'pwsh' ? 'active' : ''}" data-shell="pwsh"><span>⚡</span> Windows PowerShell</div>
+          <div class="win11-term-tab ${activeShellType === 'cmd' ? 'active' : ''}" data-shell="cmd"><span>💻</span> Command Prompt</div>
+          <div class="win11-term-tab ${activeShellType === 'bash' ? 'active' : ''}" data-shell="bash"><span>🐧</span> Ubuntu (PRoot)</div>
         </div>
-        <div id="term-output-stream" style="white-space:pre-wrap; word-break:break-all;"></div>
-        <div class="cyber-term-input-row">
-          <span class="cyber-term-prompt" id="native-term-prompt">${getTerminalPrompt(termCwd)}</span>
-          <input type="text" class="cyber-term-input" id="native-term-input" autocomplete="off" spellcheck="false" />
+        ` : ''}
+        <div class="cyber-term-view" id="native-term-body" style="flex:1;">
+          <div style="color:${isWin ? '#60a5fa' : 'var(--neon-cyan)'}; margin-bottom:4px;">
+            ${isWin ? '🪟 <strong>Windows PowerShell</strong> (Windows 11 Pro 64-bit / Kernel 6.17 aarch64)' : '⚡ <strong>VirgoX Cyber Linux Desktop v2.0</strong> (Resolute Raccoon / Ubuntu 26.04 aarch64)'}
+          </div>
+          <div style="color:#8892b0; font-size:0.75rem; margin-bottom:8px;">
+            ${isWin ? 'Microsoft Windows [Version 10.0.26100.1882] · 64 GB Virtual RAM Pool · 120 FPS' : '👑 Architect: <strong>Prince · VirgoYT</strong> | Virtual RAM: <strong>64 GB Pool</strong> | Engine: <strong>120 FPS Synchronized</strong>'}
+          </div>
+          <div id="term-output-stream" style="white-space:pre-wrap; word-break:break-all;"></div>
+          <div class="cyber-term-input-row">
+            <span class="cyber-term-prompt" id="native-term-prompt">${getTerminalPrompt(termCwd)}</span>
+            <input type="text" class="cyber-term-input" id="native-term-input" autocomplete="off" spellcheck="false" />
+          </div>
         </div>
       </div>
     `;
@@ -1440,6 +1471,18 @@
     const termBody = win.querySelector('#native-term-body');
     const promptEl = win.querySelector('#native-term-prompt');
     if (!input || !output) return;
+
+    // Shell profile tabs
+    win.querySelectorAll('.win11-term-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        win.querySelectorAll('.win11-term-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        activeShellType = tab.getAttribute('data-shell') || 'pwsh';
+        if (promptEl) promptEl.textContent = getTerminalPrompt(termCwd);
+        output.innerHTML += `\nSwitched shell profile to: ${tab.textContent.trim()}\n`;
+        if (termBody) termBody.scrollTop = termBody.scrollHeight;
+      });
+    });
 
     input.addEventListener('keydown', async (e) => {
       if (e.key === 'ArrowUp') {
@@ -1464,11 +1507,56 @@
         if (!cmd) return;
         termHistory.push(cmd);
 
-        output.innerHTML += `\n<span style="color:var(--neon-cyan); font-weight:700;">${getTerminalPrompt(termCwd)}</span> <span style="color:#fff;">${escapeHtml(cmd)}</span>\n`;
+        output.innerHTML += `\n<span style="color:${state.config.osMode === 'windows' ? '#60a5fa' : 'var(--neon-cyan)'}; font-weight:700;">${getTerminalPrompt(termCwd)}</span> <span style="color:#fff;">${escapeHtml(cmd)}</span>\n`;
 
-        if (cmd === 'clear') {
+        const lower = cmd.toLowerCase().trim();
+        if (lower === 'clear' || lower === 'cls') {
           output.innerHTML = '';
           if (termBody) termBody.scrollTop = 0;
+          return;
+        }
+
+        // Direct Windows simulated utilities
+        if (lower === 'ver') {
+          output.innerHTML += `Microsoft Windows [Version 10.0.26100.1882]\n(c) Microsoft Corporation. All rights reserved.\n`;
+          if (termBody) termBody.scrollTop = termBody.scrollHeight;
+          return;
+        } else if (lower === 'ipconfig') {
+          output.innerHTML += `Windows IP Configuration\n\nEthernet adapter vEthernet (VirgoX 10G Turbo Symmetrical):\n   Connection-specific DNS Suffix  . : local\n   IPv4 Address. . . . . . . . . . . : 10.0.0.2\n   Subnet Mask . . . . . . . . . . . : 255.255.255.0\n   Default Gateway . . . . . . . . . : 10.0.0.1\n`;
+          if (termBody) termBody.scrollTop = termBody.scrollHeight;
+          return;
+        } else if (lower === 'systeminfo') {
+          output.innerHTML += `Host Name:                 VIRGOX-WIN11-PC
+OS Name:                   Microsoft Windows 11 Pro
+OS Version:                10.0.26100 N/A Build 26100
+OS Manufacturer:           Microsoft Corporation
+OS Configuration:          Standalone Workstation
+Registered Owner:          Prince (VirgoYT)
+System Type:               ARM64-based PC (Snapdragon Octa-Core 32-Thread)
+Total Physical Memory:     65,536 MB (64 GB Virtual RAM Pool)
+Available Physical Memory: 49,152 MB
+Virtual Memory: Max Size:  98,304 MB
+Storage Disk:              5.0 TB Ultra Storage Pool (/dev/loop0)
+Display Engine:            120 FPS Hardware Synchronized Compositor\n`;
+          if (termBody) termBody.scrollTop = termBody.scrollHeight;
+          return;
+        } else if (lower === 'dir') {
+          output.innerHTML += ` Volume in drive C is Local Disk (5.0 TB)
+ Directory of ${termCwd === '/root' ? 'C:\\Users\\Prince' : 'C:' + termCwd.replace(/\//g, '\\')}
+
+09/30/2026  10:00 PM    <DIR>          .
+09/30/2026  10:00 PM    <DIR>          ..
+09/30/2026  10:00 PM    <DIR>          Desktop
+09/30/2026  10:00 PM    <DIR>          Downloads
+09/30/2026  10:00 PM    <DIR>          Documents
+09/30/2026  10:00 PM    <DIR>          VirgoX-Files
+09/30/2026  09:38 PM            82,434 server.py
+09/30/2026  09:40 PM           208,501 app.js
+09/30/2026  09:40 PM            65,000 style.css
+09/30/2026  09:30 PM               747 s.json
+               4 File(s)        356,682 bytes
+               6 Dir(s)   4,892,100,000,000 bytes free\n`;
+          if (termBody) termBody.scrollTop = termBody.scrollHeight;
           return;
         }
 
@@ -1525,20 +1613,17 @@
   function runLocalShellFallback(cmd, output, promptEl) {
     const lower = cmd.toLowerCase().trim();
     if (lower === 'help') {
-      output.innerHTML += `VirgoX Linux Core Commands:
+      output.innerHTML += `VirgoX Core Commands:
+  • ver / systeminfo - Show Windows 11 system and kernel specifications
+  • dir / ls         - Directory listing
+  • ipconfig / ifconfig - Show IP network configuration
   • neofetch / specs - Display hardware specs, 64GB RAM & 120 FPS pool
-  • pwd              - Print current working directory
-  • cd <dir>         - Change current working directory
-  • ls [-la]         - List files and directories
-  • whoami           - Display active user profile (root)
-  • uname -a         - Display operating system kernel version
-  • free -h          - Virtual ZRAM memory statistics
-  • df -h            - Disk space and storage pool
-  • ps aux / top     - View active system processes
-  • date / uptime    - Current system timestamp & uptime
-  • apt <cmd>        - Linux Advanced Package Tool
-  • python3 -V       - Python programming environment
-  • clear            - Clear terminal screen\n`;
+  • pwd / cd <dir>   - Working directory navigation
+  • whoami           - Display active user profile
+  • free -h / df -h  - Memory and 5.0 TB storage metrics
+  • ps / top         - View system processes
+  • apt / python3    - Software execution tools
+  • cls / clear      - Clear terminal screen\n`;
     } else if (lower === 'pwd') {
       output.innerHTML += `${termCwd}\n`;
     } else if (lower === 'cd' || lower === 'cd ~') {
@@ -1557,7 +1642,7 @@
       }
       if (promptEl) promptEl.textContent = getTerminalPrompt(termCwd);
     } else if (lower === 'whoami') {
-      output.innerHTML += `root\n`;
+      output.innerHTML += `${state.config.osMode === 'windows' ? 'virgox-pc\\prince' : 'root'}\n`;
     } else if (lower === 'id') {
       output.innerHTML += `uid=0(root) gid=0(root) groups=0(root)\n`;
     } else if (lower === 'uname' || lower === 'uname -a') {
@@ -1567,16 +1652,16 @@
     } else if (lower === 'uptime') {
       output.innerHTML += ` ${new Date().toLocaleTimeString()} up 24 days, 16:45,  1 user,  load average: 0.12, 0.08, 0.04\n`;
     } else if (lower === 'neofetch' || lower === 'specs') {
-      output.innerHTML += `       ⚡⚡⚡⚡⚡⚡⚡⚡⚡          root@virgox-pc
-     ⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡        --------------
-    ⚡⚡⚡  VIRGOX  ⚡⚡⚡       OS: Ubuntu 26.04.1 LTS (Resolute Raccoon) aarch64
+      output.innerHTML += `       ⚡⚡⚡⚡⚡⚡⚡⚡⚡          Prince@virgox-pc
+     ⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡        ----------------
+    ⚡⚡⚡  VIRGOX  ⚡⚡⚡       OS: Windows 11 Pro 24H2 (Ubuntu 26.04 PRoot Subsystem)
    ⚡⚡⚡   CYBER   ⚡⚡⚡      Host: Motorola FogOS Cloud Workstation (120Hz Mode)
-  ⚡⚡⚡     OS     ⚡⚡⚡     Kernel: 6.17.0-PRoot-Distro
+  ⚡⚡⚡     OS     ⚡⚡⚡     Kernel: 6.17.0-PRoot-Distro aarch64
  ⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡   Uptime: 24 days, 16 hours, 45 mins
-  ⚡⚡⚡            ⚡⚡⚡     Shell: bash 5.2.21 (Interactive Turbo Shell)
+  ⚡⚡⚡            ⚡⚡⚡     Shell: Windows Terminal (PowerShell / Bash 5.2.21)
    ⚡⚡⚡          ⚡⚡⚡      Resolution: 1600x720 (Phone 20:9 Touch Optimized)
-    ⚡⚡⚡        ⚡⚡⚡       DE: Cyber XFCE Turbo / Fluent Glass
-     ⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡        WM: Xfwm4 High-Speed Compositor
+    ⚡⚡⚡        ⚡⚡⚡       DE: Windows 11 Fluent Glass / Mica Compositor
+     ⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡        WM: Desktop Window Manager (120 FPS Synchronized)
        ⚡⚡⚡⚡⚡⚡⚡           CPU: Snapdragon Octa-Core Turbo (32 Threads)
                              GPU: Mesa LLVMpipe (120 FPS Hardware Synchronized)
                              Memory: 14820MiB / 65536MiB (64 GB ZRAM Turbo Pool)
@@ -1611,38 +1696,44 @@ server.py   s.json      style.css      scripts/  desktop-shortcuts/\n`;
         output.innerHTML += `Python 3.12.3 active. Type exit() to leave or use python3 -c 'code'.\n`;
       }
     } else {
-      output.innerHTML += `Executed: ${cmd} (Local Linux emulator active — Connect bridge port 8888 for live subshell)\n`;
+      output.innerHTML += `Executed: ${cmd} (Local fallback active — Connect bridge port 8888 for live execution)\n`;
     }
   }
 
   function getFilesHtml() {
+    const isWin = state.config.osMode === 'windows';
     return `
       <div class="cyber-files-view">
         <div class="files-sidebar">
-          <div class="files-sidebar-item active">📁 Quick Access</div>
-          <div class="files-sidebar-item">💽 Local Disk (5TB)</div>
-          <div class="files-sidebar-item">🐧 Linux Root (/)</div>
-          <div class="files-sidebar-item">📦 VirgoX-Files</div>
+          <div class="files-sidebar-item active">${isWin ? '⭐ Quick access' : '📁 Quick Access'}</div>
+          <div class="files-sidebar-item">${isWin ? '☁️ OneDrive' : '💽 Local Disk (5TB)'}</div>
+          <div class="files-sidebar-item">${isWin ? '💻 This PC (C:)' : '🐧 Linux Root (/)'}</div>
+          <div class="files-sidebar-item">${isWin ? '🐧 Linux Subsystem' : '📦 VirgoX-Files'}</div>
           <div class="files-sidebar-item">⬇️ Downloads</div>
-          <div class="files-sidebar-item">📱 ROM Builds</div>
+          <div class="files-sidebar-item">📁 Documents</div>
+          <div class="files-sidebar-item">🖼️ Pictures</div>
         </div>
         <div class="files-main-content">
           <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
-            <span>Path: <strong>/config/Desktop/VirgoX-Files/</strong></span>
-            <span style="color:var(--neon-green);">4.8 TB Free of 5.0 TB</span>
+            <span>Location: <strong>${isWin ? 'This PC > Local Disk (C:) > Users > Prince' : '/config/Desktop/VirgoX-Files/'}</strong></span>
+            <span style="color:${isWin ? '#60a5fa' : 'var(--neon-green)'}; font-weight:700;">4.8 TB Free of 5.0 TB</span>
           </div>
           <div class="files-grid-view">
-            <div class="files-grid-item" onclick="alert('Folder: Motorola FogOS ROM Builds (boot.img, super.img ready)')">
+            <div class="files-grid-item" onclick="alert('Folder: ${isWin ? 'C:\\\\Program Files (x86)' : 'ROM-Builds'}')">
               <span style="font-size:2rem;">📁</span>
-              <span style="font-size:0.75rem; color:#fff;">ROM-Builds</span>
+              <span style="font-size:0.75rem; color:#fff;">Program Files</span>
             </div>
-            <div class="files-grid-item" onclick="alert('Folder: VirgoX Android APK Downloads (64GB RAM Cache)')">
+            <div class="files-grid-item" onclick="alert('Folder: ${isWin ? 'C:\\\\Windows\\\\System32' : 'Downloads'}')">
+              <span style="font-size:2rem;">📁</span>
+              <span style="font-size:0.75rem; color:#fff;">Windows</span>
+            </div>
+            <div class="files-grid-item" onclick="alert('Folder: ${isWin ? 'C:\\\\Users\\\\Prince\\\\Downloads' : 'Projects'}')">
               <span style="font-size:2rem;">📁</span>
               <span style="font-size:0.75rem; color:#fff;">Downloads</span>
             </div>
-            <div class="files-grid-item" onclick="alert('Folder: 3D Blender & Unreal Projects')">
-              <span style="font-size:2rem;">📁</span>
-              <span style="font-size:0.75rem; color:#fff;">Projects</span>
+            <div class="files-grid-item" onclick="alert('Folder: ${isWin ? 'C:\\\\VirgoX-Files (5.0 TB Storage Pool)' : 'VirgoX-Files'}')">
+              <span style="font-size:2rem;">📦</span>
+              <span style="font-size:0.75rem; color:#fff;">VirgoX-Files</span>
             </div>
             <div class="files-grid-item" onclick="openAppWindow('editor')">
               <span style="font-size:2rem;">🐍</span>
@@ -1652,11 +1743,7 @@ server.py   s.json      style.css      scripts/  desktop-shortcuts/\n`;
               <span style="font-size:2rem;">📜</span>
               <span style="font-size:0.75rem; color:#fff;">app.js</span>
             </div>
-            <div class="files-grid-item" onclick="alert('Motorola Fastboot ROM Flasher Payload Script')">
-              <span style="font-size:2rem;">⚙️</span>
-              <span style="font-size:0.75rem; color:#fff;">payload_dumper</span>
-            </div>
-            <div class="files-grid-item" onclick="alert('VirgoX Protected Security Token Secrets')">
+            <div class="files-grid-item" onclick="alert('VirgoX Security Secrets: Protected Token Store')">
               <span style="font-size:2rem;">🔑</span>
               <span style="font-size:0.75rem; color:#fff;">s.json</span>
             </div>
@@ -1932,6 +2019,80 @@ server.py   s.json      style.css      scripts/  desktop-shortcuts/\n`;
     attachCardListeners();
   }
 
+  function getSettingsHtml() {
+    const isWin = state.config.osMode === 'windows';
+    return `
+      <div style="display:flex; height:100%; color:#fff; font-family:'Segoe UI', sans-serif; background:#0c101c;">
+        <div style="width:140px; background:rgba(20,24,36,0.9); border-right:1px solid rgba(255,255,255,0.08); padding:10px 6px; display:flex; flex-direction:column; gap:4px; font-size:0.75rem;">
+          <div style="padding:6px 8px; border-radius:6px; background:rgba(59,130,246,0.2); color:#60a5fa; font-weight:700;">💻 System</div>
+          <div style="padding:6px 8px; border-radius:6px; color:#aaa; cursor:pointer;" onclick="openAppWindow('browser')">🌐 Network</div>
+          <div style="padding:6px 8px; border-radius:6px; color:#aaa; cursor:pointer;" onclick="openAppWindow('msstore')">🛍️ Apps & Store</div>
+          <div style="padding:6px 8px; border-radius:6px; color:#aaa; cursor:pointer;" onclick="openAppWindow('taskmgr')">📊 Performance</div>
+        </div>
+        <div style="flex:1; padding:16px; overflow-y:auto; font-size:0.8rem;">
+          <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px; padding-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.1);">
+            <div style="width:48px; height:48px; border-radius:8px; background:linear-gradient(135deg, #0078d4, #00bcf2); display:flex; align-items:center; justify-content:center; font-size:1.8rem;">🪟</div>
+            <div>
+              <div style="font-size:1.05rem; font-weight:800;">VirgoX Cloud Computer</div>
+              <div style="font-size:0.75rem; color:#94a3b8;">Windows 11 Pro · Official Edition (24H2)</div>
+            </div>
+          </div>
+
+          <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:12px; margin-bottom:12px;">
+            <div style="font-weight:700; color:#60a5fa; margin-bottom:8px;">Device Specifications</div>
+            <div style="display:grid; grid-template-columns:120px 1fr; gap:6px; font-size:0.75rem;">
+              <span style="color:#aaa;">Device Name:</span> <span>VIRGOX-WIN11-PC</span>
+              <span style="color:#aaa;">Processor:</span> <span>Snapdragon Octa-Core Turbo (32 Threads) @ 4.20 GHz</span>
+              <span style="color:#aaa;">Installed RAM:</span> <span>64.0 GB (63.8 GB usable) ZRAM Pool</span>
+              <span style="color:#aaa;">Storage:</span> <span>5.0 TB Ultra Storage (/dev/loop0)</span>
+              <span style="color:#aaa;">System type:</span> <span>64-bit operating system, ARM64-based processor</span>
+              <span style="color:#aaa;">Pen and touch:</span> <span>Touch support with multi-gesture high precision</span>
+            </div>
+          </div>
+
+          <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:12px; margin-bottom:12px;">
+            <div style="font-weight:700; color:#34d399; margin-bottom:8px;">Windows Specifications</div>
+            <div style="display:grid; grid-template-columns:120px 1fr; gap:6px; font-size:0.75rem;">
+              <span style="color:#aaa;">Edition:</span> <span>Windows 11 Pro</span>
+              <span style="color:#aaa;">Version:</span> <span>24H2</span>
+              <span style="color:#aaa;">OS Build:</span> <span>26100.1882</span>
+              <span style="color:#aaa;">Experience:</span> <span>Windows Feature Experience Pack 1000.26100.32.0</span>
+            </div>
+          </div>
+
+          <div style="background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.25); border-radius:8px; padding:12px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <div>
+              <div style="font-weight:700; color:#fff;">Environment Mode Switcher</div>
+              <div style="font-size:0.72rem; color:#94a3b8;">Switch between Windows 11 Pro and Ubuntu Cyber Linux instantly.</div>
+            </div>
+            <button class="cyber-btn sm neon-cyan" id="btn-settings-toggle-os">
+              ${isWin ? '🐧 Switch to Ubuntu Linux' : '🪟 Switch to Windows 11'}
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function initSettingsActions(win) {
+    const btn = win.querySelector('#btn-settings-toggle-os');
+    if (btn) {
+      btn.addEventListener('click', () => {
+        state.config.osMode = state.config.osMode === 'windows' ? 'linux' : 'windows';
+        saveConfig();
+        applyDesktopOsTheme();
+        const activeUrl = getActiveDesktopUrl();
+        if (desktopFrame && sessionStorage.getItem('virgox_authenticated') === 'true') {
+          desktopFrame.src = activeUrl;
+        }
+        win.remove();
+        delete openWindows['settings'];
+        updateTaskbarChips();
+        openAppWindow('settings');
+      });
+    }
+  }
+
   function getTaskmgrHtml() {
     return `
       <div style="padding:14px; color:#fff; height:100%; overflow-y:auto; font-family:var(--font-mono); font-size:0.8rem;">
@@ -2179,6 +2340,413 @@ print("All systems operational.")
     });
   }
 
+  function bindDesktopEvents() {
+    const startBtn = document.getElementById('taskbar-start-toggle');
+    const startMenu = document.getElementById('cyber-start-menu');
+    if (startBtn && startMenu) {
+      // clone to drop old event listeners
+      const newStartBtn = startBtn.cloneNode(true);
+      startBtn.parentNode.replaceChild(newStartBtn, startBtn);
+
+      newStartBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        startMenu.classList.toggle('hidden');
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!startMenu.contains(e.target) && e.target !== newStartBtn) {
+          startMenu.classList.add('hidden');
+        }
+      });
+    }
+
+    // Search button in Windows 11 taskbar
+    const btnSearch = document.getElementById('win11-btn-search');
+    if (btnSearch && startMenu) {
+      btnSearch.addEventListener('click', (e) => {
+        e.stopPropagation();
+        startMenu.classList.remove('hidden');
+        const input = document.getElementById('win11-start-search');
+        if (input) setTimeout(() => input.focus(), 50);
+      });
+    }
+
+    // Start menu app clicks
+    if (startMenu) {
+      startMenu.querySelectorAll('[data-start-app]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const appId = btn.getAttribute('data-start-app');
+          openAppWindow(appId);
+          startMenu.classList.add('hidden');
+        });
+      });
+
+      const startSettings = document.getElementById('btn-start-settings');
+      if (startSettings) {
+        startSettings.addEventListener('click', () => {
+          startMenu.classList.add('hidden');
+          openAppWindow('settings');
+        });
+      }
+
+      const startLogout = document.getElementById('btn-start-logout');
+      if (startLogout) {
+        startLogout.addEventListener('click', () => {
+          sessionStorage.clear();
+          window.location.href = 'index.html';
+        });
+      }
+
+      const win11Lock = document.getElementById('btn-win11-lock');
+      if (win11Lock) {
+        win11Lock.addEventListener('click', () => {
+          sessionStorage.clear();
+          window.location.href = 'index.html';
+        });
+      }
+
+      const win11Power = document.getElementById('btn-win11-power');
+      if (win11Power) {
+        win11Power.addEventListener('click', () => {
+          if (confirm('Shut down or Restart Windows 11 session?')) {
+            sessionStorage.clear();
+            window.location.href = 'index.html';
+          }
+        });
+      }
+
+      const win11SearchInput = document.getElementById('win11-start-search');
+      if (win11SearchInput) {
+        win11SearchInput.addEventListener('input', () => {
+          const q = win11SearchInput.value.toLowerCase().trim();
+          startMenu.querySelectorAll('.win11-app-item').forEach(item => {
+            const name = item.textContent.toLowerCase();
+            item.style.display = (!q || name.includes(q)) ? 'flex' : 'none';
+          });
+        });
+      }
+    }
+
+    // Taskbar pinned clicks
+    document.querySelectorAll('.taskbar-app-icon, .win11-taskbar-icon').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const appId = btn.getAttribute('data-open');
+        if (appId) openAppWindow(appId);
+      });
+    });
+  }
+
+  function applyDesktopOsTheme() {
+    const isWin = state.config.osMode === 'windows';
+    const nativeDesk = document.getElementById('native-cyber-desktop');
+    if (!nativeDesk) return;
+
+    const watermark = nativeDesk.querySelector('.cyber-desktop-watermark');
+    const hud = nativeDesk.querySelector('.cyber-desktop-hud');
+    const taskbar = nativeDesk.querySelector('.cyber-desktop-taskbar');
+    const startMenu = document.getElementById('cyber-start-menu');
+    const iconsContainer = document.getElementById('desktop-icons-container');
+
+    if (isWin) {
+      nativeDesk.classList.add('os-win11');
+
+      if (watermark) {
+        watermark.innerHTML = `🪟 WINDOWS 11 PRO<br><span style="font-size:0.95rem; opacity:0.85;">OFFICIAL EDITION • 64 GB RAM • 120 FPS</span>`;
+      }
+
+      if (hud) {
+        hud.innerHTML = `
+          <div class="hud-row"><span>🪟 OS:</span> <span class="hud-val" style="color:#60a5fa;">Windows 11 Pro 24H2</span></div>
+          <div class="hud-row"><span>⚡ CPU:</span> <span class="hud-val">Snapdragon 32-Thread Turbo</span></div>
+          <div class="hud-row"><span>🧠 RAM:</span> <span class="hud-val">64.0 GB Installed Virtual RAM</span></div>
+          <div class="hud-row"><span>💽 DISK:</span> <span class="hud-val">5.0 TB Local Disk (C:)</span></div>
+          <div class="hud-row"><span>🎮 GPU:</span> <span class="hud-val" style="color:var(--neon-green);">120Hz Hardware Sync</span></div>
+        `;
+      }
+
+      if (taskbar) {
+        taskbar.classList.add('win11');
+        taskbar.innerHTML = `
+          <div class="taskbar-left" style="display:flex; align-items:center;">
+            <div style="font-size:0.75rem; color:#94a3b8; display:flex; align-items:center; gap:6px;">
+              <span>🌤️ 72°F</span>
+              <span style="opacity:0.6;">|</span>
+              <span style="color:#38bdf8;">Widget Hub</span>
+            </div>
+          </div>
+
+          <div class="win11-taskbar-center" id="win11-taskbar-center">
+            <button class="win11-start-btn" id="taskbar-start-toggle" title="Start">
+              <svg width="22" height="22" viewBox="0 0 88 88" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M0 12.4955L35.7273 7.63636V41.4545H0V12.4955ZM0 46.5455H35.7273V80.3636L0 75.5045V46.5455ZM41.0909 6.90909L88 0V41.4545H41.0909V6.90909ZM41.0909 46.5455H88V88L41.0909 81.0909V46.5455Z" fill="#00ADEF"/>
+              </svg>
+            </button>
+            <button class="win11-taskbar-icon" id="win11-btn-search" title="Search">🔍</button>
+            <button class="win11-taskbar-icon" data-open="browser" title="Microsoft Edge">🌐</button>
+            <button class="win11-taskbar-icon" data-open="files" title="File Explorer (C: Drive)">📁</button>
+            <button class="win11-taskbar-icon" data-open="msstore" title="Microsoft Store">🛍️</button>
+            <button class="win11-taskbar-icon" data-open="terminal" title="Windows Terminal (PowerShell)">💻</button>
+            <button class="win11-taskbar-icon" data-open="editor" title="Notepad">📝</button>
+            <button class="win11-taskbar-icon" data-open="settings" title="Settings">⚙️</button>
+            <div class="taskbar-active-chips" id="taskbar-active-chips" style="margin-left:4px;"></div>
+          </div>
+
+          <div class="taskbar-right-tray" style="display:flex; align-items:center; gap:8px;">
+            <div class="win11-tray-cluster">
+              <span title="Wi-Fi">📶</span>
+              <span title="Audio">🔊</span>
+              <span title="Battery">🔋 100%</span>
+            </div>
+            <div class="win11-clock-cluster" id="win11-clock-box">
+              <span id="win11-clock-time">12:00 PM</span>
+              <span id="win11-clock-date" style="opacity:0.8; font-size:0.68rem;">9/30/2026</span>
+            </div>
+          </div>
+        `;
+      }
+
+      if (startMenu) {
+        startMenu.className = 'cyber-start-menu win11 hidden';
+        startMenu.innerHTML = `
+          <!-- Search Row -->
+          <div class="win11-search-row">
+            <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); font-size:0.9rem; color:#94a3b8;">🔍</span>
+            <input type="text" id="win11-start-search" class="win11-search-input" placeholder="Type here to search apps, settings, and files..." />
+          </div>
+
+          <!-- Pinned Section -->
+          <div>
+            <div class="win11-pinned-section-header">
+              <span>Pinned</span>
+              <button class="cyber-btn xs" onclick="openAppWindow('msstore')">All Apps &gt;</button>
+            </div>
+            <div class="win11-pinned-grid" id="win11-pinned-grid">
+              <div class="win11-app-item" data-start-app="browser">
+                <div class="win11-app-icon">🌐</div>
+                <div class="win11-app-name">Edge</div>
+              </div>
+              <div class="win11-app-item" data-start-app="files">
+                <div class="win11-app-icon">📁</div>
+                <div class="win11-app-name">Explorer</div>
+              </div>
+              <div class="win11-app-item" data-start-app="msstore">
+                <div class="win11-app-icon">🛍️</div>
+                <div class="win11-app-name">Store</div>
+              </div>
+              <div class="win11-app-item" data-start-app="terminal">
+                <div class="win11-app-icon">💻</div>
+                <div class="win11-app-name">Terminal</div>
+              </div>
+              <div class="win11-app-item" data-start-app="editor">
+                <div class="win11-app-icon">📝</div>
+                <div class="win11-app-name">Notepad</div>
+              </div>
+              <div class="win11-app-item" data-start-app="taskmgr">
+                <div class="win11-app-icon">📊</div>
+                <div class="win11-app-name">Taskmgr</div>
+              </div>
+              <div class="win11-app-item" data-start-app="settings">
+                <div class="win11-app-icon">⚙️</div>
+                <div class="win11-app-name">Settings</div>
+              </div>
+              <div class="win11-app-item" data-start-app="photopea">
+                <div class="win11-app-icon">🎨</div>
+                <div class="win11-app-name">Photos</div>
+              </div>
+              <div class="win11-app-item" data-start-app="shotcut">
+                <div class="win11-app-icon">🎬</div>
+                <div class="win11-app-name">Clipchamp</div>
+              </div>
+              <div class="win11-app-item" data-start-app="steam">
+                <div class="win11-app-icon">🎮</div>
+                <div class="win11-app-name">Xbox / Steam</div>
+              </div>
+              <div class="win11-app-item" data-start-app="blender">
+                <div class="win11-app-icon">🚀</div>
+                <div class="win11-app-name">Blender 5.0</div>
+              </div>
+              <div class="win11-app-item" data-start-app="unreal">
+                <div class="win11-app-icon">⚡</div>
+                <div class="win11-app-name">Unreal Engine</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recommended Section -->
+          <div>
+            <div class="win11-pinned-section-header" style="margin-bottom:6px;">
+              <span>Recommended</span>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:4px; font-size:0.75rem;">
+              <div style="display:flex; align-items:center; gap:8px; padding:4px 8px; border-radius:6px; cursor:pointer;" onclick="openAppWindow('files')">
+                <span>📁</span>
+                <div>
+                  <div style="color:#fff; font-weight:600;">This PC — Local Disk (C:)</div>
+                  <div style="color:#94a3b8; font-size:0.68rem;">5.0 TB High-Speed Storage Pool</div>
+                </div>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px; padding:4px 8px; border-radius:6px; cursor:pointer;" onclick="openAppWindow('terminal')">
+                <span>💻</span>
+                <div>
+                  <div style="color:#fff; font-weight:600;">Windows Terminal (PowerShell)</div>
+                  <div style="color:#94a3b8; font-size:0.68rem;">Live PRoot-Distro Subsystem connected</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- User Profile & Power Bar -->
+          <div class="win11-user-footer">
+            <div class="win11-user-profile" id="btn-win11-profile">
+              <div style="width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg, #0078d4, #00bcf2); display:flex; align-items:center; justify-content:center; font-weight:bold; color:#fff;">P</div>
+              <div>
+                <div style="font-weight:700; color:#fff; font-size:0.82rem;">Prince · VirgoYT</div>
+                <div style="font-size:0.68rem; color:#94a3b8;">Administrator</div>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:4px;">
+              <button class="win11-power-btn" id="btn-win11-lock" title="Lock Workstation">🔒</button>
+              <button class="win11-power-btn" id="btn-win11-power" title="Shut Down / Restart">⏻</button>
+            </div>
+          </div>
+        `;
+      }
+
+      // Windows 11 Desktop Icons
+      if (iconsContainer) {
+        iconsContainer.innerHTML = '';
+        const WIN_APPS = [
+          { id: 'files', name: 'This PC (C:)', icon: '📁' },
+          { id: 'browser', name: 'Microsoft Edge', icon: '🌐' },
+          { id: 'msstore', name: 'Microsoft Store', icon: '🛍️' },
+          { id: 'terminal', name: 'Terminal (PS)', icon: '💻' },
+          { id: 'editor', name: 'Notepad', icon: '📝' },
+          { id: 'settings', name: 'Settings', icon: '⚙️' },
+          { id: 'taskmgr', name: 'Task Manager', icon: '📊' },
+          { id: 'photopea', name: 'Photoshop', icon: '🎨' },
+          { id: 'shotcut', name: 'Clipchamp', icon: '🎬' },
+          { id: 'steam', name: 'Xbox & Steam', icon: '🎮' },
+          { id: 'blender', name: 'Blender 5.0', icon: '🚀' },
+          { id: 'unreal', name: 'Unreal Engine', icon: '⚡' }
+        ];
+        WIN_APPS.forEach(app => {
+          const item = document.createElement('div');
+          item.className = 'desktop-icon';
+          item.innerHTML = `
+            <div class="icon-art">${app.icon}</div>
+            <div class="icon-label">${app.name}</div>
+          `;
+          item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openAppWindow(app.id);
+          });
+          iconsContainer.appendChild(item);
+        });
+      }
+    } else {
+      // Return to Linux
+      nativeDesk.classList.remove('os-win11');
+      if (watermark) {
+        watermark.innerHTML = `VIRGOX CYBER OS<br><span style="font-size:1.05rem; opacity:0.85;">64 GB VIRTUAL RAM • 120 FPS</span>`;
+      }
+      if (hud) {
+        hud.innerHTML = `
+          <div class="hud-row"><span>⚡ CPU:</span> <span class="hud-val">14% (32-Core Turbo)</span></div>
+          <div class="hud-row"><span>🧠 RAM:</span> <span class="hud-val">64 GB (ZRAM Engine)</span></div>
+          <div class="hud-row"><span>💽 DISK:</span> <span class="hud-val">5.0 TB (/dev/loop0)</span></div>
+          <div class="hud-row"><span>🎮 FPS:</span> <span class="hud-val" style="color:var(--neon-green);">120 FPS SYNC</span></div>
+        `;
+      }
+      if (taskbar) {
+        taskbar.classList.remove('win11');
+        taskbar.innerHTML = `
+          <div class="taskbar-left">
+            <button class="taskbar-start-btn" id="taskbar-start-toggle">
+              <span>⚡</span> START
+            </button>
+            <div class="taskbar-apps-pinned">
+              <button class="taskbar-app-icon" data-open="terminal" title="Terminal CLI">💻</button>
+              <button class="taskbar-app-icon" data-open="msstore" title="Microsoft Store">🛍️</button>
+              <button class="taskbar-app-icon" data-open="browser" title="Web Browser">🌐</button>
+              <button class="taskbar-app-icon" data-open="files" title="This PC / Files">📁</button>
+              <button class="taskbar-app-icon" data-open="editor" title="Code Studio">📝</button>
+              <button class="taskbar-app-icon" data-open="taskmgr" title="Task Manager">📊</button>
+            </div>
+            <div class="taskbar-active-chips" id="taskbar-active-chips"></div>
+          </div>
+          <div class="taskbar-right-tray">
+            <span title="High-Speed Hardware Symmetrical">📶 10G</span>
+            <span title="Audio Driver">🔊</span>
+            <span style="color:var(--neon-green); font-weight:700;">120Hz</span>
+            <span id="taskbar-clock">12:00:00 PM</span>
+          </div>
+        `;
+      }
+      if (startMenu) {
+        startMenu.className = 'cyber-start-menu hidden';
+        startMenu.innerHTML = `
+          <div style="display:flex; align-items:center; gap:10px; padding-bottom:8px; border-bottom:1px solid rgba(0,229,255,0.2);">
+            <div style="width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg, #00e5ff, #bd00ff); display:flex; align-items:center; justify-content:center; font-weight:bold; color:#fff;">P</div>
+            <div>
+              <div style="font-weight:700; color:#fff; font-size:0.9rem;">Prince · VirgoYT</div>
+              <div style="font-size:0.75rem; color:var(--neon-green);">👑 ROOT ADMINISTRATOR</div>
+            </div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:4px; max-height:240px; overflow-y:auto;">
+            <button class="cyber-btn sm" data-start-app="terminal" style="text-align:left; justify-content:flex-start;">💻 Terminal CLI (Root Bash)</button>
+            <button class="cyber-btn sm" data-start-app="msstore" style="text-align:left; justify-content:flex-start;">🛍️ Microsoft Store (Web Hub)</button>
+            <button class="cyber-btn sm" data-start-app="browser" style="text-align:left; justify-content:flex-start;">🌐 Chrome Web Browser</button>
+            <button class="cyber-btn sm" data-start-app="files" style="text-align:left; justify-content:flex-start;">📁 This PC (5.0 TB Storage)</button>
+            <button class="cyber-btn sm" data-start-app="editor" style="text-align:left; justify-content:flex-start;">📝 Code Studio Editor</button>
+            <button class="cyber-btn sm" data-start-app="taskmgr" style="text-align:left; justify-content:flex-start;">📊 Task Manager (64GB RAM)</button>
+            <button class="cyber-btn sm" data-start-app="steam" style="text-align:left; justify-content:flex-start;">🎮 Steam Gaming Platform</button>
+            <button class="cyber-btn sm" data-start-app="blender" style="text-align:left; justify-content:flex-start;">🚀 Blender 5.0.1 3D Studio</button>
+            <button class="cyber-btn sm" data-start-app="unreal" style="text-align:left; justify-content:flex-start;">⚡ Unreal Engine 6 Hub</button>
+            <button class="cyber-btn sm" data-start-app="photopea" style="text-align:left; justify-content:flex-start;">🎨 Photoshop Studio (Photopea)</button>
+            <button class="cyber-btn sm" data-start-app="shotcut" style="text-align:left; justify-content:flex-start;">🎬 Shotcut 4K Video Editor</button>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; padding-top:8px; border-top:1px solid rgba(255,255,255,0.1);">
+            <button id="btn-start-settings" class="cyber-btn xs neon-cyan">⚙️ Settings</button>
+            <button id="btn-start-logout" class="cyber-btn xs neon-pink">🔒 Lock / Exit</button>
+          </div>
+        `;
+      }
+      if (iconsContainer) {
+        iconsContainer.innerHTML = '';
+        const APPS = [
+          { id: 'terminal', name: 'Terminal CLI', icon: '💻' },
+          { id: 'msstore', name: 'Microsoft Store', icon: '🛍️' },
+          { id: 'browser', name: 'Chrome Web', icon: '🌐' },
+          { id: 'files', name: 'This PC (5TB)', icon: '📁' },
+          { id: 'editor', name: 'Code Studio', icon: '📝' },
+          { id: 'taskmgr', name: 'Task Manager', icon: '📊' },
+          { id: 'photopea', name: 'Photoshop', icon: '🎨' },
+          { id: 'shotcut', name: 'Video Studio', icon: '🎬' },
+          { id: 'steam', name: 'Steam Hub', icon: '🎮' },
+          { id: 'blender', name: 'Blender 5.0', icon: '🚀' },
+          { id: 'unreal', name: 'Unreal Engine', icon: '⚡' },
+          { id: 'settings', name: 'Stream Config', icon: '⚙️' }
+        ];
+        APPS.forEach(app => {
+          const item = document.createElement('div');
+          item.className = 'desktop-icon';
+          item.innerHTML = `
+            <div class="icon-art">${app.icon}</div>
+            <div class="icon-label">${app.name}</div>
+          `;
+          item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openAppWindow(app.id);
+          });
+          iconsContainer.appendChild(item);
+        });
+      }
+    }
+
+    bindDesktopEvents();
+    updateTaskbarChips();
+  }
+
   // OS Switcher (Linux Ubuntu XFCE vs Windows 11 Cloud VM)
   function setupOsSwitcher() {
     const btnToggleOs = document.getElementById('btn-toggle-os');
@@ -2198,6 +2766,7 @@ print("All systems operational.")
           btnToggleOs.classList.remove('neon-purple');
         }
       }
+      applyDesktopOsTheme();
     }
 
     if (btnToggleOs) {
