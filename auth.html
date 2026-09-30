@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>VirgoX — Authorise device</title>
+<link rel="stylesheet" href="style.css?v=20261001_01" />
+<style>
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background-color: #0b1220;
+    background-image:
+      radial-gradient(ellipse 60% 45% at 50% 30%, rgba(120, 160, 255, 0.34) 0%, rgba(120, 160, 255, 0) 70%),
+      linear-gradient(170deg, #16203a 0%, #0b1220 55%, #060a14 100%);
+    font-family: 'Segoe UI Variable Text', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    color: #e8e8ea;
+  }
+
+  .card {
+    width: 100%;
+    max-width: 400px;
+    background: rgba(32, 32, 32, 0.78);
+    backdrop-filter: blur(30px) saturate(1.6);
+    -webkit-backdrop-filter: blur(30px) saturate(1.6);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 8px;
+    padding: 32px 28px;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .brand-mark {
+    width: 32px;
+    height: 32px;
+    border-radius: 7px;
+    background: linear-gradient(135deg, #4f7cff, #8b5cf6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 800;
+    color: #fff;
+    flex-shrink: 0;
+  }
+
+  .brand-name {
+    font-size: 0.98rem;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+  }
+
+  .brand-sub {
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 1px;
+  }
+
+  h1 {
+    font-size: 1.28rem;
+    font-weight: 600;
+    margin: 0 0 8px;
+    line-height: 1.3;
+  }
+
+  .lead {
+    font-size: 0.82rem;
+    line-height: 1.6;
+    color: rgba(255, 255, 255, 0.66);
+    margin: 0 0 22px;
+  }
+
+  .lead code {
+    font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+    font-size: 0.76rem;
+    background: rgba(255, 255, 255, 0.10);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: #cbd5e1;
+  }
+
+  label {
+    display: block;
+    font-size: 0.74rem;
+    color: rgba(255, 255, 255, 0.55);
+    margin-bottom: 7px;
+  }
+
+  input#code {
+    width: 100%;
+    box-sizing: border-box;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-bottom: 2px solid rgba(255, 255, 255, 0.28);
+    border-radius: 4px;
+    color: #fff;
+    font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+    font-size: 1.32rem;
+    letter-spacing: 4px;
+    text-align: center;
+    text-transform: uppercase;
+    padding: 13px 12px;
+    outline: none;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+
+  input#code::placeholder {
+    color: rgba(255, 255, 255, 0.22);
+    letter-spacing: 4px;
+  }
+
+  input#code:focus {
+    background: rgba(255, 255, 255, 0.09);
+    border-color: rgba(255, 255, 255, 0.22);
+    border-bottom-color: #6ea8ff;
+  }
+
+  button {
+    width: 100%;
+    margin-top: 16px;
+    padding: 12px;
+    border: none;
+    border-radius: 4px;
+    background: #4f7cff;
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.86rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.12s ease;
+    min-height: 44px;
+  }
+
+  button:hover:not(:disabled) { background: #6b91ff; }
+  button:active:not(:disabled) { background: #3f6ae8; }
+  button:disabled { background: rgba(255, 255, 255, 0.10); color: rgba(255, 255, 255, 0.35); cursor: not-allowed; }
+
+  .status {
+    margin-top: 16px;
+    font-size: 0.78rem;
+    line-height: 1.55;
+    padding: 11px 13px;
+    border-radius: 5px;
+    display: none;
+  }
+
+  .status.show { display: block; }
+  .status.err { background: rgba(196, 43, 28, 0.16); color: #ffb4a8; }
+  .status.ok { background: rgba(16, 124, 16, 0.18); color: #9fe8a0; }
+  .status.wait { background: rgba(255, 255, 255, 0.07); color: rgba(255, 255, 255, 0.72); }
+
+  .perms {
+    margin: 24px 0 0;
+    padding: 14px 0 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    list-style: none;
+  }
+
+  .perms li {
+    font-size: 0.76rem;
+    color: rgba(255, 255, 255, 0.52);
+    line-height: 1.5;
+    padding-left: 18px;
+    position: relative;
+    margin-bottom: 7px;
+  }
+
+  .perms li::before {
+    content: '✓';
+    position: absolute;
+    left: 0;
+    color: #6ea8ff;
+  }
+
+  .foot {
+    margin-top: 20px;
+    font-size: 0.68rem;
+    color: rgba(255, 255, 255, 0.32);
+    text-align: center;
+    line-height: 1.5;
+  }
+
+  .svc-off {
+    background: rgba(196, 43, 28, 0.14);
+    border: 1px solid rgba(255, 138, 128, 0.3);
+    color: #ffb4a8;
+    font-size: 0.76rem;
+    line-height: 1.55;
+    padding: 12px 14px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+  }
+
+  .svc-off code {
+    font-family: ui-monospace, Consolas, monospace;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+</style>
+</head>
+<body>
+  <main class="card">
+    <div class="brand">
+      <div class="brand-mark">V</div>
+      <div>
+        <div class="brand-name">VirgoX Cloud PC</div>
+        <div class="brand-sub">Device authorisation</div>
+      </div>
+    </div>
+
+    <div id="svc-warn" class="svc-off" hidden>
+      Can't reach the auth service. Start it with
+      <code>node server/auth-service.js</code> and reload.
+    </div>
+
+    <h1>Authorise this device</h1>
+    <p class="lead">
+      Open <code>vxc auth login</code> in the VirgoX terminal. It prints a
+      one-time code — type it below to sign that workstation in. The code expires
+      on its own.
+    </p>
+
+    <form id="form" autocomplete="off">
+      <label for="code">Device code</label>
+      <input
+        id="code"
+        name="code"
+        type="text"
+        inputmode="latin"
+        autocapitalize="characters"
+        autocomplete="one-time-code"
+        spellcheck="false"
+        maxlength="11"
+        placeholder="XXXX-XXXX"
+        aria-label="Device code"
+      />
+      <button id="submit" type="submit">Authorise</button>
+    </form>
+
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+
+    <ul class="perms">
+      <li>Sign in to the VirgoX Cloud PC workstation</li>
+      <li>Read your account email and device list</li>
+      <li>Nothing is stored outside this browser session</li>
+    </ul>
+
+    <p class="foot" id="origin"></p>
+  </main>
+
+<script>
+(function () {
+  'use strict';
+
+  // Keep this in sync with VXC_AUTH.base in app.js.
+  var BASE = 'https://virgox-auth.onrender.com';
+
+  var form = document.getElementById('form');
+  var input = document.getElementById('code');
+  var submit = document.getElementById('submit');
+  var status = document.getElementById('status');
+  var warn = document.getElementById('svc-warn');
+  var origin = document.getElementById('origin');
+
+  origin.textContent = 'VirgoX Cloud PC · ' + location.host;
+
+  function say(kind, text) {
+    status.className = 'status show ' + kind;
+    status.textContent = text;
+  }
+
+  function normalise(v) {
+    var raw = (v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (raw.length > 9) raw = raw.slice(0, 9);
+    if (raw.length > 4) raw = raw.slice(0, 4) + '-' + raw.slice(4);
+    return raw;
+  }
+
+  input.addEventListener('input', function () {
+    input.value = normalise(input.value);
+    submit.disabled = input.value.replace('-', '').length < 8;
+  });
+
+  submit.disabled = true;
+
+  // Health probe so a dead service is announced before the user types a code.
+  fetch(BASE + '/health', { cache: 'no-store' })
+    .then(function (r) { if (!r.ok) throw new Error('bad status'); })
+    .then(function () { warn.hidden = true; })
+    .catch(function () { warn.hidden = false; });
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var code = input.value.replace('-', '').trim();
+    if (code.length < 8) { say('err', 'Enter the full 8-character code.'); return; }
+
+    submit.disabled = true;
+    say('wait', 'Authorising…');
+
+    fetch(BASE + '/device/approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_code: code })
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (res) {
+        if (!res.ok) throw new Error(res.data.error_description || res.data.error || 'Authorisation failed');
+        say('ok', 'Approved. Go back to the terminal — it will pick this up within a few seconds.');
+        input.value = '';
+        setTimeout(function () { submit.disabled = true; }, 1200);
+      })
+      .catch(function (err) {
+        say('err', err.message);
+        submit.disabled = false;
+      });
+  });
+
+  input.focus();
+})();
+</script>
+</body>
+</html>

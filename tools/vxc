@@ -1,0 +1,447 @@
+#!/data/data/com.termux/files/usr/bin/sh
+# vxc — VirgoX Cloud PC command line
+#
+#   vxc auth login     device login: prints a one-time code and a link,
+#                      waits for you to approve it on any device, then hands
+#                      the session to the web workstation
+#   vxc auth status    who is this machine signed in as
+#   vxc auth logout    drop the stored session
+#   vxc auth token     print the session token
+#   vxc app <name>     open an app in the web workstation
+#   vxc apps           list the apps you can open
+#
+# POSIX sh, no jq, no node. curl if present, otherwise wget.
+
+set -u
+
+VXC_VERSION="1.0.0"
+
+# ---- config ---------------------------------------------------------------
+
+CONFIG_DIR="${VXC_CONFIG_DIR:-$HOME/.config/vxc}"
+CONFIG_FILE="$CONFIG_DIR/config"
+SESSION_FILE="$CONFIG_DIR/session"
+
+# Base URL of the VirgoX auth service. Override with VXC_AUTH or `vxc config`.
+AUTH_BASE="${VXC_AUTH:-}"
+CLIENT_ID="${VXC_CLIENT_ID:-virgox-cloud-pc}"
+SCOPE="${VXC_SCOPE:-workstation:read}"
+WORKSTATION_URL="${VXC_WORKSTATION:-https://darkvirgoyt-beep.github.io/VirgoX-Cloud-Computer/}"
+
+if [ -z "$AUTH_BASE" ] && [ -f "$CONFIG_FILE" ]; then
+  # shellcheck disable=SC1090
+  . "$CONFIG_FILE"
+fi
+AUTH_BASE="${VXC_AUTH:-$AUTH_BASE}"
+
+# ---- output ---------------------------------------------------------------
+
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+  C_DIM=$(printf '\033[2m'); C_RED=$(printf '\033[31m'); C_GRN=$(printf '\033[32m')
+  C_YLW=$(printf '\033[33m'); C_BLU=$(printf '\033[34m'); C_BLD=$(printf '\033[1m')
+  C_OFF=$(printf '\033[0m')
+else
+  C_DIM=""; C_RED=""; C_GRN=""; C_YLW=""; C_BLU=""; C_BLD=""; C_OFF=""
+fi
+
+say()  { printf '%s\n' "$*"; }
+dim()  { printf '%s%s%s\n' "$C_DIM" "$*" "$C_OFF"; }
+ok()   { printf '%s✓%s %s\n' "$C_GRN" "$C_OFF" "$*"; }
+bad()  { printf '%s✖%s %s\n' "$C_RED" "$C_OFF" "$*" >&2; }
+warn() { printf '%s!%s %s\n' "$C_YLW" "$C_OFF" "$*" >&2; }
+
+# ---- http -----------------------------------------------------------------
+
+have_curl=0
+command -v curl >/dev/null 2>&1 && have_curl=1
+
+# Split "<body>\n<status>" using shell expansion only.
+#
+# This deliberately avoids `... | tail -n1`: piping into tail is unreliable on
+# some Android/Termux builds, and two extra forks per request is wasted anyway.
+NL='
+'
+HTTP_STATUS=""
+RESP=""
+
+# http_post <url> <json-body>  -> sets $RESP and $HTTP_STATUS (globals, not stdout:
+# $(...) runs in a subshell so assignments made inside it are lost on return)
+http_post() {
+  _url="$1"; _json="$2"
+  if [ "$have_curl" -eq 1 ]; then
+    _out=$(curl -sS -X POST "$_url" \
+      -H 'Content-Type: application/json' \
+      -H 'Accept: application/json' \
+      -d "$_json" -w '\n%{http_code}' 2>/dev/null)
+  elif command -v wget >/dev/null 2>&1; then
+    _out=$(wget -q -O- --header='Content-Type: application/json' \
+      --post-data="$_json" "$_url" 2>/dev/null; printf '\n000')
+  else
+    HTTP_STATUS="000"; RESP=""
+    bad "need curl or wget — run: pkg install curl"
+    return 127
+  fi
+  HTTP_STATUS="${_out##*${NL}}"
+  RESP="${_out%${NL}*}"
+}
+
+# http_post_form <url> <form-encoded> -> same
+http_post_form() {
+  _url="$1"; _form="$2"
+  if [ "$have_curl" -eq 1 ]; then
+    _out=$(curl -sS -X POST "$_url" \
+      -H 'Content-Type: application/x-www-form-urlencoded' \
+      -H 'Accept: application/json' \
+      --data "$_form" -w '\n%{http_code}' 2>/dev/null)
+  elif command -v wget >/dev/null 2>&1; then
+    _out=$(wget -q -O- --header='Content-Type: application/x-www-form-urlencoded' \
+      --post-data="$_form" "$_url" 2>/dev/null; printf '\n000')
+  else
+    HTTP_STATUS="000"; RESP=""
+    bad "need curl or wget — run: pkg install curl"
+    return 127
+  fi
+  HTTP_STATUS="${_out##*${NL}}"
+  RESP="${_out%${NL}*}"
+}
+
+# ---- json (no jq) ---------------------------------------------------------
+
+# json_get <json> <key>  -> raw value with quotes stripped
+json_get() {
+  printf '%s' "$1" \
+    | tr ',' '\n' \
+    | grep -m1 "\"$2\"" \
+    | sed -E "s/^.*\"$2\"[[:space:]]*:[[:space:]]*//" \
+    | sed -E 's/[,}[:space:]]*$//' \
+    | sed -E 's/^"//; s/"$//' \
+    || true
+}
+
+# ---- session file ---------------------------------------------------------
+
+session_set() {
+  mkdir -p "$CONFIG_DIR"
+  chmod 700 "$CONFIG_DIR"
+  umask 077
+  printf '%s\n' "$1" > "$SESSION_FILE"
+  chmod 600 "$SESSION_FILE"
+  umask 022
+}
+
+session_get() {
+  [ -f "$SESSION_FILE" ] || return 1
+  grep -m1 "^$1=" "$SESSION_FILE" | cut -d= -f2-
+}
+
+# ---- commands -------------------------------------------------------------
+
+require_auth_base() {
+  if [ -z "$AUTH_BASE" ]; then
+    bad "no auth service configured."
+    say ""
+    say "  Set one, either for this shell:"
+    say ""
+    say "    ${C_BLD}export VXC_AUTH=https://your-auth-host${C_OFF}"
+    say ""
+    say "  or permanently:"
+    say ""
+    say "    ${C_BLD}vxc config set auth https://your-auth-host${C_OFF}"
+    say ""
+    say "  Then run ${C_BLD}vxc auth login${C_OFF} again."
+    exit 2
+  fi
+}
+
+cmd_login() {
+  require_auth_base
+
+  if [ -n "$(session_get token 2>/dev/null)" ]; then
+    warn "already signed in as $(session_get email 2>/dev/null)"
+    say "  Run ${C_BLD}vxc auth logout${C_OFF} first, or just continue."
+    say ""
+  fi
+
+  printf '%s\n' ""
+  printf '%sVirgoX Cloud PC — device login%s\n' "$C_BLD$C_BLU" "$C_OFF"
+  printf '%s\n' ""
+  printf '  Contacting %s … ' "$AUTH_BASE"
+
+  http_post "$AUTH_BASE/device/code" \
+    "{\"client_id\":\"$CLIENT_ID\",\"scope\":\"$SCOPE\"}"
+  resp="$RESP"
+
+  if [ "$HTTP_STATUS" = "000" ] || [ -z "$resp" ]; then
+    printf '%s\n' ""
+    bad "could not reach the auth service"
+    say ""
+    dim "  Checked $AUTH_BASE"
+    exit 1
+  fi
+
+  if [ "$HTTP_STATUS" != "200" ]; then
+    printf '%s\n' "failed"
+    err=$(json_get "$resp" error)
+    desc=$(json_get "$resp" error_description)
+    bad "auth service returned HTTP $HTTP_STATUS${err:+ ($err)}"
+    [ -n "$desc" ] && say "  $desc"
+    exit 1
+  fi
+
+  device_code=$(json_get "$resp" device_code)
+  user_code=$(json_get "$resp" user_code)
+  verify_uri=$(json_get "$resp" verification_uri_complete)
+  [ -z "$verify_uri" ] && verify_uri=$(json_get "$resp" verification_uri)
+  expires_in=$(json_get "$resp" expires_in)
+  interval=$(json_get "$resp" interval)
+  [ -z "$expires_in" ] && expires_in=900
+  [ -z "$interval" ] && interval=5
+
+  if [ -z "$device_code" ] || [ -z "$user_code" ]; then
+    printf '%s\n' "failed"
+    bad "auth service did not return a device code"
+    exit 1
+  fi
+
+  printf '%s\n' "ok"
+  printf '%s\n' ""
+  printf '  %sCopy this one-time code:%s  %s%s%s\n' "$C_DIM" "$C_OFF" "$C_BLD$C_GRN" "$user_code" "$C_OFF"
+  printf '%s\n' ""
+  printf '  %sOpen this link on any phone or computer:%s\n' "$C_DIM" "$C_OFF"
+  printf '\n    %s%s%s\n\n' "$C_BLU" "$verify_uri" "$C_OFF"
+  printf '  %sWaiting for approval — expires in %s min. Ctrl-C to cancel.%s\n\n' \
+    "$C_DIM" "$((expires_in / 60))" "$C_OFF"
+
+  # Open the link automatically if the user has a desktop browser.
+  if command -v termux-open-url >/dev/null 2>&1; then
+    termux-open-url "$verify_uri" >/dev/null 2>&1 && dim "  (opened in your browser)"
+    printf '\n'
+  fi
+
+  deadline=$(( $(date +%s) + expires_in ))
+  waited=0
+
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    sleep "$interval"
+
+    http_post_form "$AUTH_BASE/token" \
+      "client_id=$CLIENT_ID&device_code=$device_code&grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code"
+    resp="$RESP"
+
+    token=$(json_get "$resp" access_token)
+    if [ -n "$token" ]; then
+      email=$(json_get "$resp" user_email)
+      [ -z "$email" ] && email=$(json_get "$resp" email)
+      granted_scope=$(json_get "$resp" scope)
+
+      session_set "token=$token
+email=$email
+scope=$granted_scope
+auth=$AUTH_BASE
+granted_at=$(date +%s)"
+
+      printf '\n'
+      ok "authenticated as ${C_BLD}$email${C_OFF}"
+      dim "  scope      $granted_scope"
+      dim "  endpoint   $AUTH_BASE"
+
+      # Hand the session to the web workstation.
+      http_post "$AUTH_BASE/session/push" \
+        "{\"token\":\"$token\",\"email\":\"$email\",\"scope\":\"$granted_scope\"}"
+      if [ "$HTTP_STATUS" = "200" ]; then
+        printf '\n'
+        ok "web workstation session queued"
+        say ""
+        say "  ${C_DIM}Open this on the same browser you use for the PC:${C_OFF}"
+        say "  ${C_BLU}$WORKSTATION_URL${C_OFF}"
+        say ""
+        say "  ${C_DIM}It will sign itself in from the queued session.${C_OFF}"
+        say ""
+      else
+        warn "could not queue the web session (HTTP $HTTP_STATUS)"
+        dim "  the token is stored locally — vxc auth status still works"
+      fi
+      return 0
+    fi
+
+    err=$(json_get "$resp" error)
+    case "$err" in
+      authorization_pending)
+        waited=$((waited + interval))
+        printf '\r  %s· waiting for approval… %ss%s' "$C_DIM" "$waited" "$C_OFF"
+        ;;
+      slow_down)
+        interval=$((interval + 5))
+        printf '\r  %s· service asked us to slow down, polling every %ss%s' "$C_DIM" "$interval" "$C_OFF"
+        ;;
+      access_denied)
+        printf '\r%s%s%s\n' "$(printf '\r\033[2K')" "" ""
+        bad "the request was denied"
+        exit 1
+        ;;
+      expired_token)
+        printf '\r%s%s%s\n' "$(printf '\r\033[2K')" "" ""
+        bad "the code expired before it was approved"
+        say "  Run ${C_BLD}vxc auth login${C_OFF} again for a fresh code."
+        exit 1
+        ;;
+      *)
+        printf '\r%s%s%s\n' "$(printf '\r\033[2K')" "" ""
+        desc=$(json_get "$resp" error_description)
+        bad "auth error: ${err:-unknown}${desc:+ — $desc}"
+        exit 1
+        ;;
+    esac
+  done
+
+  printf '\r%s%s%s\n' "$(printf '\r\033[2K')" "" ""
+  bad "timed out waiting for approval"
+  exit 1
+}
+
+cmd_status() {
+  token=$(session_get token 2>/dev/null)
+  if [ -z "$token" ]; then
+    say ""
+    warn "not signed in"
+    say "  Run ${C_BLD}vxc auth login${C_OFF} to sign in."
+    say ""
+    return 1
+  fi
+  say ""
+  ok "signed in"
+  dim "  account   $(session_get email)"
+  dim "  scope     $(session_get scope)"
+  dim "  endpoint  $(session_get auth)"
+  dim "  token     $(printf '%s' "$token" | cut -c1-8)…$(printf '%s' "$token" | rev | cut -c1-4 | rev)"
+  say ""
+}
+
+cmd_token() {
+  token=$(session_get token 2>/dev/null)
+  if [ -z "$token" ]; then
+    bad "not signed in"
+    exit 1
+  fi
+  printf '%s\n' "$token"
+}
+
+cmd_logout() {
+  if [ -f "$SESSION_FILE" ]; then
+    auth=$(session_get auth)
+    token=$(session_get token)
+    if [ -n "$auth" ] && [ -n "$token" ]; then
+      http_post "$auth/session/revoke" "{\"token\":\"$token\"}" >/dev/null 2>&1 || true
+    fi
+    rm -f "$SESSION_FILE"
+    ok "session cleared from this device"
+  else
+    dim "no stored session"
+  fi
+}
+
+cmd_config() {
+  case "${1:-}" in
+    set)
+      key="${2:-}"; val="${3:-}"
+      [ -z "$key" ] && { bad "usage: vxc config set <auth|workstation> <url>"; exit 2; }
+      mkdir -p "$CONFIG_DIR"
+      touch "$CONFIG_FILE"
+      grep -v "^$key=" "$CONFIG_FILE" > "$CONFIG_FILE.tmp" 2>/dev/null || true
+      printf '%s=%s\n' "$key" "$val" >> "$CONFIG_FILE.tmp"
+      mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
+      ok "$key = $val"
+      ;;
+    get)
+      key="${2:-}"
+      [ -f "$CONFIG_FILE" ] && grep -m1 "^$key=" "$CONFIG_FILE" | cut -d= -f2- || true
+      ;;
+    *)
+      say "usage: vxc config set <key> <value> | vxc config get <key>"
+      ;;
+  esac
+}
+
+cmd_apps() {
+  say ""
+  say "${C_BLD}Apps in the web workstation${C_OFF}"
+  say ""
+  say "  ${C_BLD}browser${C_OFF}        Microsoft Edge"
+  say "  ${C_BLD}chrome${C_OFF}         Google Chrome"
+  say "  ${C_BLD}vscode${C_OFF}         Visual Studio Code"
+  say "  ${C_BLD}blender${C_OFF}        Blender"
+  say "  ${C_BLD}photoshop${C_OFF}      Photopea  ${C_DIM}(real Photoshop alternative, runs in the browser)${C_OFF}"
+  say "  ${C_BLD}files${C_OFF}          File Explorer"
+  say "  ${C_BLD}terminal${C_OFF}       Terminal"
+  say "  ${C_BLD}settings${C_OFF}       Settings"
+  say "  ${C_BLD}taskmgr${C_OFF}        Task Manager"
+  say ""
+  say "  ${C_DIM}vxc app vscode${C_OFF}"
+  say ""
+}
+
+cmd_app() {
+  name="${1:-}"
+  if [ -z "$name" ]; then
+    cmd_apps
+    exit 2
+  fi
+  say ""
+  dim "  opening '$name' in the web workstation"
+  say "  ${C_BLU}$WORKSTATION_URL?open=$name${C_OFF}"
+  say ""
+  if command -v termux-open-url >/dev/null 2>&1; then
+    termux-open-url "$WORKSTATION_URL?open=$name" >/dev/null 2>&1 && ok "opened"
+  else
+    warn "termux-api not installed — install it to open links automatically:"
+    say "    ${C_BLD}pkg install termux-api${C_OFF}"
+  fi
+}
+
+usage() {
+  cat <<EOF
+
+${C_BLD}vxc${C_OFF} $VXC_VERSION — VirgoX Cloud PC
+
+${C_BLD}USAGE${C_OFF}
+  vxc auth login              sign in with a one-time code
+  vxc auth status             show the current session
+  vxc auth logout             clear the session
+  vxc auth token              print the session token
+  vxc app <name>              open an app in the web workstation
+  vxc apps                    list available apps
+  vxc config set auth <url>   point at your auth service
+  vxc version
+
+${C_BLD}ENV${C_OFF}
+  VXC_AUTH            auth service base URL
+  VXC_WORKSTATION     workstation URL
+  VXC_SCOPE           OAuth scope (default: $SCOPE)
+
+EOF
+}
+
+# ---- dispatch -------------------------------------------------------------
+
+case "${1:-}" in
+  auth)
+    case "${2:-}" in
+      login)            shift 2; cmd_login "$@" ;;
+      status|whoami)    cmd_status ;;
+      token)            cmd_token ;;
+      logout|signout)   cmd_logout ;;
+      *)
+        say ""
+        bad "unknown: vxc auth ${2:-}"
+        usage
+        exit 2
+        ;;
+    esac
+    ;;
+  app)     shift; cmd_app "$@" ;;
+  apps)    cmd_apps ;;
+  config)  shift; cmd_config "$@" ;;
+  version|--version|-v) say "vxc $VXC_VERSION" ;;
+  help|--help|-h|"") usage ;;
+  *)       say ""; bad "unknown command: $1"; usage; exit 2 ;;
+esac

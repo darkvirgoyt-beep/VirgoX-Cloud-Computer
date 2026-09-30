@@ -1291,8 +1291,9 @@ html, body {
   line-height: 1;
 }
 
+/* display stays none — the rule above collapses this. Kept only for the
+   column layout in case it is ever re-shown. */
 .pill-text-block {
-  display: flex;
   flex-direction: column;
   text-align: left;
 }

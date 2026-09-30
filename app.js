@@ -221,6 +221,275 @@
     });
   }
 
+  // ==========================================================================
+  //  vxc auth — OAuth 2.0 device authorization grant, driven from the terminal.
+  //  Modelled on `gh auth login`: the CLI prints a one-time user code and a
+  //  verification link, the user opens that link on any device and types the
+  //  code, and the CLI polls until the service reports the grant is complete.
+  // ==========================================================================
+
+  // Single point of configuration. This page is static, so the service has to be
+  // somewhere else; point this at wherever server/auth-service.js is running.
+  const VXC_AUTH = {
+    base: 'https://virgox-auth.onrender.com',
+    client: 'virgox-cloud-pc',
+    scope: 'workstation:read',
+    store: {
+      token: 'virgox_session_token',
+      user: 'virgox_user_email',
+      authed: 'virgox_authenticated',
+      meta: 'virgox_auth_meta'
+    }
+  };
+
+  // Survives `vxc auth login cancel` — the poll loop checks this each tick.
+  const vxcLogin = { active: false, deviceCode: null, cancelled: false };
+
+  const vxcSleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+  async function vxcPostJson(url, payload) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      throw new Error(`auth service returned non-JSON (HTTP ${res.status})`);
+    }
+    if (!res.ok) throw new Error(data.error_description || data.error || `HTTP ${res.status}`);
+    return data;
+  }
+
+  async function vxcPostForm(url, params) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+      body: new URLSearchParams(params).toString()
+    });
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      throw new Error(`auth service returned non-JSON (HTTP ${res.status})`);
+    }
+  }
+
+  function vxcWriteSession(token, email, meta) {
+    sessionStorage.setItem(VXC_AUTH.store.authed, 'true');
+    sessionStorage.setItem(VXC_AUTH.store.token, token);
+    sessionStorage.setItem(VXC_AUTH.store.user, String(email || '').toLowerCase());
+    sessionStorage.setItem(VXC_AUTH.store.meta, JSON.stringify(meta || {}));
+  }
+
+  function vxcClearSession() {
+    Object.values(VXC_AUTH.store).forEach(k => sessionStorage.removeItem(k));
+  }
+
+  function vxcCurrentUser() {
+    const meta = sessionStorage.getItem(VXC_AUTH.store.meta);
+    return {
+      token: sessionStorage.getItem(VXC_AUTH.store.token),
+      email: sessionStorage.getItem(VXC_AUTH.store.user),
+      meta: meta ? JSON.parse(meta) : null
+    };
+  }
+
+  async function runVxcCommand(rawArgs, output, termBody) {
+    const scroll = () => { if (termBody) termBody.scrollTop = termBody.scrollHeight; };
+    const put = html => { output.innerHTML += html; scroll(); };
+
+    const parts = (rawArgs || '').trim().split(/\s+/).filter(Boolean);
+    const sub = (parts[0] || 'help').toLowerCase();
+
+    if (sub === 'help' || sub === '--help' || sub === '-h') {
+      put(`\n<b>vxc auth</b> — device login for the VirgoX Cloud PC\n\n` +
+          `  <b>vxc auth login</b>     print a one-time code + link, then poll until approved\n` +
+          `  <b>vxc auth status</b>   show the account this workstation is signed in as\n` +
+          `  <b>vxc auth token</b>    print the session token (masked unless --show)\n` +
+          `  <b>vxc auth logout</b>   clear the stored session from this browser\n\n` +
+          `  <b>vxc</b> with no arguments prints this list.\n`);
+      return;
+    }
+
+    if (sub === 'status') {
+      const cur = vxcCurrentUser();
+      if (!cur.token) {
+        put(`\n  ○ not logged in — run <b>vxc auth login</b>\n`);
+        return;
+      }
+      put(`\n  ✓ signed in\n`);
+      put(`    account    ${escapeHtml(cur.email || '(unknown)')}\n`);
+      if (cur.meta && cur.meta.device) put(`    device     ${escapeHtml(cur.meta.device)}\n`);
+      if (cur.meta && cur.meta.granted_at) {
+        put(`    granted    ${escapeHtml(new Date(cur.meta.granted_at).toLocaleString())}\n`);
+      }
+      if (cur.meta && cur.meta.scope) put(`    scope      ${escapeHtml(cur.meta.scope)}\n`);
+      put(`    endpoint   ${escapeHtml(VXC_AUTH.base)}\n\n`);
+      return;
+    }
+
+    if (sub === 'token') {
+      const cur = vxcCurrentUser();
+      if (!cur.token) {
+        put(`\n  ✖ not logged in — run <b>vxc auth login</b>\n`);
+        return;
+      }
+      const show = parts.includes('--show') || parts.includes('--raw');
+      const shown = show ? cur.token : cur.token.slice(0, 8) + '…' + cur.token.slice(-4);
+      put(`\n  ${escapeHtml(shown)}\n`);
+      if (!show) put(`  (pass --show to print the whole token)\n`);
+      put(`\n`);
+      return;
+    }
+
+    if (sub === 'logout') {
+      vxcClearSession();
+      put(`\n  ✓ session cleared from this browser\n\n`);
+      return;
+    }
+
+    if (sub !== 'login') {
+      put(`\n  ✖ unknown command: vxc auth ${escapeHtml(sub)}\n`);
+      put(`    type <b>vxc auth help</b> for the list\n\n`);
+      return;
+    }
+
+    // ---- vxc auth login ------------------------------------------------
+    if (vxcLogin.active) {
+      put(`\n  ✖ a login is already running — cancel it with <b>vxc auth login cancel</b>\n\n`);
+      return;
+    }
+
+    vxcLogin.active = true;
+    vxcLogin.cancelled = false;
+    vxcLogin.deviceCode = null;
+
+    const finish = () => { vxcLogin.active = false; vxcLogin.deviceCode = null; vxcLogin.cancelled = false; };
+
+    const cancelRequested = parts.includes('cancel');
+    if (cancelRequested) {
+      vxcLogin.cancelled = true;
+      vxcLogin.deviceCode = null;
+      finish();
+      put(`\n  ✓ login cancelled\n\n`);
+      return;
+    }
+
+    put(`\n<b>VirgoX Cloud PC — device login</b>\n\n  Requesting a code from ${escapeHtml(VXC_AUTH.base)} … `);
+
+    let device;
+    try {
+      device = await vxcPostJson(`${VXC_AUTH.base}/device/code`, {
+        client_id: VXC_AUTH.client,
+        scope: VXC_AUTH.scope
+      });
+    } catch (err) {
+      finish();
+      put(`failed\n\n`);
+      put(`  ✖ ${escapeHtml(err.message)}\n\n`);
+      put(`  This workstation is a static page, so the device flow needs the\n`);
+      put(`  VirgoX auth service to be running somewhere reachable. Start it:\n\n`);
+      put(`      node server/auth-service.js\n\n`);
+      put(`  Then point VXC_AUTH.base in app.js at it and run this again.\n\n`);
+      return;
+    }
+
+    if (!device || !device.device_code || !device.user_code) {
+      finish();
+      put(`failed\n\n  ✖ auth service did not return a device code\n\n`);
+      return;
+    }
+
+    vxcLogin.deviceCode = device.device_code;
+
+    const verifyUri = device.verification_uri_complete || device.verification_uri || VXC_AUTH.base;
+    const expiresIn = Number(device.expires_in) || 900;
+
+    put(`ok\n\n`);
+    put(`  ┌────────────────────────────────────────────────────────────┐\n`);
+    put(`  │  First copy your one-time code:  <b>${escapeHtml(device.user_code)}</b>${' '.repeat(Math.max(1, 22 - String(device.user_code).length))}│\n`);
+    put(`  │  Then open this link on any device:                        │\n`);
+    put(`  │  <span style="color:#60a5fa; word-break:break-all;">${escapeHtml(verifyUri)}</span>${' '.repeat(Math.max(1, 52 - verifyUri.length))}│\n`);
+    put(`  └────────────────────────────────────────────────────────────┘\n\n`);
+    put(`  Waiting for you to authorise… <span style="opacity:.6">(expires in ${Math.round(expiresIn / 60)} min, cancel with <b>vxc auth login cancel</b>)</span>\n`);
+
+    let interval = (Number(device.interval) || 5) * 1000;
+    const deadline = Date.now() + expiresIn * 1000;
+    let elapsed = 0;
+
+    while (Date.now() < deadline) {
+      await vxcSleep(interval);
+
+      if (vxcLogin.cancelled || vxcLogin.deviceCode !== device.device_code) {
+        finish();
+        put(`\n  ✓ cancelled\n\n`);
+        return;
+      }
+
+      let poll;
+      try {
+        poll = await vxcPostForm(`${VXC_AUTH.base}/token`, {
+          client_id: VXC_AUTH.client,
+          device_code: device.device_code,
+          grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
+        });
+      } catch (err) {
+        // A transport blip is not a denial — keep polling until the deadline.
+        elapsed = Math.min(60, elapsed + 1);
+        put(`<span style="opacity:.55">· ${escapeHtml(err.message)} (retrying)</span>\n`);
+        continue;
+      }
+
+      if (poll.access_token) {
+        vxcWriteSession(poll.access_token, poll.user_email || poll.email, {
+          device: device.device || 'cloud-pc',
+          scope: poll.scope || VXC_AUTH.scope,
+          granted_at: Date.now()
+        });
+        finish();
+        put(`\n  ✓ authenticated as <b>${escapeHtml(poll.user_email || poll.email || 'unknown')}</b>\n`);
+        put(`    token stored in sessionStorage · scope ${escapeHtml(poll.scope || VXC_AUTH.scope)}\n`);
+        put(`    reload the workstation page to apply it\n\n`);
+        return;
+      }
+
+      if (poll.error === 'authorization_pending') {
+        elapsed += 5;
+        put(`<span style="opacity:.55">· still waiting… ${elapsed}s</span>\n`);
+        continue;
+      }
+
+      if (poll.error === 'slow_down') {
+        interval += 5000;
+        put(`<span style="opacity:.55">· service asked us to slow down, polling every ${interval / 1000}s</span>\n`);
+        continue;
+      }
+
+      if (poll.error === 'access_denied') {
+        finish();
+        put(`\n  ✖ the request was denied\n\n`);
+        return;
+      }
+
+      if (poll.error === 'expired_token') {
+        finish();
+        put(`\n  ✖ the code expired before it was approved — run <b>vxc auth login</b> again\n\n`);
+        return;
+      }
+
+      finish();
+      put(`\n  ✖ ${escapeHtml(poll.error_description || poll.error || 'unknown auth error')}\n\n`);
+      return;
+    }
+
+    finish();
+    put(`\n  ✖ timed out waiting for approval — the code has expired\n\n`);
+  }
+
   // Initialize
   function init() {
     const tasks = [
@@ -2210,7 +2479,7 @@ Display Engine:            120 FPS Hardware Synchronized Compositor\n`;
         }
 
         if (!executed) {
-          runLocalShellFallback(cmd, output, promptEl);
+          await runLocalShellFallback(cmd, output, promptEl, termBody);
         }
 
         if (termBody) termBody.scrollTop = termBody.scrollHeight;
@@ -2221,7 +2490,9 @@ Display Engine:            120 FPS Hardware Synchronized Compositor\n`;
     setTimeout(() => input.focus(), 80);
   }
 
-  function runLocalShellFallback(cmd, output, promptEl) {
+  // Async because `vxc auth login` is a long-running device-flow poll loop; the
+  // keydown handler above awaits this before scrolling.
+  async function runLocalShellFallback(cmd, output, promptEl, termBody) {
     const lower = cmd.toLowerCase().trim();
     if (lower === 'help') {
       output.innerHTML += `VirgoX Core Commands:
@@ -2234,6 +2505,7 @@ Display Engine:            120 FPS Hardware Synchronized Compositor\n`;
   • free -h / df -h  - Memory and 5.0 TB storage metrics
   • ps / top         - View system processes
   • apt / python3    - Software execution tools
+  • vxc auth <cmd>   - Device login (login / status / token / logout)
   • cls / clear      - Clear terminal screen\n`;
     } else if (lower === 'pwd') {
       output.innerHTML += `${termCwd}\n`;
@@ -2306,8 +2578,10 @@ server.py   s.json      style.css      scripts/  desktop-shortcuts/\n`;
       } else {
         output.innerHTML += `Python 3.12.3 active. Type exit() to leave or use python3 -c 'code'.\n`;
       }
+    } else if (lower === 'vxc' || lower.startsWith('vxc ')) {
+      await runVxcCommand(cmd.replace(/^\s*vxc\s*/i, ''), output, termBody);
     } else {
-      output.innerHTML += `Executed: ${cmd} (Local fallback active — Connect bridge port 8888 for live execution)\n`;
+      output.innerHTML += `Executed: ${escapeHtml(cmd)} (Local fallback active — Connect bridge port 8888 for live execution)\n`;
     }
   }
 
