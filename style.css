@@ -256,7 +256,12 @@ html, body {
   display: block;
 }
 
-/* Screen as Touchpad Overlay */
+/* Screen as Touchpad Overlay
+   Inert by default. The overlay is only allowed to take pointer input while the
+   trackpad is actually armed (.trackpad-active on .screen-wrapper, applied by
+   updateTrackpadUI in app.js). A transparent full-size catcher that is
+   pointer-events:auto at rest will sit above .native-cyber-desktop (z-index 10)
+   and swallow every click on the desktop, so the default must be none. */
 .screen-touchpad-overlay {
   position: absolute;
   top: 0;
@@ -268,6 +273,11 @@ html, body {
   user-select: none;
   -webkit-user-select: none;
   background: transparent;
+  cursor: default;
+  pointer-events: none;
+}
+
+.screen-wrapper.trackpad-active .screen-touchpad-overlay {
   cursor: grab;
   pointer-events: auto;
 }
