@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=VS Code & Codespace
+Comment=Visual Studio Code & Cloud IDE Suite
+Exec=google-chrome-stable --app=https://github.com/codespaces
+Icon=/usr/share/icons/virgox/codespace.svg
+Terminal=false
+StartupNotify=true
+Categories=Development;IDE;

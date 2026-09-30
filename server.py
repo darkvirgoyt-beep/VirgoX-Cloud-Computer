@@ -630,6 +630,30 @@ class BridgeHandler(BaseHTTPRequestHandler):
             self._respond_ok({"status": "ok", "tokens": tokens})
             return
 
+        elif path == "/api/ai/access_status":
+            qs = parse_qs(parsed.query)
+            email = qs.get("email", [""])[0].strip().lower()
+            if not email:
+                email = "darkvirgoyt@gmail.com"
+            cloud = get_user_cloud(email) or {}
+            ai_perms = cloud.get("ai_permissions", {
+                "granted": True,
+                "scope": "workspace",
+                "can_execute": True,
+                "can_mouse": True,
+                "can_view_screen": True
+            })
+            safe_email = "".join(c for c in email.lower() if c.isalnum() or c in ("@", ".", "_", "-"))
+            user_ws = os.path.join(USER_CLOUDS_DIR, safe_email, "workspace")
+            os.makedirs(user_ws, exist_ok=True)
+            self._respond_ok({
+                "status": "ok",
+                "email": email,
+                "ai_permissions": ai_perms,
+                "workspace_path": user_ws
+            })
+            return
+
         elif path == "/api/user/download_backup":
             qs = parse_qs(parsed.query)
             filename = qs.get("filename", [""])[0].strip()
@@ -1025,6 +1049,30 @@ print(json.dumps(apps))
                 "output": sanitize_output(out),
                 "error": sanitize_output(err),
                 "code": code
+            })
+
+        elif path == "/api/ai/grant_access":
+            email = payload.get("email", "").strip().lower()
+            granted = bool(payload.get("granted", True))
+            can_exec = bool(payload.get("can_execute", True))
+            can_mouse = bool(payload.get("can_mouse", True))
+            can_vision = bool(payload.get("can_view_screen", True))
+            if not email:
+                email = "darkvirgoyt@gmail.com"
+            cloud = get_user_cloud(email) or {}
+            cloud["ai_permissions"] = {
+                "granted": granted,
+                "can_execute": can_exec,
+                "can_mouse": can_mouse,
+                "can_view_screen": can_vision,
+                "updated_at": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
+            }
+            save_user_cloud(email, cloud)
+            log_user_activity(email, "AI_PERMISSION_CHANGE", f"AI Access set to: {granted} (Exec={can_exec}, Mouse={can_mouse})")
+            self._respond_ok({
+                "status": "ok",
+                "message": f"AI permissions updated for {email}",
+                "ai_permissions": cloud["ai_permissions"]
             })
 
         elif path == "/api/user/sync_cloud_data":

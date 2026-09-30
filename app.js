@@ -1666,6 +1666,64 @@
       });
     }
 
+    // AI Pair-Programming Delegation Access Control
+    const btnToggleAiAccess = document.getElementById('btn-toggle-ai-access');
+    const aiAccessState = document.getElementById('ai-access-state');
+    const aiUserWorkspace = document.getElementById('ai-user-workspace');
+
+    async function updateAiAccessUI() {
+      const email = (sessionStorage.getItem('virgox_user_email') || 'darkvirgoyt@gmail.com').toLowerCase();
+      if (aiUserWorkspace) {
+        aiUserWorkspace.textContent = `/home/darkvirgoyt/virgox_user_clouds/${email}/workspace`;
+      }
+      try {
+        const bridgeUrl = state.config.bridgeUrl || 'http://localhost:8888';
+        const res = await fetch(`${bridgeUrl}/api/ai/access_status?email=${encodeURIComponent(email)}`);
+        if (res.ok) {
+          const data = await res.json();
+          const granted = data.ai_permissions && data.ai_permissions.granted !== false;
+          if (aiAccessState) {
+            aiAccessState.textContent = granted ? 'GRANTED' : 'REVOKED';
+          }
+          if (btnToggleAiAccess) {
+            if (granted) {
+              btnToggleAiAccess.classList.add('neon-green');
+              btnToggleAiAccess.classList.remove('neon-pink');
+            } else {
+              btnToggleAiAccess.classList.add('neon-pink');
+              btnToggleAiAccess.classList.remove('neon-green');
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (btnToggleAiAccess) {
+      btnToggleAiAccess.addEventListener('click', async () => {
+        const email = (sessionStorage.getItem('virgox_user_email') || 'darkvirgoyt@gmail.com').toLowerCase();
+        const currentState = aiAccessState && aiAccessState.textContent === 'GRANTED';
+        const newState = !currentState;
+        try {
+          const bridgeUrl = state.config.bridgeUrl || 'http://localhost:8888';
+          await fetch(`${bridgeUrl}/api/ai/grant_access`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email, granted: newState, can_execute: newState, can_mouse: newState })
+          });
+          if (aiAccessState) aiAccessState.textContent = newState ? 'GRANTED' : 'REVOKED';
+          if (newState) {
+            btnToggleAiAccess.classList.add('neon-green');
+            btnToggleAiAccess.classList.remove('neon-pink');
+          } else {
+            btnToggleAiAccess.classList.add('neon-pink');
+            btnToggleAiAccess.classList.remove('neon-green');
+          }
+        } catch (e) {
+          alert('Could not update AI access status with bridge server.');
+        }
+      });
+    }
+
     // Subtab switching
     subtabBtns.forEach(btn => {
       btn.addEventListener('click', () => {
@@ -1676,7 +1734,10 @@
         const activeContent = document.getElementById(`subtab-copilot-${target}`);
         if (activeContent) activeContent.classList.add('active');
 
-        if (target === 'cloud') loadCloudActivity();
+        if (target === 'cloud') {
+          loadCloudActivity();
+          updateAiAccessUI();
+        }
         if (target === 'history') loadHistoryArchive();
         if (target === 'memory') loadMemoryVault();
       });

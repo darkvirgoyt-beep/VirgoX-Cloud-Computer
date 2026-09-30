@@ -848,6 +848,25 @@
               <div id="cloud-activity-count" style="font-size:1.2rem; font-weight:800; color:var(--neon-amber);">Active</div>
               <div style="font-size:0.75rem; color:var(--text-muted);">Cloud Audit Sync</div>
             </div>
+          <!-- AI Pair-Programming & Workspace Access Control -->
+          <div class="ai-delegation-card" style="background:rgba(15,23,42,0.8); border:1px solid rgba(0,242,254,0.3); border-radius:10px; padding:14px; margin-bottom:16px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+              <div>
+                <h4 style="margin:0; color:var(--neon-cyan); font-size:1rem; display:flex; align-items:center; gap:8px;">
+                  <span>🤖 AI Pair-Programming & CLI Agent Access</span>
+                </h4>
+                <p style="margin:4px 0 0 0; font-size:0.8rem; color:var(--text-muted);">
+                  Allow autonomous AI agents (CLI, Antigravity, OpenCode, Jarvis) to view screen, automate mouse, and assist inside your isolated workspace.
+                </p>
+              </div>
+              <button id="btn-toggle-ai-access" class="cyber-btn sm neon-green" type="button">
+                🛡️ AI ACCESS: <span id="ai-access-state">GRANTED</span>
+              </button>
+            </div>
+            <div style="margin-top:10px; font-size:0.78rem; color:var(--text-muted); background:rgba(0,0,0,0.3); padding:8px 12px; border-radius:6px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+              <span>📁 <strong>Isolated Storage:</strong> <code id="ai-user-workspace" style="color:var(--neon-cyan);">/home/darkvirgoyt/virgox_user_clouds/[your-email]/workspace</code></span>
+              <span style="color:var(--neon-green);">🔒 Zero-leakage multi-tenant sandbox</span>
+            </div>
           </div>
 
           <div class="cloud-timeline-container">
