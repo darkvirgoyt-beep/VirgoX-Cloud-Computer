@@ -232,16 +232,22 @@
       loadFrames();
     }
 
-    function verifyOrOpenExternal(url) {
+    async function verifyOrOpenExternal(url) {
       if (sessionStorage.getItem('virgox_authenticated') === 'true') {
         window.open(url, '_blank');
         return;
       }
-      const pass = prompt('🔑 Enter Master/PC Password (Princeraj@20 or Prince@20) to open Cloud PC in a new tab:');
+      const pass = prompt('🔑 Enter Master/PC Security Key to open Cloud PC in a new tab:');
       if (pass) {
         const p = pass.trim();
-        const valid = ['princeraj@20', 'prince@20', 'darkvirgoyt@20', 'virgox-pro-client-2026', 'vx_sec_darkvirgoyt20_7a9f82d1'];
-        if (valid.includes(p.toLowerCase())) {
+        const pHash = await sha256Hex(p.toLowerCase());
+        const validHashes = [
+          '558c93a71d924e65977c7152aa6260596825d8c118d5d30f43dcfb1797d9bbf0',
+          '0a7a37ae29ae8cb4326cf7684fbded25330bba38b65b501449e9ca8ba67b4de1',
+          '2b90cb3a6ffa02f386e4ad8290a62d4f3d33c8db010e02feb92c1655ea799a2a'
+        ];
+        const valid = ['virgox-pro-client-2026', 'vx_sec_darkvirgoyt20_7a9f82d1'];
+        if (valid.includes(p.toLowerCase()) || validHashes.includes(pHash)) {
           sessionStorage.setItem('virgox_master_unlocked', 'true');
           sessionStorage.setItem('virgox_authenticated', 'true');
           localStorage.setItem('virgox_auth_configured', 'true');
@@ -250,7 +256,7 @@
           window.open(url, '_blank');
           return;
         } else {
-          alert('❌ Incorrect Password. Please enter Princeraj@20 or Prince@20.');
+          alert('❌ Incorrect Password. Please enter your valid Master Security Key.');
         }
       }
       if (authOverlay) {
@@ -2534,12 +2540,12 @@
       });
     }
 
-    // 0. MASTER WEBSITE UNLOCK HANDLER (Darkvirgoyt@20)
+    // 0. MASTER WEBSITE UNLOCK HANDLER
     // ==========================================
     async function handleMasterUnlock(passOverride) {
       const p = (typeof passOverride === 'string' ? passOverride : (inputMasterPass ? inputMasterPass.value : '')).trim();
       if (!p) {
-        showAlert('Please enter your Master Key (Princeraj@20 or Prince@20).');
+        showAlert('Please enter your Master Security Key.');
         if (inputMasterPass) inputMasterPass.focus();
         return;
       }
@@ -2549,14 +2555,18 @@
         btnMasterUnlock.textContent = '⏳ VERIFYING MASTER KEY...';
       }
 
-      // Master key verification
-      const MASTER_KEY = 'Princeraj@20';
-      const PC_KEY = 'Prince@20';
-      const MASTER_HASH = 'ecdf4819d9d83df23bcbfec7fa6d37aa7a48d8b4e876a445e45c719e7631bd95';
-      const enteredHash = await sha256Hex(p);
+      // Master key verification using SHA-256 hashes
+      const MASTER_HASHES = [
+        '558c93a71d924e65977c7152aa6260596825d8c118d5d30f43dcfb1797d9bbf0',
+        '0a7a37ae29ae8cb4326cf7684fbded25330bba38b65b501449e9ca8ba67b4de1',
+        '2b90cb3a6ffa02f386e4ad8290a62d4f3d33c8db010e02feb92c1655ea799a2a',
+        'ecdf4819d9d83df23bcbfec7fa6d37aa7a48d8b4e876a445e45c719e7631bd95'
+      ];
+      const enteredHash = await sha256Hex(p.toLowerCase());
+      const rawHash = await sha256Hex(p);
 
-      const VALID_KEYS = ['princeraj@20', 'prince@20', 'darkvirgoyt@20', 'virgox-pro-client-2026', 'vx_sec_darkvirgoyt20_7a9f82d1'];
-      let authorized = VALID_KEYS.includes(p.toLowerCase()) || (enteredHash === MASTER_HASH);
+      const VALID_KEYS = ['virgox-pro-client-2026', 'vx_sec_darkvirgoyt20_7a9f82d1'];
+      let authorized = VALID_KEYS.includes(p.toLowerCase()) || MASTER_HASHES.includes(enteredHash) || MASTER_HASHES.includes(rawHash);
 
       if (!authorized && state.config.bridgeUrl) {
         try {
@@ -2593,7 +2603,7 @@
           btnMasterUnlock.disabled = false;
           btnMasterUnlock.textContent = '🛡️ UNLOCK CLOUD PC NOW';
         }
-        showAlert('❌ Invalid Password. Enter Princeraj@20, Prince@20, or Sign in with Google.');
+        showAlert('❌ Invalid Master Security Key. Please verify and try again.');
         if (inputMasterPass) {
           inputMasterPass.select();
           inputMasterPass.focus();
@@ -2605,10 +2615,7 @@
       btnMasterUnlock.addEventListener('click', () => handleMasterUnlock());
     }
     if (btnMasterQuick) {
-      btnMasterQuick.addEventListener('click', () => {
-        if (inputMasterPass) inputMasterPass.value = 'Princeraj@20';
-        handleMasterUnlock('Princeraj@20');
-      });
+      btnMasterQuick.style.display = 'none';
     }
     if (inputMasterPass) {
       inputMasterPass.addEventListener('keydown', (e) => {
@@ -2626,8 +2633,8 @@
     function triggerDownloadSJson() {
       const sJsonData = {
         client_id: "VIRGOX-CLIENT-2026-X99",
-        auth_secret: "vx_sec_Darkvirgoyt20_7a9f82d1",
-        master_web_password: "Darkvirgoyt@20",
+        auth_secret: "vx_sec_darkvirgoyt_protected",
+        master_web_hash: "558c93a71d924e65977c7152aa6260596825d8c118d5d30f43dcfb1797d9bbf0",
         target_path: "/storage/emulated/0/boot/s.json",
         endpoints: {
           web_suite: window.location.href,
@@ -2902,14 +2909,20 @@
 
       // Fallback: Local hash & Master Key verification
       if (!authorized) {
-        const VALID_LOGIN_KEYS = ['princeraj@20', 'prince@20', 'darkvirgoyt@20', 'virgox-pro-client-2026', 'vx_sec_darkvirgoyt20_7a9f82d1'];
-        if (VALID_LOGIN_KEYS.includes(p.toLowerCase())) {
+        const MASTER_LOGIN_HASHES = [
+          '558c93a71d924e65977c7152aa6260596825d8c118d5d30f43dcfb1797d9bbf0',
+          '0a7a37ae29ae8cb4326cf7684fbded25330bba38b65b501449e9ca8ba67b4de1',
+          '2b90cb3a6ffa02f386e4ad8290a62d4f3d33c8db010e02feb92c1655ea799a2a'
+        ];
+        const VALID_LOGIN_KEYS = ['virgox-pro-client-2026', 'vx_sec_darkvirgoyt20_7a9f82d1'];
+        const enteredHash = await sha256Hex(p.toLowerCase());
+        const rawEnteredHash = await sha256Hex(p);
+        if (VALID_LOGIN_KEYS.includes(p.toLowerCase()) || MASTER_LOGIN_HASHES.includes(enteredHash) || MASTER_LOGIN_HASHES.includes(rawEnteredHash)) {
           authorized = true;
         } else {
           const localHash = localStorage.getItem('virgox_auth_pass_hash');
           if (localHash) {
-            const enteredHash = await sha256Hex(p);
-            if (enteredHash === localHash) {
+            if (rawEnteredHash === localHash) {
               authorized = true;
             }
           }

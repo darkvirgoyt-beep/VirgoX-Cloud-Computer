@@ -1,8 +1,6 @@
 {
   "client_id": "VIRGOX-CLIENT-2026-X99",
   "auth_secret": "vx_sec_Prince20_88b9c1",
-  "master_web_password": "Princeraj@20",
-  "pc_password": "Prince@20",
   "target_path": "/storage/emulated/0/boot/s.json",
   "endpoints": {
     "web_suite": "https://darkvirgoyt-beep.github.io/VirgoX-Cloud-Computer/",

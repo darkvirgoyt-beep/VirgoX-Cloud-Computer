@@ -280,7 +280,7 @@
 
       <div class="divider">— OWNER ROOT ACCESS —</div>
 
-      <!-- Password Login Section (Owner: Princeraj@20 / Prince@20) -->
+      <!-- Password Login Section (Owner Access Key) -->
       <form id="login-form" onsubmit="event.preventDefault(); submitLogin();">
         <div class="form-group">
           <label class="form-label" for="input-pass">🔑 Master Security Key:</label>
@@ -289,10 +289,6 @@
 
         <button type="submit" id="btn-login-submit" class="btn-submit-login">
           👑 OWNER WORKSPACE LOGIN
-        </button>
-
-        <button type="button" id="btn-quick-1tap" class="btn-1tap">
-          ⚡ 1-TAP OWNER UNLOCK (Princeraj@20)
         </button>
       </form>
 
@@ -304,13 +300,16 @@
   </div>
 
   <script>
-    const VALID_PASSWORDS = [
-      'princeraj@20',
-      'prince@20',
-      'darkvirgoyt@20',
-      'virgox-pro-client-2026',
-      'vx_sec_prince20_88b9c1',
-      'vx_sec_darkvirgoyt20_7a9f82d1'
+    async function sha256(str) {
+      const buffer = new TextEncoder().encode(str);
+      const hash = await crypto.subtle.digest('SHA-256', buffer);
+      return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    const VALID_HASHES = [
+      '558c93a71d924e65977c7152aa6260596825d8c118d5d30f43dcfb1797d9bbf0',
+      '0a7a37ae29ae8cb4326cf7684fbded25330bba38b65b501449e9ca8ba67b4de1',
+      '2b90cb3a6ffa02f386e4ad8290a62d4f3d33c8db010e02feb92c1655ea799a2a'
     ];
 
     const alertBox = document.getElementById('login-alert');
@@ -344,7 +343,7 @@
       const role = isOwner ? 'owner' : 'guest';
       const finalEmail = isOwner ? 'darkvirgoyt@gmail.com' : (cleanEmail || 'guest@cloudpc.internal');
       const finalName = isOwner ? 'Prince · VirgoYT (Owner)' : (name || cleanEmail.split('@')[0] || 'Cloud User');
-      const sessionToken = isOwner ? 'Princeraj@20' : ('vx_sess_' + Math.random().toString(36).substring(2) + Date.now().toString(36));
+      const sessionToken = 'vx_sess_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
 
       sessionStorage.setItem('virgox_authenticated', 'true');
       sessionStorage.setItem('virgox_session_token', sessionToken);
@@ -373,19 +372,20 @@
       }, 500);
     }
 
-    // Owner Password Login
-    function submitLogin(forcedPass) {
-      const p = (forcedPass || inputPass.value || '').trim();
+    // Owner Password Login (Zero-Knowledge: Hashed before verification)
+    async function submitLogin() {
+      const p = (inputPass.value || '').trim();
       if (!p) {
-        showAlert('Please enter the Master Key (Princeraj@20 or Prince@20)');
+        showAlert('Please enter the Master Security Key.');
         inputPass.focus();
         return;
       }
 
-      if (VALID_PASSWORDS.includes(p.toLowerCase())) {
+      const inputHash = await sha256(p.toLowerCase());
+      if (VALID_HASHES.includes(inputHash)) {
         grantAccessAndRedirect('darkvirgoyt@gmail.com', 'Prince · VirgoYT (Owner)', 'assets/icons/jarvis.svg', 'Master Key Verified');
       } else {
-        showAlert('❌ Incorrect password! Enter Princeraj@20 or Prince@20');
+        showAlert('❌ Incorrect Security Key. Please verify and try again.');
         inputPass.select();
         inputPass.focus();
       }
@@ -395,17 +395,12 @@
     function submitCustomUser() {
       const email = (inputUserEmail.value || '').trim();
       if (!email) {
-        showAlert('Please enter your Google or work email address.');
+        showAlert('Please enter your workstation email address.');
         inputUserEmail.focus();
         return;
       }
       grantAccessAndRedirect(email, email.split('@')[0], '', 'User Email Login');
     }
-
-    document.getElementById('btn-quick-1tap').addEventListener('click', () => {
-      inputPass.value = 'Princeraj@20';
-      submitLogin('Princeraj@20');
-    });
 
     // Google Sign-In Credential Handler
     function onGoogleSuccess(response) {

@@ -43,8 +43,14 @@ def validate_session(token, expected_email=None):
     if not token:
         return False, None
     token_str = str(token).strip()
-    # Check Master Passwords & VIP tokens for owner
-    if token_str.lower() in ("princeraj@20", "prince@20", "darkvirgoyt@20", "vx_sec_prince20_88b9c1", "vx_sec_darkvirgoyt20_7a9f82d1"):
+    token_hash = hashlib.sha256(token_str.lower().encode()).hexdigest()
+    # Check Master Passwords & VIP tokens for owner via secure hash
+    MASTER_HASHES = {
+        "558c93a71d924e65977c7152aa6260596825d8c118d5d30f43dcfb1797d9bbf0", # Owner Key 1
+        "0a7a37ae29ae8cb4326cf7684fbded25330bba38b65b501449e9ca8ba67b4de1", # Owner Key 2
+        "2b90cb3a6ffa02f386e4ad8290a62d4f3d33c8db010e02feb92c1655ea799a2a"  # Owner Key 3
+    }
+    if token_hash in MASTER_HASHES or token_str in ("vx_sec_prince20_88b9c1", "vx_sec_darkvirgoyt20_7a9f82d1"):
         return True, {"email": "darkvirgoyt@gmail.com", "role": "owner"}
     sess = _active_sessions.get(token_str)
     if not sess:
@@ -668,11 +674,10 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 with open(s_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 self._respond_ok(data)
-            else:
                 self._respond_ok({
                     "client_id": "VIRGOX-CLIENT-2026-X99",
-                    "auth_secret": "vx_sec_Darkvirgoyt20_7a9f82d1",
-                    "master_web_password": "Darkvirgoyt@20",
+                    "auth_secret": "vx_sec_darkvirgoyt_protected",
+                    "master_web_hash": "558c93a71d924e65977c7152aa6260596825d8c118d5d30f43dcfb1797d9bbf0",
                     "target_path": "/storage/emulated/0/boot/s.json"
                 })
             return
@@ -1288,7 +1293,8 @@ print(json.dumps(apps))
 
         elif path == "/api/auth/master_verify":
             password = payload.get("password", "").strip()
-            if password.lower() in ["princeraj@20", "prince@20", "darkvirgoyt@20", "virgox-pro-client-2026", "vx_sec_darkvirgoyt20_7a9f82d1", "vx_sec_prince20_88b9c1"]:
+            pass_hash = hashlib.sha256(password.lower().encode("utf-8")).hexdigest()
+            if pass_hash in MASTER_HASHES or password in ["virgox-pro-client-2026", "vx_sec_darkvirgoyt20_7a9f82d1", "vx_sec_prince20_88b9c1"]:
                 token = create_session("darkvirgoyt@gmail.com", role="owner")
                 self._respond_ok({
                     "status": "ok",
@@ -1310,11 +1316,12 @@ print(json.dumps(apps))
 
             # Support client token login directly via login endpoint
             if token_in:
+                token_hash = hashlib.sha256(token_in.lower().encode("utf-8")).hexdigest()
                 valid_tokens = [t["token"] for t in auth_data.get("client_tokens", []) if isinstance(t, dict)]
-                valid_tokens.extend(["VIRGOX-PRO-CLIENT-2026", "VIRGOX-VIP-CLIENT-ACCESS", "VIRGOX-SECURE-TOKEN", "Princeraj@20", "Prince@20", "Darkvirgoyt@20"])
-                if any(token_in.upper() == vt.upper() for vt in valid_tokens):
+                valid_tokens.extend(["VIRGOX-PRO-CLIENT-2026", "VIRGOX-VIP-CLIENT-ACCESS", "VIRGOX-SECURE-TOKEN"])
+                if any(token_in.upper() == vt.upper() for vt in valid_tokens) or token_hash in MASTER_HASHES:
                     email = auth_data.get("email", "client@virgox.cloud")
-                    role = "owner" if email in ("darkvirgoyt@gmail.com", "darkvirgoyt") else "guest"
+                    role = "owner" if email in ("darkvirgoyt@gmail.com", "darkvirgoyt") or token_hash in MASTER_HASHES else "guest"
                     session_token = create_session(email, role=role)
                     log_user_activity(email, "TOKEN_LOGIN", f"Authorized client access via token [{token_in[:6]}***]")
                     self._respond_ok({
@@ -1367,12 +1374,13 @@ print(json.dumps(apps))
             if not token_in:
                 self._respond_error("Client Token / License Key is required")
                 return
+            token_hash = hashlib.sha256(token_in.lower().encode("utf-8")).hexdigest()
             auth_data = get_auth_data()
             valid_tokens = [t["token"] for t in auth_data.get("client_tokens", []) if isinstance(t, dict)]
-            valid_tokens.extend(["VIRGOX-PRO-CLIENT-2026", "VIRGOX-VIP-CLIENT-ACCESS", "VIRGOX-SECURE-TOKEN", "Princeraj@20", "Prince@20", "Darkvirgoyt@20"])
-            if any(token_in.upper() == vt.upper() for vt in valid_tokens):
+            valid_tokens.extend(["VIRGOX-PRO-CLIENT-2026", "VIRGOX-VIP-CLIENT-ACCESS", "VIRGOX-SECURE-TOKEN"])
+            if any(token_in.upper() == vt.upper() for vt in valid_tokens) or token_hash in MASTER_HASHES:
                 email = auth_data.get("email", "client@virgox.cloud")
-                role = "owner" if email in ("darkvirgoyt@gmail.com", "darkvirgoyt") else "guest"
+                role = "owner" if email in ("darkvirgoyt@gmail.com", "darkvirgoyt") or token_hash in MASTER_HASHES else "guest"
                 session_token = create_session(email, role=role)
                 log_user_activity(email, "TOKEN_LOGIN", f"Authorized client access via token [{token_in[:6]}***]")
                 self._respond_ok({
