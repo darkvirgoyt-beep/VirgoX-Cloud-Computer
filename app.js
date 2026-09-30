@@ -2406,9 +2406,9 @@
     // ==========================================
     // ==========================================
     // 🌐 GOOGLE OAUTH 2.0 AUTHENTICATION (darkvirgoyt)
-    // Client ID: 73927663926-heju7q6bhcd8j4r5s3ij93gfo4afq8d6.apps.googleusercontent.com
+    // Client ID: 73927663926-op69k4iepso1tsmh08sni7p6jj9hlpkc.apps.googleusercontent.com
     // ==========================================
-    const GOOGLE_CLIENT_ID = "73927663926-heju7q6bhcd8j4r5s3ij93gfo4afq8d6.apps.googleusercontent.com";
+    const GOOGLE_CLIENT_ID = "73927663926-op69k4iepso1tsmh08sni7p6jj9hlpkc.apps.googleusercontent.com";
     let googleTokenClient = null;
 
     function handleGoogleCredentialResponse(response) {
