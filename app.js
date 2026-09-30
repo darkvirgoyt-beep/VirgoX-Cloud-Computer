@@ -171,6 +171,19 @@
     }
   }
 
+  // Escape untrusted text before it goes into innerHTML.
+  // Called by renderMsStoreCards() and by the terminal command-output handler.
+  // The MS Store call site sits inside the configs object literal in
+  // openAppWindow(), which is evaluated eagerly for every app id, so while this
+  // was missing every launcher in the desktop threw a ReferenceError before it
+  // could open anything.
+  const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
+  function escapeHtml(value) {
+    if (value === null || value === undefined) return '';
+    return String(value).replace(/[&<>"']/g, ch => HTML_ESCAPES[ch]);
+  }
+
   // Initialize
   function init() {
     const tasks = [
