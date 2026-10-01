@@ -1,0 +1,2 @@
+import { cors, getSessions, saveSessions  } from '../_shared.js';
+module.exports = async (req, res) => { cors(res); if (req.method === 'OPTIONS') return res.status(204).end(); if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' }); const auth = req.headers.authorization; if (!auth?.startsWith('Bearer ')) return res.status(401).json({ error: 'missing_token' }); const token = auth.slice(7); const sessions = getSessions(); delete sessions[token]; saveSessions(sessions); res.status(200).json({ status: 'logged_out' }); };
