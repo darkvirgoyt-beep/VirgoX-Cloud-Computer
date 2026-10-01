@@ -4,7 +4,9 @@ set -euo pipefail
 REPO="https://github.com/darkvirgoyt-beep/VirgoX-Cloud-Computer.git"
 BRANCH="android-arm64-native-vxc"
 ROOT="${HOME}/.virgox-cloud-computer"
-if [ "$(id -u)" -eq 0 ]; then
+if [ -n "${PREFIX:-}" ] && [ -d "${PREFIX}/bin" ]; then
+  BIN_DIR="${PREFIX}/bin"
+elif [ "$(id -u)" -eq 0 ]; then
   BIN_DIR="/usr/local/bin"
 else
   BIN_DIR="${HOME}/.local/bin"

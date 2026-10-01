@@ -14,9 +14,6 @@ import webbrowser
 
 CONFIG = pathlib.Path(os.environ.get("XDG_CONFIG_HOME", pathlib.Path.home() / ".config")) / "vxc" / "config.json"
 DEFAULT_SERVER = os.environ.get("VIRGOX_SERVER", "http://127.0.0.1:8888").rstrip("/")
-# Optional override for deployments that host a dedicated authorization page.
-# Normally the bridge returns the correct verification URL for its own host.
-AUTH_WEB = os.environ.get("VIRGOX_AUTH_WEB", "").rstrip("/")
 VERSION = "0.4.2"
 
 USE_COLOR = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
@@ -72,7 +69,10 @@ def logo():
 def login(args):
     cfg = load()
     server = (args.server or cfg.get("server") or DEFAULT_SERVER).rstrip("/")
-    auth_web = (args.web or AUTH_WEB).rstrip("/")
+    # The bridge URL is authoritative: it points to the authorization route
+    # that can update this exact running session. A hosted page is opt-in via
+    # --web so stale VIRGOX_AUTH_WEB values cannot hijack login.
+    auth_web = (args.web or "").rstrip("/")
 
     logo()
     print(c("  Authentication", BOLD))
