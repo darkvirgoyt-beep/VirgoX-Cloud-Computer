@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VirgoX — Authorize CLI</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:radial-gradient(circle at 20% 10%,#123044 0,#071018 38%,#030609 100%);font-family:Inter,system-ui,sans-serif;color:#eafcff}.card{width:min(440px,92vw);padding:30px;border:1px solid #1f5364;border-radius:22px;background:rgba(7,16,24,.92);box-shadow:0 25px 90px #0009}.logo{font-size:42px}.title{font-size:25px;font-weight:800;letter-spacing:.08em}.muted{color:#8ca9b3}.code{margin:18px 0;padding:14px;text-align:center;border:1px solid #215c6d;border-radius:14px;font:800 25px ui-monospace,monospace;letter-spacing:.16em;color:#5ff4ff;background:#06131a}.input{width:100%;margin:8px 0;padding:13px;border-radius:11px;border:1px solid #244451;background:#061017;color:#fff}.btn{width:100%;margin-top:12px;padding:13px;border:0;border-radius:11px;background:linear-gradient(135deg,#00e5ff,#00a7c4);color:#001016;font-weight:800;cursor:pointer}.btn:disabled{opacity:.55}.msg{min-height:24px;margin-top:14px}.small{font-size:12px}.switch{margin-top:12px;text-align:center;color:#65dcec;cursor:pointer}.ok{color:#63ffb1}.err{color:#ff7f98}
+</style>
+</head>
+<body>
+<main class="card">
+<div class="logo">⚡</div>
+<div class="title">VIRGOX CLI AUTHORIZATION</div>
+<p class="muted">Authorize this terminal from your VirgoX account.</p>
+<div id="code" class="code">Loading…</div>
+<form id="form">
+<input id="email" class="input" type="email" placeholder="Email" autocomplete="email" required>
+<input id="password" class="input" type="password" placeholder="Password" autocomplete="current-password" required>
+<button id="submit" class="btn">Sign in & authorize terminal</button>
+</form>
+<div id="msg" class="msg"></div>
+<div id="switch" class="switch">Need an account? Create one</div>
+<p class="muted small">Your password is handled by Supabase Auth. VirgoX receives only the authenticated identity for this device authorization.</p>
+</main>
+<script type="module">
+import {createClient} from "https://esm.sh/@supabase/supabase-js@2";
+const SUPABASE_URL="https://tblhywjusyyzqzlagbnh.supabase.co";
+const SUPABASE_KEY="sb_publishable_ma-oYMaKn7v-rqr6uDXgew_lLmvDgDC";
+const BACKEND="https://tblhywjusyyzqzlagbnh.supabase.co/functions/v1/virgox-auth";
+const supabase=createClient(SUPABASE_URL,SUPABASE_KEY);
+const params=new URLSearchParams(location.search);
+const code=(params.get("device_code")||"").trim().toUpperCase();
+const codeEl=document.getElementById("code"),form=document.getElementById("form"),msg=document.getElementById("msg"),submit=document.getElementById("submit"),sw=document.getElementById("switch");
+let signup=false;
+codeEl.textContent=code||"Missing code";
+function message(t,ok=false){msg.textContent=t;msg.className="msg "+(ok?"ok":"err")}
+sw.onclick=()=>{signup=!signup;submit.textContent=signup?"Create account & authorize terminal":"Sign in & authorize terminal";sw.textContent=signup?"Already have an account? Sign in":"Need an account? Create one";message("")};
+form.onsubmit=async e=>{
+ e.preventDefault();
+ if(!code){message("Missing device code.");return}
+ submit.disabled=true;message(signup?"Creating account…":"Signing in…",true);
+ try{
+  const email=document.getElementById("email").value.trim().toLowerCase(),password=document.getElementById("password").value;
+  let result;
+  if(signup) result=await supabase.auth.signUp({email,password});
+  else result=await supabase.auth.signInWithPassword({email,password});
+  if(result.error) throw result.error;
+  let session=result.data.session;
+  if(!session){
+   const signed=await supabase.auth.signInWithPassword({email,password});
+   if(signed.error||!signed.data.session) throw signed.error||new Error("Email confirmation may be required.");
+   session=signed.data.session;
+  }
+  const auth=await fetch(BACKEND,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+session.access_token},body:JSON.stringify({action:"authorize",code})});
+  const data=await auth.json();
+  if(!auth.ok) throw new Error(data.error||"Authorization failed");
+  message("✓ Terminal authorized. Return to your VirgoX terminal.",true);
+  form.style.display="none";sw.style.display="none";
+ }catch(err){message(err.message||"Authorization failed.");submit.disabled=false}
+};
+</script>
+</body>
+</html>
