@@ -4,7 +4,11 @@ set -euo pipefail
 REPO="https://github.com/darkvirgoyt-beep/VirgoX-Cloud-Computer.git"
 BRANCH="android-arm64-native-vxc"
 ROOT="${HOME}/.virgox-cloud-computer"
-BIN_DIR="${HOME}/.local/bin"
+if [ "$(id -u)" -eq 0 ]; then
+  BIN_DIR="/usr/local/bin"
+else
+  BIN_DIR="${HOME}/.local/bin"
+fi
 
 printf '\n'
 printf '╭────────────────────────────────────────────╮\n'
@@ -41,14 +45,16 @@ bash "${ROOT}/setup_android.sh"
 echo "[3/3] Installing vxc command..."
 ln -sf "${ROOT}/bin/vxc" "${BIN_DIR}/vxc"
 
-case ":${PATH}:" in
-  *":${BIN_DIR}:"*) ;;
-  *)
-    echo
-    echo "[NOTE] Add this to your shell profile:"
-    echo "export PATH=\"\$HOME/.local/bin:\$PATH\""
-    ;;
-esac
+if [ "${BIN_DIR}" = "${HOME}/.local/bin" ]; then
+  case ":${PATH}:" in
+    *":${BIN_DIR}:"*) ;;
+    *)
+      echo
+      echo "[NOTE] Add this to your shell profile:"
+      echo "export PATH=\"\$HOME/.local/bin:\$PATH\""
+      ;;
+  esac
+fi
 
 echo
 echo "✓ VirgoX installed."
