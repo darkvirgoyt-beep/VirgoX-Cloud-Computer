@@ -1,0 +1,63 @@
+name: Deploy VirgoX Firebase
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - android-arm64-native-vxc
+    paths:
+      - "firebase/**"
+      - ".github/workflows/firebase-deploy.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Install Firebase CLI
+        run: npm install --global firebase-tools
+
+      - name: Generate Firebase web config
+        working-directory: firebase
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          cat > public/config.js <<'EOF'
+          // Generated during deployment. Do not edit manually.
+          EOF
+          firebase apps:sdkconfig WEB --project darkvirgoyt > /tmp/firebase-sdkconfig.txt
+          node <<'NODE'
+          const fs = require("fs");
+          const text = fs.readFileSync("/tmp/firebase-sdkconfig.txt", "utf8");
+          const m = text.match(/const firebaseConfig = (\{[\s\S]*?\});/);
+          if (!m) {
+            console.error("Could not read Firebase Web SDK config.");
+            process.exit(1);
+          }
+          const cfg = JSON.parse(m[1]);
+          const out = `// Generated during deployment. Do not edit manually.
+          window.VIRGOX_FIREBASE_CONFIG = ${JSON.stringify({
+            apiKey: cfg.apiKey,
+            authDomain: cfg.authDomain,
+            projectId: cfg.projectId,
+            appId: cfg.appId
+          }, null, 2)};
+          window.VIRGOX_AUTH_FUNCTION = "https://asia-south1-darkvirgoyt.cloudfunctions.net/vxcAuth";
+          `;
+          fs.writeFileSync("public/config.js", out);
+          NODE
+
+      - name: Deploy Functions and Hosting
+        working-directory: firebase
+        run: firebase deploy --project darkvirgoyt --only functions,hosting --non-interactive
