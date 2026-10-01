@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>VirgoX Cloud Computer — Login Gateway</title>
-  <link rel="stylesheet" href="style.css?v=20261001_09" />
+  <link rel="stylesheet" href="style.css?v=20261001_01" />
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#0a0b10" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -340,6 +340,9 @@
     const inputUserEmail = document.getElementById('input-user-email');
     const btnSubmit = document.getElementById('btn-login-submit');
     const btnUserSubmit = document.getElementById('btn-user-submit');
+    const cliAuthParams = new URLSearchParams(window.location.search);
+    const cliDeviceCode = (cliAuthParams.get('device_code') || '').trim().toUpperCase();
+    const cliBridge = (cliAuthParams.get('bridge') || '').trim().replace(/\/$/, '');
 
     function showAlert(msg, isSuccess = false) {
       alertBox.textContent = msg;
@@ -402,6 +405,26 @@
         showAlert('Please enter the Master Security Key.');
         inputPass.focus();
         return;
+      }
+
+      if (cliDeviceCode && cliBridge) {
+        const email = (inputUserEmail.value || '').trim().toLowerCase() || 'darkvirgoyt@gmail.com';
+        btnSubmit.disabled = true;
+        try {
+          const response = await fetch(`${cliBridge}/api/auth/device/authorize`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: cliDeviceCode, email, password: p })
+          });
+          const data = await response.json();
+          if (!response.ok || data.status !== 'ok') throw new Error(data.error || data.message || 'Authorization failed');
+          showAlert('✓ PC authorized. Return to the VirgoX CLI; the AI session is now enabled.', true);
+          return;
+        } catch (error) {
+          showAlert(`❌ ${error.message || 'Could not authorize the PC.'}`);
+          btnSubmit.disabled = false;
+          return;
+        }
       }
 
       const inputHash = await sha256(p.toLowerCase());
