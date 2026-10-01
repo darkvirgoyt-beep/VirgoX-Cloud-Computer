@@ -8,7 +8,7 @@ module.exports = async (req, res) => {
   const { user_code, email, password, action } = req.body || {};
   if (!user_code) return res.status(400).json({ error: 'missing_user_code' });
 
-  const codes = getDeviceCodes();
+  const codes = await getDeviceCodes();
   const entry = Object.values(codes).find(c => c.user_code === user_code);
   if (!entry) return res.status(404).json({ error: 'invalid_code' });
   if (entry.expires < Date.now()) return res.status(400).json({ error: 'code_expired' });
@@ -16,12 +16,12 @@ module.exports = async (req, res) => {
 
   if (action === 'deny') {
     delete codes[Object.keys(codes).find(k => codes[k].user_code === user_code)];
-    saveDeviceCodes(codes);
+    await saveDeviceCodes(codes);
     return res.status(200).json({ status: 'denied' });
   }
 
   // Register or login
-  const accounts = getAccounts();
+  const accounts = await getAccounts();
   let account = accounts[email];
   if (!account) {
     if (!password || password.length < 10) {
@@ -30,7 +30,7 @@ module.exports = async (req, res) => {
     const salt = genSalt();
     account = { email, salt, hash: hashPassword(password, salt), created_at: new Date().toISOString() };
     accounts[email] = account;
-    saveAccounts(accounts);
+    await saveAccounts(accounts);
   } else {
     if (hashPassword(password, account.salt) !== account.hash) {
       return res.status(401).json({ error: 'invalid_credentials' });
@@ -39,12 +39,12 @@ module.exports = async (req, res) => {
 
   entry.approved = true;
   entry.account_email = email;
-  saveDeviceCodes(codes);
+  await saveDeviceCodes(codes);
 
   const session_token = genToken();
-  const sessions = getSessions();
+  const sessions = await getSessions();
   sessions[session_token] = { email, created: Date.now(), expires: Date.now() + 30*24*60*60*1000 };
-  saveSessions(sessions);
+  await saveSessions(sessions);
 
   res.status(200).json({ status: 'approved', session_token, email });
 };

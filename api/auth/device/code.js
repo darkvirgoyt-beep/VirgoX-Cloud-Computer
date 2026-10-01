@@ -18,7 +18,7 @@ module.exports = async (req, res) => {
   const user_code = genCode();
   const expires = Date.now() + EXPIRY_MS;
 
-  const codes = getDeviceCodes();
+  const codes = await getDeviceCodes();
   codes[device_code] = {
     user_code,
     client_id,
@@ -27,7 +27,7 @@ module.exports = async (req, res) => {
     approved: false,
     account_email: null
   };
-  saveDeviceCodes(codes);
+  await saveDeviceCodes(codes);
 
   const base = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:8787';
   res.status(200).json({

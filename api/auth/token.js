@@ -10,12 +10,12 @@ module.exports = async (req, res) => {
     return res.status(400).json({ error: 'unsupported_grant_type' });
   }
 
-  const codes = getDeviceCodes();
+  const codes = await getDeviceCodes();
   const entry = codes[device_code];
   if (!entry) return res.status(400).json({ error: 'invalid_device_code' });
   if (entry.expires < Date.now()) {
     delete codes[device_code];
-    saveDeviceCodes(codes);
+    await saveDeviceCodes(codes);
     return res.status(400).json({ error: 'expired_token' });
   }
   if (!entry.approved) {
@@ -24,9 +24,9 @@ module.exports = async (req, res) => {
 
   const access_token = genToken();
   const refresh_token = genToken();
-  const sessions = getSessions();
+  const sessions = await getSessions();
   sessions[access_token] = { email: entry.account_email, created: Date.now(), expires: Date.now() + 30*24*60*60*1000 };
-  saveSessions(sessions);
+  await saveSessions(sessions);
 
   res.status(200).json({
     access_token,
