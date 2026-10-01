@@ -76,14 +76,12 @@ def login(args):
     print(c("  Authentication", BOLD))
     print(c("  ──────────────", DIM))
     print(f"  Host       {server}")
-    print(f"  Auth       {web}")
+    print(f"  Auth       {AUTH_WEB}")
 
     try:
         start = api(server, "/api/auth/device/start", {})
         code = start["device_code"]
-        verification_url = start.get("verification_url") or (
-            server + "/cli-authorize?code=" + urllib.parse.quote(code, safe="")
-        )
+        verification_url = AUTH_WEB + "/?code=" + urllib.parse.quote(code, safe="")
         expires = int(start.get("expires_in", 600))
 
         print()
