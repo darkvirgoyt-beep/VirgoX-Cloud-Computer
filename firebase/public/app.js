@@ -25,7 +25,10 @@
   const auth = firebase.auth();
   const endpoint = window.VIRGOX_AUTH_FUNCTION;
 
-  githubButton.addEventListener("click", async () => {
+  if (!githubButton) {
+    msg.textContent = "GitHub sign-in is unavailable on this deployment.";
+  } else {
+    githubButton.addEventListener("click", async () => {
     msg.textContent = "Opening GitHub…";
     try {
       const provider = new firebase.auth.GithubAuthProvider();
@@ -38,7 +41,8 @@
       form.remove(); githubButton.remove();
       await auth.signOut();
     } catch (error) { msg.textContent = error && error.message ? error.message : "GitHub authorization failed."; }
-  });
+    });
+  }
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
