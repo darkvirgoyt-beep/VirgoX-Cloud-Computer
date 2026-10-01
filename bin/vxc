@@ -221,6 +221,24 @@ def _port_open(port, host="127.0.0.1", timeout=1.0):
         return False
 
 
+def _startup_diagnostics(state):
+    ports = {"desktop": 3000, "terminal": 7681, "bridge": 8888}
+    print("  Service status:")
+    for name, port in ports.items():
+        status = "ONLINE" if _port_open(port) else "OFFLINE"
+        print(f"    {name.title():8} {status} (port {port})")
+    for path in (state / "startup.log", state / "novnc.log", state / "ttyd.log", state / "server.log", pathlib.Path.home() / "bridge_server.log"):
+        if path.exists():
+            try:
+                lines = path.read_text(errors="replace").splitlines()
+                if lines:
+                    print(f"  Last log lines from {path}:")
+                    for line in lines[-8:]:
+                        print(f"    {line}")
+            except OSError:
+                pass
+
+
 def run_pc(args):
     root = _runtime_root()
     if root is None:
@@ -279,6 +297,7 @@ def run_pc(args):
 
     print(c("  ✗ VirgoX did not become ready in time.", RED), file=sys.stderr)
     print(f"  Check log: {log}", file=sys.stderr)
+    _startup_diagnostics(state)
     return 1
 
 
