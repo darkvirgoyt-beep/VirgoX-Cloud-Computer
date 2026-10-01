@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""VirgoX Cloud CLI — browser/device login, status and logout."""
+"""VirgoX Cloud Computer CLI — polished terminal UX for VirgoX."""
 import argparse
 import json
 import os
 import pathlib
+import shutil
 import sys
 import time
 import urllib.error
@@ -13,6 +14,20 @@ import webbrowser
 
 CONFIG = pathlib.Path(os.environ.get("XDG_CONFIG_HOME", pathlib.Path.home() / ".config")) / "vxc" / "config.json"
 DEFAULT_SERVER = os.environ.get("VIRGOX_SERVER", "http://127.0.0.1:8888").rstrip("/")
+VERSION = "0.2.0"
+
+USE_COLOR = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+RESET = "\033[0m"
+BOLD = "\033[1m"
+DIM = "\033[2m"
+CYAN = "\033[36m"
+GREEN = "\033[32m"
+YELLOW = "\033[33m"
+RED = "\033[31m"
+
+
+def c(text, color=""):
+    return f"{color}{text}{RESET}" if USE_COLOR and color else text
 
 
 def load():
@@ -42,10 +57,40 @@ def api(server, path, payload=None, query=None, token=None):
         return json.loads(raw) if raw else {}
 
 
+def logo():
+    print()
+    print(c("╭────────────────────────────────────────────╮", CYAN))
+    print(c("│", CYAN) + c("              VIRGOX CLOUD PC              ", BOLD) + c("│", CYAN))
+    print(c("│", CYAN) + c("          Secure computer from CLI          ", DIM) + c("│", CYAN))
+    print(c("╰────────────────────────────────────────────╯", CYAN))
+    print()
+
+
+def spinner(label, seconds=0):
+    if not sys.stdout.isatty():
+        print(label)
+        return
+    frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+    if seconds <= 0:
+        print(label, end="", flush=True)
+        return
+    end = time.time() + seconds
+    i = 0
+    while time.time() < end:
+        print("\r" + frames[i % len(frames)] + " " + label, end="", flush=True)
+        time.sleep(0.08)
+        i += 1
+    print("\r" + " " * (len(label) + 2) + "\r", end="", flush=True)
+
+
 def login(args):
     cfg = load()
     server = (args.server or cfg.get("server") or DEFAULT_SERVER).rstrip("/")
-    print(f"VirgoX host: {server}")
+
+    logo()
+    print(c("  Authentication", BOLD))
+    print(c("  ──────────────", DIM))
+    print(f"  Host     {server}")
 
     try:
         start = api(server, "/api/auth/device/start", {})
@@ -54,103 +99,134 @@ def login(args):
         expires = int(start.get("expires_in", 600))
 
         print()
-        print("🔐 Browser authorization required")
-        print(f"Code: {code}")
-        print(f"Open: {url}")
+        print(c("  🔐 Browser authorization", CYAN))
+        print()
+        print(c(f"  Code: {code}", BOLD))
+        print(f"  URL : {url}")
+        print()
+        print(c("  Opening authorization page...", DIM))
 
         try:
             opened = webbrowser.open(url)
-            if opened:
-                print("✓ Opened the authorization page in your browser.")
-            else:
-                print("Open the URL above manually.")
+            if not opened:
+                print(c("  ↳ Open the URL above manually.", YELLOW))
         except Exception:
-            print("Open the URL above manually.")
+            print(c("  ↳ Open the URL above manually.", YELLOW))
 
         print()
-        print("Waiting for authorization", end="", flush=True)
+        print(c("  Waiting for authorization ", DIM), end="", flush=True)
         deadline = time.time() + expires
+        frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+        frame = 0
 
         while time.time() < deadline:
             try:
                 result = api(server, "/api/auth/device/poll", query={"code": code})
                 if result.get("authenticated") and result.get("token"):
-                    email = result.get("email") or ""
-                    save({"server": server, "email": email, "token": result["token"]})
+                    email = result.get("email") or "user"
+                    save({"server": server, "email": email, "token": result["token"], "version": VERSION})
+                    print("\r" + c("  ✓ Authorization complete.          ", GREEN))
                     print()
-                    print(f"✓ {email} logged in.")
-                    print(f"✓ Session saved to {CONFIG}")
+                    print(c("  ┌─ Signed in", GREEN))
+                    print(f"  │  Account : {email}")
+                    print(f"  │  Host    : {server}")
+                    print(f"  └─ Session : {CONFIG}")
+                    print()
+                    print(c("  VirgoX is ready.", BOLD))
                     return 0
             except urllib.error.HTTPError as exc:
-                if exc.code not in (404,):
-                    print(f"\n✗ Authorization error: HTTP {exc.code}", file=sys.stderr)
+                if exc.code != 404:
+                    print(f"\n  {c('✗', RED)} Authorization error: HTTP {exc.code}", file=sys.stderr)
                     return 1
             except Exception as exc:
-                print(f"\n✗ Could not reach VirgoX: {exc}", file=sys.stderr)
+                print(f"\n  {c('✗', RED)} Could not reach VirgoX: {exc}", file=sys.stderr)
                 return 1
 
-            print(".", end="", flush=True)
+            if sys.stdout.isatty():
+                print("\b" + frames[frame % len(frames)], end="", flush=True)
+            else:
+                print(".", end="", flush=True)
+            frame += 1
             time.sleep(2)
 
-        print("\n✗ Authorization timed out.", file=sys.stderr)
+        print("\n  " + c("✗ Authorization timed out.", RED), file=sys.stderr)
         return 1
 
     except Exception as exc:
-        print(f"✗ Could not start browser authorization: {exc}", file=sys.stderr)
+        print(f"  {c('✗', RED)} Could not start browser authorization: {exc}", file=sys.stderr)
         return 1
 
 
 def status(args):
     cfg = load()
+    logo()
+    print(c("  Session", BOLD))
+    print(c("  ───────", DIM))
+
     if not cfg.get("token"):
-        print("✗ Not logged in.")
+        print(f"  {c('●', RED)} Not logged in.")
+        print()
+        print("  Run: vxc auth login")
         return 1
 
     server = (cfg.get("server") or DEFAULT_SERVER).rstrip("/")
     try:
         result = api(server, "/api/auth/validate_session", token=cfg["token"])
         if result.get("valid") or result.get("authenticated"):
-            print(f"✓ {cfg.get('email') or result.get('email') or 'logged in'} logged in.")
+            email = cfg.get("email") or result.get("email") or "logged in"
+            print(f"  {c('●', GREEN)} Connected")
+            print(f"  Account : {email}")
+            print(f"  Host    : {server}")
+            print(f"  Config  : {CONFIG}")
             return 0
-        print("✗ Session is invalid or expired.")
+        print(f"  {c('●', YELLOW)} Session expired or invalid.")
+        print("  Run: vxc auth login")
         return 1
     except Exception as exc:
-        print(f"✗ Could not reach VirgoX: {exc}", file=sys.stderr)
+        print(f"  {c('✗', RED)} Could not reach VirgoX: {exc}", file=sys.stderr)
         return 1
 
 
 def logout(args):
     if CONFIG.exists():
         CONFIG.unlink()
-        print("✓ Logged out.")
+        print(c("✓ Logged out of VirgoX.", GREEN))
     else:
         print("✓ Already logged out.")
     return 0
 
 
+def version(args):
+    print(f"VirgoX Cloud Computer CLI {VERSION}")
+
+
 def main():
-    parser = argparse.ArgumentParser(prog="vxc", description="VirgoX Cloud Computer CLI")
+    parser = argparse.ArgumentParser(
+        prog="vxc",
+        description="VirgoX Cloud Computer — secure terminal client",
+        epilog="Examples: vxc auth login   |   vxc auth status   |   vxc auth logout",
+    )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
     sub = parser.add_subparsers(dest="command")
 
     auth = sub.add_parser("auth", help="Manage VirgoX authentication")
     auth_sub = auth.add_subparsers(dest="auth_command")
 
-    login_parser = auth_sub.add_parser("login", help="Login through browser authorization")
+    login_parser = auth_sub.add_parser("login", help="Sign in through browser authorization")
     login_parser.add_argument("--server", help="VirgoX bridge URL")
     login_parser.set_defaults(func=login)
 
-    status_parser = auth_sub.add_parser("status", help="Show login status")
+    status_parser = auth_sub.add_parser("status", help="Show current session status")
     status_parser.set_defaults(func=status)
 
     logout_parser = auth_sub.add_parser("logout", help="Remove the local session")
     logout_parser.set_defaults(func=logout)
 
     args = parser.parse_args()
-
     if not getattr(args, "func", None):
+        logo()
         parser.print_help()
         return 0
-
     return args.func(args)
 
 
