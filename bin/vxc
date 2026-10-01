@@ -1,406 +1,115 @@
 #!/usr/bin/env python3
-"""VirgoX Cloud Computer CLI — browser-assisted device authorization."""
-import argparse
-import json
-import os
-import pathlib
-import secrets
-import sys
-import time
-import urllib.error
-import urllib.parse
-import urllib.request
-import webbrowser
-import shutil
-import subprocess
-
-CONFIG = pathlib.Path(os.environ.get("XDG_CONFIG_HOME", pathlib.Path.home() / ".config")) / "vxc" / "config.json"
-DEFAULT_SERVER = os.environ.get("VIRGOX_SERVER", "http://127.0.0.1:8888").rstrip("/")
-DEFAULT_AUTH_WEB = os.environ.get("VIRGOX_AUTH_WEB", "https://darkvirgoyt-beep.github.io/VirgoX-Cloud-Computer").rstrip("/")
-AUTH_BACKEND = os.environ.get("VIRGOX_AUTH_BACKEND", "https://tblhywjusyyzqzlagbnh.supabase.co/functions/v1/virgox-auth").rstrip("/")
-VERSION = "0.5.0"
-
-USE_COLOR = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
-RESET = "\033[0m"
-BOLD = "\033[1m"
-DIM = "\033[2m"
-CYAN = "\033[36m"
-GREEN = "\033[32m"
-YELLOW = "\033[33m"
-RED = "\033[31m"
-
-
-def c(text, color=""):
-    return f"{color}{text}{RESET}" if USE_COLOR and color else text
-
-
+"""VirgoX Cloud Computer CLI — Supabase browser-assisted device authorization."""
+import argparse, json, os, pathlib, sys, time, urllib.error, urllib.parse, urllib.request, webbrowser, shutil, subprocess
+CONFIG=pathlib.Path(os.environ.get("XDG_CONFIG_HOME",pathlib.Path.home()/".config"))/"vxc"/"config.json"
+DEFAULT_SERVER=os.environ.get("VIRGOX_SERVER","http://127.0.0.1:8888").rstrip("/")
+DEFAULT_AUTH_WEB=os.environ.get("VIRGOX_AUTH_WEB","https://darkvirgoyt-beep.github.io/VirgoX-Cloud-Computer").rstrip("/")
+AUTH_BACKEND=os.environ.get("VIRGOX_AUTH_BACKEND","https://tblhywjusyyzqzlagbnh.supabase.co/functions/v1/virgox-auth").rstrip("/")
+VERSION="0.5.0"
+USE_COLOR=sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+RESET="\033[0m";BOLD="\033[1m";DIM="\033[2m";CYAN="\033[36m";GREEN="\033[32m";YELLOW="\033[33m";RED="\033[31m"
+def c(text,color=""): return f"{color}{text}{RESET}" if USE_COLOR and color else text
 def load():
-    try:
-        return json.loads(CONFIG.read_text())
-    except Exception:
-        return {}
-
-
+    try:return json.loads(CONFIG.read_text())
+    except Exception:return {}
 def save(data):
-    CONFIG.parent.mkdir(parents=True, exist_ok=True)
-    CONFIG.write_text(json.dumps(data, indent=2))
-    os.chmod(CONFIG, 0o600)
-
-
-def api(server, path, payload=None, query=None, token=None, timeout=15):
-    url = server.rstrip("/") + path
-    if query:
-        url += "?" + urllib.parse.urlencode(query)
-    data = json.dumps(payload).encode() if payload is not None else None
-    headers = {"Content-Type": "application/json"} if data else {}
-    if token:
-        headers["Authorization"] = "Bearer " + token
-    req = urllib.request.Request(url, data=data, headers=headers)
-    with urllib.request.urlopen(req, timeout=timeout) as response:
-        raw = response.read().decode()
-        return json.loads(raw) if raw else {}
-
-
+    CONFIG.parent.mkdir(parents=True,exist_ok=True);CONFIG.write_text(json.dumps(data,indent=2));os.chmod(CONFIG,0o600)
+def api(server,path="",payload=None,query=None,token=None,timeout=15):
+    url=server.rstrip("/")+path
+    if query:url+="?"+urllib.parse.urlencode(query)
+    data=json.dumps(payload).encode() if payload is not None else None
+    headers={"Content-Type":"application/json"} if data else {}
+    if token:headers["Authorization"]="Bearer "+token
+    req=urllib.request.Request(url,data=data,headers=headers)
+    with urllib.request.urlopen(req,timeout=timeout) as response:
+        raw=response.read().decode();return json.loads(raw) if raw else {}
 def open_browser(url):
-    """Open a URL on desktop Linux or Android/Termux."""
     try:
         if shutil.which("am"):
-            result = subprocess.run(["am", "start", "-a", "android.intent.action.VIEW", "-d", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            if result.returncode == 0:
-                return True
-    except Exception:
-        pass
-    try:
-        return bool(webbrowser.open(url))
-    except Exception:
-        return False
-
-
+            result=subprocess.run(["am","start","-a","android.intent.action.VIEW","-d",url],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+            if result.returncode==0:return True
+    except Exception:pass
+    try:return bool(webbrowser.open(url))
+    except Exception:return False
 def logo():
-    print()
-    print(c("╭────────────────────────────────────────────╮", CYAN))
-    print(c("│", CYAN) + c("              VIRGOX CLOUD PC              ", BOLD) + c("│", CYAN))
-    print(c("│", CYAN) + c("          Secure computer from CLI          ", DIM) + c("│", CYAN))
-    print(c("╰────────────────────────────────────────────╯", CYAN))
-    print()
-
-
+    print();print(c("╭────────────────────────────────────────────╮",CYAN));print(c("│",CYAN)+c("              VIRGOX CLOUD PC              ",BOLD)+c("│",CYAN));print(c("│",CYAN)+c("          Secure computer from CLI          ",DIM)+c("│",CYAN));print(c("╰────────────────────────────────────────────╯",CYAN));print()
 def login(args):
-    cfg = load()
-    server = (args.server or cfg.get("server") or DEFAULT_SERVER).rstrip("/")
-    auth_web = (args.web or cfg.get("auth_web") or DEFAULT_AUTH_WEB).rstrip("/")
-
-    logo()
-    print(c("  Authentication", BOLD))
-    print(c("  ──────────────", DIM))
-    print(f"  Host       {server}")
-    print(f"  Auth       {auth_web or 'bridge verification page'}")
-
+    cfg=load();server=(args.server or cfg.get("server") or DEFAULT_SERVER).rstrip("/");auth_web=(args.web or cfg.get("auth_web") or DEFAULT_AUTH_WEB).rstrip("/");backend=(args.backend or cfg.get("auth_backend") or AUTH_BACKEND).rstrip("/")
+    logo();print(c("  Authentication",BOLD));print(c("  ──────────────",DIM));print(f"  Host       {server}");print(f"  Auth       {auth_web}")
     try:
-        start = api(AUTH_BACKEND, "", {"action": "start"})
-        code = start["device_code"]
-        verification_url = auth_web + "/cli.html?" + urllib.parse.urlencode({"device_code": code})
-        expires = int(start.get("expires_in", 600))
-
-        print()
-        print(c("  🔐 Browser authorization", CYAN))
-        print()
-        print(c(f"  Code: {code}", BOLD))
-        print(f"  URL : {verification_url}")
-        print()
-        print(c("  Opening authorization page...", DIM))
-
-        try:
-            opened = open_browser(verification_url)
-            if not opened:
-                print(c("  ↳ Open the URL above manually.", YELLOW))
-        except Exception:
-            print(c("  ↳ Open the URL above manually.", YELLOW))
-
-        print()
-        print(c("  Waiting for authorization ", DIM), end="", flush=True)
-        deadline = time.time() + expires
-        frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
-        frame = 0
-
-        while time.time() < deadline:
+        start=api(backend,payload={"action":"start"});code=start["device_code"];verification_url=auth_web+"/cli.html?"+urllib.parse.urlencode({"device_code":code});expires=int(start.get("expires_in",600))
+        print();print(c("  🔐 Browser authorization",CYAN));print();print(c(f"  Code: {code}",BOLD));print(f"  URL : {verification_url}");print();print(c("  Opening authorization page...",DIM))
+        if not open_browser(verification_url):print(c("  ↳ Open the URL above manually.",YELLOW))
+        print();print(c("  Waiting for authorization ",DIM),end="",flush=True);deadline=time.time()+expires;frames="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";frame=0
+        while time.time()<deadline:
             try:
-                result = api(AUTH_BACKEND, "", {"action": "poll", "code": code})
+                result=api(backend,payload={"action":"poll","code":code})
                 if result.get("authenticated") and result.get("token"):
-                    email = result.get("email") or "user"
-                    save({
-                        "server": server,
-                        "email": email,
-                        "token": result["token"],
-                        "role": result.get("role", "user"),
-                        "version": VERSION
-                    })
-                    print("\r" + c("  ✓ Authorization complete.          ", GREEN))
-                    print()
-                    print(c("  ┌─ Signed in", GREEN))
-                    print(f"  │  Account : {email}")
-                    print(f"  │  Host    : {server}")
-                    print(f"  └─ Session : {CONFIG}")
-                    print()
-                    print(c("  VirgoX is ready.", BOLD))
-                    return 0
+                    email=result.get("email") or "user";save({"server":server,"auth_web":auth_web,"auth_backend":backend,"email":email,"token":result["token"],"role":result.get("role","user"),"version":VERSION})
+                    print("\r"+c("  ✓ Authorization complete.          ",GREEN));print();print(c("  ┌─ Signed in",GREEN));print(f"  │  Account : {email}");print(f"  │  Host    : {server}");print(f"  └─ Session : {CONFIG}");print();print(c("  VirgoX is ready.",BOLD));return 0
             except urllib.error.HTTPError as exc:
-                if exc.code in (404, 409):
-                    pass
-                else:
-                    print(f"\\n  {c('✗', RED)} Authorization error: HTTP {exc.code}", file=sys.stderr)
-                    return 1
-            except (urllib.error.URLError, TimeoutError, ConnectionError):
-                pass
-            except Exception as exc:
-                print(f"\\n  {c('✗', RED)} {exc}", file=sys.stderr)
-                return 1
-
-            if sys.stdout.isatty():
-                print("\\b" + frames[frame % len(frames)], end="", flush=True)
-            else:
-                print(".", end="", flush=True)
-            frame += 1
-            time.sleep(2)
-
-        print("\\n  " + c("✗ Authorization timed out.", RED), file=sys.stderr)
-        return 1
-
-    except Exception as exc:
-        print(f"  {c('✗', RED)} Could not start browser authorization: {exc}", file=sys.stderr)
-        return 1
-
+                if exc.code not in (404,409):print(f"\n  {c('✗',RED)} Authorization error: HTTP {exc.code}",file=sys.stderr);return 1
+            except (urllib.error.URLError,TimeoutError,ConnectionError):pass
+            except Exception as exc:print(f"\n  {c('✗',RED)} {exc}",file=sys.stderr);return 1
+            print("\b"+frames[frame%len(frames)] if sys.stdout.isatty() else ".",end="",flush=True);frame+=1;time.sleep(2)
+        print("\n  "+c("✗ Authorization timed out.",RED),file=sys.stderr);return 1
+    except Exception as exc:print(f"  {c('✗',RED)} Could not start browser authorization: {exc}",file=sys.stderr);return 1
 def status(args):
-    cfg = load()
-    logo()
-    print(c("  Session", BOLD))
-    print(c("  ───────", DIM))
-
-    if not cfg.get("token"):
-        print(f"  {c('●', RED)} Not logged in.")
-        print()
-        print("  Run: vxc auth login")
-        return 1
-
-    server = (cfg.get("server") or DEFAULT_SERVER).rstrip("/")
+    cfg=load();logo();print(c("  Session",BOLD));print(c("  ───────",DIM))
+    if not cfg.get("token"):print(f"  {c('●',RED)} Not logged in.");print();print("  Run: vxc auth login");return 1
+    server=(cfg.get("server") or DEFAULT_SERVER).rstrip("/")
     try:
-        result = api(server, "/api/auth/validate_session", token=cfg["token"])
+        result=api(server,"/api/auth/validate_session",token=cfg["token"])
         if result.get("valid") or result.get("authenticated"):
-            email = cfg.get("email") or result.get("email") or "logged in"
-            print(f"  {c('●', GREEN)} Connected")
-            print(f"  Account : {email}")
-            print(f"  Host    : {server}")
-            print(f"  Config  : {CONFIG}")
-            return 0
-        print(f"  {c('●', YELLOW)} Session expired or invalid.")
-        print("  Run: vxc auth login")
-        return 1
-    except Exception as exc:
-        print(f"  {c('✗', RED)} Could not reach VirgoX: {exc}", file=sys.stderr)
-        return 1
-
-
+            email=cfg.get("email") or result.get("email") or "logged in";print(f"  {c('●',GREEN)} Connected");print(f"  Account : {email}");print(f"  Host    : {server}");print(f"  Config  : {CONFIG}");return 0
+        print(f"  {c('●',YELLOW)} Session expired or invalid.");print("  Run: vxc auth login");return 1
+    except Exception as exc:print(f"  {c('✗',RED)} Could not reach VirgoX: {exc}",file=sys.stderr);return 1
 def logout(args):
-    if CONFIG.exists():
-        CONFIG.unlink()
-        print(c("✓ Logged out of VirgoX.", GREEN))
-    else:
-        print("✓ Already logged out.")
+    if CONFIG.exists():CONFIG.unlink();print(c("✓ Logged out of VirgoX.",GREEN))
+    else:print("✓ Already logged out.")
     return 0
-
-
 def _runtime_root():
-    explicit = os.environ.get("VIRGOX_ROOT", "")
-    candidates = [
-        explicit,
-        str(pathlib.Path(__file__).resolve().parent.parent),
-        str(pathlib.Path.home() / ".virgox-cloud-computer"),
-    ]
-    for candidate in candidates:
-        if candidate and (pathlib.Path(candidate) / "start_native.sh").exists():
-            return pathlib.Path(candidate)
+    explicit=os.environ.get("VIRGOX_ROOT","")
+    for candidate in (explicit,str(pathlib.Path(__file__).resolve().parent.parent),str(pathlib.Path.home()/".virgox-cloud-computer")):
+        if candidate and (pathlib.Path(candidate)/"start_native.sh").exists():return pathlib.Path(candidate)
     return None
-
-
-def _port_open(port, host="127.0.0.1", timeout=1.0):
+def _port_open(port,host="127.0.0.1",timeout=1.0):
     import socket
     try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
-    except OSError:
-        return False
-
-
-def _startup_diagnostics(state):
-    ports = {"desktop": 3000, "terminal": 7681, "bridge": 8888}
-    print("  Service status:")
-    for name, port in ports.items():
-        status = "ONLINE" if _port_open(port) else "OFFLINE"
-        print(f"    {name.title():8} {status} (port {port})")
-    for path in (state / "startup.log", state / "novnc.log", state / "ttyd.log", state / "server.log", pathlib.Path.home() / "bridge_server.log"):
-        if path.exists():
-            try:
-                lines = path.read_text(errors="replace").splitlines()
-                if lines:
-                    print(f"  Last log lines from {path}:")
-                    for line in lines[-8:]:
-                        print(f"    {line}")
-            except OSError:
-                pass
-
-
+        with socket.create_connection((host,port),timeout=timeout):return True
+    except OSError:return False
 def run_pc(args):
-    root = _runtime_root()
-    if root is None:
-        print(c("  ✗ VirgoX runtime is not installed.", RED), file=sys.stderr)
-        print("  Reinstall with the official installer:")
-        print("  curl -fsSL https://raw.githubusercontent.com/darkvirgoyt-beep/VirgoX-Cloud-Computer/android-arm64-native-vxc/install.sh | bash")
-        return 1
-
-    state = pathlib.Path.home() / ".virgox-native"
-    state.mkdir(parents=True, exist_ok=True)
-    server_pid = state / "server.pid"
-
-    if _port_open(8888) and _port_open(3000):
-        print(c("✓ VirgoX Cloud PC is already running.", GREEN))
-        print("  Desktop  : http://127.0.0.1:3000/vnc.html?autoconnect=true")
-        print("  Terminal : http://127.0.0.1:7681/")
-        print("  Bridge   : http://127.0.0.1:8888/")
-        return 0
-
-    log = state / "startup.log"
-    env = os.environ.copy()
-    env["VIRGOX_RUNTIME"] = "native"
-    env["VIRGOX_HOME"] = str(pathlib.Path.home())
-
+    root=_runtime_root()
+    if root is None:print(c("  ✗ VirgoX runtime is not installed.",RED),file=sys.stderr);return 1
+    state=pathlib.Path.home()/".virgox-native";state.mkdir(parents=True,exist_ok=True)
+    if _port_open(8888) and _port_open(3000):print(c("✓ VirgoX Cloud PC is already running.",GREEN));return 0
+    log=state/"startup.log";env=os.environ.copy();env["VIRGOX_RUNTIME"]="native";env["VIRGOX_HOME"]=str(pathlib.Path.home())
     try:
-        with log.open("ab") as fh:
-            import subprocess
-            subprocess.Popen(
-                ["bash", str(root / "start_native.sh")],
-                cwd=str(root),
-                env=env,
-                stdin=subprocess.DEVNULL,
-                stdout=fh,
-                stderr=fh,
-                start_new_session=True,
-            )
-    except Exception as exc:
-        print(c(f"  ✗ Could not start VirgoX: {exc}", RED), file=sys.stderr)
-        return 1
-
-    print(c("  Starting VirgoX Cloud PC...", CYAN), flush=True)
-    deadline = time.time() + max(5, int(args.timeout))
-    while time.time() < deadline:
+        with log.open("ab") as fh:subprocess.Popen(["bash",str(root/"start_native.sh")],cwd=str(root),env=env,stdin=subprocess.DEVNULL,stdout=fh,stderr=fh,start_new_session=True)
+    except Exception as exc:print(c(f"  ✗ Could not start VirgoX: {exc}",RED),file=sys.stderr);return 1
+    print(c("  Starting VirgoX Cloud PC...",CYAN),flush=True);deadline=time.time()+max(5,int(args.timeout))
+    while time.time()<deadline:
         if _port_open(8888) and _port_open(3000):
-            print(c("  ✓ VirgoX Cloud PC is running.", GREEN))
-            print("  Desktop  : http://127.0.0.1:3000/vnc.html?autoconnect=true")
-            print("  Terminal : http://127.0.0.1:7681/")
-            print("  Bridge   : http://127.0.0.1:8888/")
-            if args.open:
-                try:
-                    open_browser("http://127.0.0.1:3000/vnc.html?autoconnect=true")
-                except Exception:
-                    pass
+            print(c("  ✓ VirgoX Cloud PC is running.",GREEN))
+            if args.open:open_browser("http://127.0.0.1:3000/vnc.html?autoconnect=true")
             return 0
-        time.sleep(0.5)
-
-    print(c("  ✗ VirgoX did not become ready in time.", RED), file=sys.stderr)
-    print(f"  Check log: {log}", file=sys.stderr)
-    _startup_diagnostics(state)
-    return 1
-
-
+        time.sleep(.5)
+    print(c("  ✗ VirgoX did not become ready in time.",RED),file=sys.stderr);return 1
 def stop_pc(args):
-    state = pathlib.Path.home() / ".virgox-native"
-    stopped = False
-    for name in ("server.pid", "xvfb.pid"):
-        pidfile = state / name
-        try:
-            pid = int(pidfile.read_text().strip())
-            os.kill(pid, 15)
-            stopped = True
-        except Exception:
-            pass
-    import subprocess
-    patterns = [
-        "websockify.*3000",
-        "x11vnc.*-rfbport 5900",
-        "ttyd.*7681",
-        "startxfce4",
-    ]
-    for pattern in patterns:
-        subprocess.run(["pkill", "-f", pattern], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    print(c("✓ VirgoX Cloud PC stopped." if stopped else "✓ VirgoX Cloud PC is not running.", GREEN))
-    return 0
-
-
+    state=pathlib.Path.home()/".virgox-native";stopped=False
+    for name in ("server.pid","xvfb.pid"):
+        try:os.kill(int((state/name).read_text().strip()),15);stopped=True
+        except Exception:pass
+    for pattern in ("websockify.*3000","x11vnc.*-rfbport 5900","ttyd.*7681","startxfce4"):subprocess.run(["pkill","-f",pattern],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    print(c("✓ VirgoX Cloud PC stopped." if stopped else "✓ VirgoX Cloud PC is not running.",GREEN));return 0
 def status_pc(args):
-    desktop = _port_open(3000)
-    terminal = _port_open(7681)
-    bridge = _port_open(8888)
-    print(c("  VirgoX Cloud PC", BOLD))
-    print(c("  ───────────────", DIM))
-    print(f"  Desktop  : {c('ONLINE', GREEN) if desktop else c('OFFLINE', RED)}")
-    print(f"  Terminal : {c('ONLINE', GREEN) if terminal else c('OFFLINE', RED)}")
-    print(f"  Bridge   : {c('ONLINE', GREEN) if bridge else c('OFFLINE', RED)}")
-    return 0 if bridge else 1
-
-
-def version(args):
-    print(f"VirgoX Cloud Computer CLI {VERSION}")
-
-
+    desktop=_port_open(3000);terminal=_port_open(7681);bridge=_port_open(8888);print(c("  VirgoX Cloud PC",BOLD));print(c("  ───────────────",DIM));print(f"  Desktop  : {c('ONLINE',GREEN) if desktop else c('OFFLINE',RED)}");print(f"  Terminal : {c('ONLINE',GREEN) if terminal else c('OFFLINE',RED)}");print(f"  Bridge   : {c('ONLINE',GREEN) if bridge else c('OFFLINE',RED)}");return 0 if bridge else 1
 def main():
-    parser = argparse.ArgumentParser(
-        prog="vxc",
-        description="VirgoX Cloud Computer — secure terminal client",
-        epilog="Examples: vxc run --open | vxc pc status | vxc auth login",
-    )
-    parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
-    sub = parser.add_subparsers(dest="command")
-
-    run_parser = sub.add_parser("run", help="Start the native VirgoX Cloud PC in the background")
-    run_parser.add_argument("--open", action="store_true", help="Open the desktop in the browser")
-    run_parser.add_argument("--timeout", type=int, default=30, help="Startup wait time in seconds")
-    run_parser.set_defaults(func=run_pc)
-
-    pc = sub.add_parser("pc", help="Manage the local VirgoX Cloud PC")
-    pc_sub = pc.add_subparsers(dest="pc_command")
-
-    pc_status = pc_sub.add_parser("status", help="Show desktop, terminal and bridge status")
-    pc_status.set_defaults(func=status_pc)
-
-    pc_stop = pc_sub.add_parser("stop", help="Stop the local VirgoX Cloud PC")
-    pc_stop.set_defaults(func=stop_pc)
-
-    pc_restart = pc_sub.add_parser("restart", help="Restart the local VirgoX Cloud PC")
-    pc_restart.set_defaults(func=lambda args: (stop_pc(args), run_pc(args))[1])
-    pc_restart.add_argument("--open", action="store_true", help="Open the desktop in the browser")
-    pc_restart.add_argument("--timeout", type=int, default=30, help="Startup wait time in seconds")
-
-    auth = sub.add_parser("auth", help="Manage VirgoX authentication")
-    auth_sub = auth.add_subparsers(dest="auth_command")
-
-    login_parser = auth_sub.add_parser("login", help="Sign in through bridge browser authorization")
-    login_parser.add_argument("--server", help="VirgoX bridge URL")
-    login_parser.add_argument("--backend", help="Supabase VirgoX auth function URL")
-    login_parser.add_argument("--web", help="VirgoX web login URL")
-    login_parser.set_defaults(func=login)
-
-    status_parser = auth_sub.add_parser("status", help="Show current session status")
-    status_parser.set_defaults(func=status)
-
-    logout_parser = auth_sub.add_parser("logout", help="Remove the local session")
-    logout_parser.set_defaults(func=logout)
-
-    args = parser.parse_args()
-    if not getattr(args, "func", None):
-        logo()
-        parser.print_help()
-        return 0
+    parser=argparse.ArgumentParser(prog="vxc",description="VirgoX Cloud Computer — secure terminal client",epilog="Examples: vxc run --open | vxc pc status | vxc auth login");parser.add_argument("--version",action="version",version=f"%(prog)s {VERSION}");sub=parser.add_subparsers(dest="command")
+    run_parser=sub.add_parser("run",help="Start the native VirgoX Cloud PC in the background");run_parser.add_argument("--open",action="store_true");run_parser.add_argument("--timeout",type=int,default=30);run_parser.set_defaults(func=run_pc)
+    pc=sub.add_parser("pc",help="Manage the local VirgoX Cloud PC");pc_sub=pc.add_subparsers(dest="pc_command");pc_status=pc_sub.add_parser("status");pc_status.set_defaults(func=status_pc);pc_stop=pc_sub.add_parser("stop");pc_stop.set_defaults(func=stop_pc);pc_restart=pc_sub.add_parser("restart");pc_restart.add_argument("--open",action="store_true");pc_restart.add_argument("--timeout",type=int,default=30);pc_restart.set_defaults(func=lambda args:(stop_pc(args),run_pc(args))[1])
+    auth=sub.add_parser("auth",help="Manage VirgoX authentication");auth_sub=auth.add_subparsers(dest="auth_command");login_parser=auth_sub.add_parser("login",help="Sign in through Supabase browser authorization");login_parser.add_argument("--server",help="VirgoX bridge URL");login_parser.add_argument("--backend",help="Supabase auth function URL");login_parser.add_argument("--web",help="VirgoX web login URL");login_parser.set_defaults(func=login);status_parser=auth_sub.add_parser("status",help="Show current session status");status_parser.set_defaults(func=status);logout_parser=auth_sub.add_parser("logout",help="Remove the local session");logout_parser.set_defaults(func=logout)
+    args=parser.parse_args()
+    if not getattr(args,"func",None):logo();parser.print_help();return 0
     return args.func(args)
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__=="__main__":raise SystemExit(main())
