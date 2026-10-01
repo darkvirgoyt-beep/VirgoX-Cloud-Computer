@@ -5,8 +5,10 @@ export VIRGOX_RUNTIME=native
 export VIRGOX_HOME="${VIRGOX_HOME:-$HOME}"
 export DISPLAY="${DISPLAY:-:1}"
 STATE="$HOME/.virgox-native"
-mkdir -p "$STATE" "$HOME/VirgoX-Files" "/tmp/virgox-runtime-$(id -u)"
-export XDG_RUNTIME_DIR="/tmp/virgox-runtime-$(id -u)"
+RUNTIME_BASE="${TMPDIR:-$HOME/.cache}"
+export XDG_RUNTIME_DIR="${RUNTIME_BASE%/}/virgox-runtime-$(id -u)"
+mkdir -p "$STATE" "$HOME/VirgoX-Files" "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
 
 start_if_missing() {
   local pidfile="$1"; shift

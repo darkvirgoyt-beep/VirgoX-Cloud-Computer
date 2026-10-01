@@ -930,7 +930,9 @@ print(json.dumps(apps))
             code = secrets.token_hex(4).upper()
             _device_auth[code] = {"expires": time.time() + 600, "status": "pending"}
             host = f"http://{self.headers.get('Host', '127.0.0.1:8888')}"
-            self._respond_ok({"status":"ok","device_code":code,"verification_url":f"{host}/cli-authorize?code={code}","expires_in":600})
+            public_host = os.environ.get("VIRGOX_PUBLIC_BRIDGE_URL", "").strip().rstrip("/")
+            verification_host = public_host or host
+            self._respond_ok({"status":"ok","device_code":code,"verification_url":f"{verification_host}/cli-authorize?code={code}","expires_in":600})
             return
 
         if path == "/api/auth/device/authorize":
