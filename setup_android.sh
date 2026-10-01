@@ -7,7 +7,14 @@ export DISPLAY="${DISPLAY:-:1}"
 
 echo "=== VirgoX Native ARM64 setup ==="
 echo "[*] Installing native desktop/runtime dependencies..."
-sudo apt-get update -y
+if [ "$(id -u)" -eq 0 ]; then
+  APT=(apt-get)
+else
+  command -v sudo >/dev/null 2>&1 || { echo "[ERROR] sudo is required when not running as root."; exit 1; }
+  APT=(sudo apt-get)
+fi
+"${APT[@]}" update -y
+DEBIAN_FRONTEND=noninteractive "${APT[@]}" install -y \
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
   xfce4 xfce4-goodies xfce4-terminal dbus-x11 xvfb x11vnc novnc websockify \
   xdotool wmctrl scrot curl wget unzip git python3 python3-pip filebrowser ttyd \
