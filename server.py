@@ -21,14 +21,15 @@ import re
 PORT = 8888
 CONTAINER_NAME = "virgox-desktop"
 UDP_INPUT_TARGET = ("172.17.0.2", 9999)
-AUTH_FILE = "/home/darkvirgoyt/virgox_auth.json"
-OTP_LOG_FILE = "/home/darkvirgoyt/otp_codes.log"
+VIRGOX_HOME = os.environ.get("VIRGOX_HOME", os.path.expanduser("~"))
+AUTH_FILE = os.environ.get("VIRGOX_AUTH_FILE", os.path.join(VIRGOX_HOME, "virgox_auth.json"))
+OTP_LOG_FILE = os.environ.get("VIRGOX_OTP_LOG_FILE", os.path.join(VIRGOX_HOME, "otp_codes.log"))
 _active_otps = {}  # {email: {"otp": code, "expires": timestamp, "attempts": count}}
 _setup_otps = {}   # {email: {"otp": code, "expires": timestamp, "attempts": count}}
 _active_sessions = {} # {token: {"email": email, "role": role, "expires": timestamp}}
 _device_auth = {} # {device_code: {"expires": timestamp, "status": "pending|authorized", "token": ..., "email": ...}}
 _udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-USER_CLOUDS_DIR = "/home/darkvirgoyt/virgox_user_clouds"
+USER_CLOUDS_DIR = os.environ.get("VIRGOX_USER_CLOUDS_DIR", os.path.join(VIRGOX_HOME, "virgox_user_clouds"))
 os.makedirs(USER_CLOUDS_DIR, exist_ok=True)
 
 def create_session(email, role="user"):
@@ -560,7 +561,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
             qs = parse_qs(parsed.query)
             code = (qs.get("code", [""])[0] or "").strip().upper()
             safe_code = re.sub(r"[^A-Z0-9-]", "", code)
-            html = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VirgoX CLI Authorization</title><style>body{font-family:system-ui;background:#0b1020;color:#fff;display:grid;place-items:center;min-height:100vh;margin:0}.card{width:min(420px,90vw);padding:28px;border:1px solid #26304d;border-radius:18px;background:#11182b;box-shadow:0 20px 60px #0008}input{width:100%;box-sizing:border-box;margin:8px 0;padding:12px;border-radius:10px;border:1px solid #35405e;background:#0b1020;color:#fff}button{width:100%;padding:12px;border:0;border-radius:10px;background:#6d5dfc;color:#fff;font-weight:700;margin-top:10px}small{color:#9aa5c2}.code{font:700 20px monospace;letter-spacing:2px}</style></head><body><div class="card"><h2>⚡ VirgoX CLI Authorization</h2><p>Authorize this terminal session.</p><p>Code: <span class="code">__CODE__</span></p><small>Sign in with your existing VirgoX account. The terminal will receive a session after authorization.</small><form id="f"><input id="email" type="email" placeholder="Email" required><input id="password" type="password" placeholder="Password" required><button>Authorize terminal</button></form><p id="m"></p><script>const code="__CODE__";document.getElementById("f").onsubmit=async e=>{e.preventDefault();const m=document.getElementById("m");m.textContent="Authorizing…";try{const r=await fetch("/api/auth/device/authorize",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code,email:document.getElementById("email").value,password:document.getElementById("password").value})});const d=await r.json();m.textContent=d.message||d.error||(d.status==="ok"?"Authorized. You can return to the terminal.":"Authorization failed.");if(d.status==="ok")document.getElementById("f").remove()}catch(err){m.textContent="Could not reach VirgoX.";}};</script></div></body></html>""".replaceAll("__CODE__", safe_code);
+            html = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VirgoX CLI Authorization</title><style>body{font-family:system-ui;background:#0b1020;color:#fff;display:grid;place-items:center;min-height:100vh;margin:0}.card{width:min(420px,90vw);padding:28px;border:1px solid #26304d;border-radius:18px;background:#11182b;box-shadow:0 20px 60px #0008}input{width:100%;box-sizing:border-box;margin:8px 0;padding:12px;border-radius:10px;border:1px solid #35405e;background:#0b1020;color:#fff}button{width:100%;padding:12px;border:0;border-radius:10px;background:#6d5dfc;color:#fff;font-weight:700;margin-top:10px}small{color:#9aa5c2}.code{font:700 20px monospace;letter-spacing:2px}</style></head><body><div class="card"><h2>⚡ VirgoX CLI Authorization</h2><p>Authorize this terminal session.</p><p>Code: <span class="code">__CODE__</span></p><small>Sign in with your existing VirgoX account. The terminal will receive a session after authorization.</small><form id="f"><input id="email" type="email" placeholder="Email" required><input id="password" type="password" placeholder="Password" required><button>Authorize terminal</button></form><p id="m"></p><script>const code="__CODE__";document.getElementById("f").onsubmit=async e=>{e.preventDefault();const m=document.getElementById("m");m.textContent="Authorizing…";try{const r=await fetch("/api/auth/device/authorize",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code,email:document.getElementById("email").value,password:document.getElementById("password").value})});const d=await r.json();m.textContent=d.message||d.error||(d.status==="ok"?"Authorized. You can return to the terminal.":"Authorization failed.");if(d.status==="ok")document.getElementById("f").remove()}catch(err){m.textContent="Could not reach VirgoX.";}};</script></div></body></html>""".replace("__CODE__", safe_code);
             self.send_response(200)
             self._send_cors()
             self.send_header("Content-Type", "text/html; charset=utf-8")
