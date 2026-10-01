@@ -1,1 +1,97 @@
-:root{color-scheme:dark;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at top,#18233f,#070b14 55%);color:#f7f9ff;display:grid;place-items:center}.shell{width:min(440px,92vw)}.card{padding:32px;border:1px solid #263552;border-radius:24px;background:#0e1525e8;box-shadow:0 24px 80px #0008;backdrop-filter:blur(16px)}.brand{font-weight:800;letter-spacing:.16em;color:#8e9cff;font-size:13px}h1{margin:12px 0 8px;font-size:28px}.muted{color:#9aa7c1}.small{font-size:12px}.code{margin:22px 0;padding:18px;text-align:center;border:1px solid #334264;border-radius:16px;background:#080d18;font:800 25px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:5px}label{display:block;font-size:13px;color:#b8c2d8;margin:14px 0}input{display:block;width:100%;margin-top:7px;padding:13px 14px;border-radius:12px;border:1px solid #334264;background:#080d18;color:#fff;outline:none}input:focus{border-color:#8792ff}button{width:100%;padding:14px;border:0;border-radius:12px;background:#6675ff;color:#fff;font-weight:800;cursor:pointer}button:hover{filter:brightness(1.08)}.message{min-height:20px;margin:18px 0 0;color:#b8c8ff}
+:root{
+  color-scheme:dark;
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --bg:#050711;
+  --panel:rgba(12,16,30,.78);
+  --panel-2:rgba(18,24,43,.72);
+  --line:rgba(143,156,255,.18);
+  --line-strong:rgba(143,156,255,.34);
+  --text:#f7f8ff;
+  --muted:#929bb5;
+  --accent:#7c83ff;
+  --accent-2:#9b7cff;
+  --success:#55e6a5;
+}
+*{box-sizing:border-box}
+html{min-height:100%;background:var(--bg)}
+body{
+  margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;
+  color:var(--text);overflow-x:hidden;
+  background:
+    radial-gradient(700px 420px at 50% -10%,rgba(104,116,255,.22),transparent 62%),
+    radial-gradient(500px 400px at 100% 100%,rgba(151,93,255,.11),transparent 65%),
+    linear-gradient(145deg,#070a14 0%,#03050b 100%);
+}
+body:before{
+  content:"";position:fixed;inset:0;pointer-events:none;opacity:.28;
+  background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
+  background-size:32px 32px;mask-image:linear-gradient(to bottom,black,transparent 80%);
+}
+.shell{width:min(460px,100%);position:relative;z-index:1}
+.card{
+  position:relative;padding:32px;border:1px solid var(--line);border-radius:28px;
+  background:linear-gradient(145deg,rgba(18,24,43,.88),rgba(8,11,21,.86));
+  box-shadow:0 32px 90px rgba(0,0,0,.55),inset 0 1px rgba(255,255,255,.045);
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+}
+.card:before{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(135deg,rgba(124,131,255,.08),transparent 42%);
+}
+.brand-row{display:flex;align-items:center;gap:11px}
+.brand-mark{
+  width:38px;height:38px;display:grid;place-items:center;border-radius:12px;
+  background:linear-gradient(135deg,var(--accent),var(--accent-2));
+  box-shadow:0 8px 28px rgba(124,131,255,.28);font-size:19px;
+}
+.brand{font-weight:850;letter-spacing:.12em;color:#fff;font-size:13px}
+.badge{
+  margin-left:auto;padding:6px 9px;border:1px solid rgba(85,230,165,.18);
+  border-radius:999px;color:var(--success);background:rgba(85,230,165,.06);
+  font-size:10px;font-weight:750;letter-spacing:.08em;text-transform:uppercase
+}
+h1{margin:25px 0 8px;font-size:30px;line-height:1.08;letter-spacing:-.035em}
+.muted{color:var(--muted);line-height:1.55}
+.small{font-size:12px}
+.code-wrap{margin:25px 0}
+.code-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px;color:#8993ad;font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:750}
+.code{
+  padding:19px 14px;text-align:center;border:1px solid var(--line-strong);border-radius:17px;
+  background:rgba(4,7,15,.72);font:850 25px/1 ui-monospace,SFMono-Regular,Menlo,monospace;
+  letter-spacing:5px;color:#fff;box-shadow:inset 0 1px rgba(255,255,255,.035)
+}
+label{display:block;font-size:12px;color:#aeb7ce;margin:16px 0;font-weight:650}
+input{
+  display:block;width:100%;margin-top:8px;padding:14px 15px;border-radius:13px;
+  border:1px solid rgba(143,156,255,.17);background:rgba(3,6,13,.72);color:#fff;
+  outline:none;transition:border-color .18s,box-shadow .18s,background .18s
+}
+input::placeholder{color:#5e677e}
+input:focus{border-color:rgba(124,131,255,.72);box-shadow:0 0 0 4px rgba(124,131,255,.10);background:rgba(5,8,17,.9)}
+button{
+  width:100%;padding:14px 16px;border:1px solid transparent;border-radius:13px;
+  background:linear-gradient(135deg,#7079ff,#8b70ff);color:#fff;font-weight:800;
+  cursor:pointer;box-shadow:0 10px 26px rgba(103,113,255,.22);transition:transform .15s,filter .15s,box-shadow .15s
+}
+button:hover{filter:brightness(1.08);transform:translateY(-1px);box-shadow:0 14px 32px rgba(103,113,255,.28)}
+button:active{transform:translateY(0)}
+button.secondary{
+  margin-top:12px;background:rgba(255,255,255,.035);border-color:var(--line);
+  box-shadow:none;color:#e8ebf7
+}
+button.secondary:hover{background:rgba(255,255,255,.065);box-shadow:none}
+.divider{display:flex;align-items:center;gap:12px;margin:20px 0 0;color:#626b82;font-size:11px}
+.divider:before,.divider:after{content:"";height:1px;flex:1;background:rgba(143,156,255,.12)}
+.divider span{text-transform:uppercase;letter-spacing:.1em}
+.message{min-height:21px;margin:18px 0 0;color:#b9c4ff;font-size:13px}
+.footer{display:flex;align-items:center;gap:8px;margin-top:22px;color:#69738b}
+.footer-dot{width:6px;height:6px;border-radius:50%;background:var(--success);box-shadow:0 0 10px rgba(85,230,165,.45)}
+@media(max-width:520px){
+  body{padding:14px}
+  .card{padding:25px 20px;border-radius:22px}
+  h1{font-size:27px}
+  .badge{display:none}
+}
+@media(prefers-reduced-motion:reduce){
+  *{scroll-behavior:auto!important;transition:none!important}
+}
