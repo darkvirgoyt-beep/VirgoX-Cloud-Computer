@@ -15,7 +15,6 @@ else
 fi
 "${APT[@]}" update -y
 DEBIAN_FRONTEND=noninteractive "${APT[@]}" install -y \
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
   xfce4 xfce4-goodies xfce4-terminal dbus-x11 xvfb x11vnc novnc websockify \
   xdotool wmctrl scrot curl wget unzip git python3 python3-pip filebrowser ttyd \
   chromium || true
