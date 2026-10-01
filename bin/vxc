@@ -71,56 +71,31 @@ def logo():
 def login(args):
     cfg = load()
     server = (args.server or cfg.get("server") or DEFAULT_SERVER).rstrip("/")
-    # Migrate stale pre-Firebase project defaults automatically.
-    stored_backend = cfg.get("auth_backend") or ""
-    if stored_backend.rstrip("/") == "https://asia-south1-virgox-cloud.cloudfunctions.net/vxcAuth":
-        stored_backend = ""
-    stored_web = cfg.get("auth_web") or ""
-    if stored_web.rstrip("/") == "https://virgox-cloud.web.app":
-        stored_web = ""
-    backend = (args.backend or stored_backend or AUTH_BACKEND).rstrip("/")
-    web = (args.web or stored_web or AUTH_WEB).rstrip("/")
 
     logo()
     print(c("  Authentication", BOLD))
     print(c("  ──────────────", DIM))
     print(f"  Host       {server}")
-    print(f"  Auth       {backend or 'not configured'}")
+    print("  Auth       Local VirgoX browser authorization")
 
     try:
         start = api(server, "/api/auth/device/start", {})
         code = start["device_code"]
+        verification_url = start.get("verification_url") or (
+            server + "/cli-authorize?code=" + urllib.parse.quote(code, safe="")
+        )
         expires = int(start.get("expires_in", 600))
-        client_secret = secrets.token_urlsafe(32)
 
-        # Keep code creation on the local VirgoX bridge, but register the
-        # correlation pair with Firebase so the browser never needs localhost.
-        try:
-            api(backend, "", {
-                "action": "register",
-                "code": code,
-                "client_secret": client_secret
-            }, timeout=15)
-        except urllib.error.HTTPError as exc:
-            if exc.code == 404:
-                raise RuntimeError(
-                    "Firebase auth backend is not deployed at "
-                    f"{backend}. Deploy firebase/functions and Firebase Hosting "
-                    "for project 'darkvirgoyt', then run vxc auth login again."
-                )
-            raise
-
-        url = web + "/?code=" + urllib.parse.quote(code, safe="")
         print()
         print(c("  🔐 Browser authorization", CYAN))
         print()
         print(c(f"  Code: {code}", BOLD))
-        print(f"  URL : {url}")
+        print(f"  URL : {verification_url}")
         print()
         print(c("  Opening authorization page...", DIM))
 
         try:
-            opened = webbrowser.open(url)
+            opened = webbrowser.open(verification_url)
             if not opened:
                 print(c("  ↳ Open the URL above manually.", YELLOW))
         except Exception:
@@ -134,26 +109,14 @@ def login(args):
 
         while time.time() < deadline:
             try:
-                result = api(backend, "", {
-                    "action": "poll",
-                    "code": code,
-                    "client_secret": client_secret
-                })
-                if result.get("authenticated") and result.get("exchange_ticket"):
-                    local = api(server, "/api/auth/device/complete", {
-                        "code": code,
-                        "client_secret": client_secret,
-                        "exchange_ticket": result["exchange_ticket"]
-                    })
-                    if not local.get("authenticated") or not local.get("token"):
-                        raise RuntimeError("Local VirgoX session exchange failed")
-                    email = local.get("email") or result.get("email") or "user"
+                result = api(server, "/api/auth/device/poll", query={"code": code})
+                if result.get("authenticated") and result.get("token"):
+                    email = result.get("email") or "user"
                     save({
                         "server": server,
-                        "auth_backend": backend,
-                        "auth_web": web,
                         "email": email,
-                        "token": local["token"],
+                        "token": result["token"],
+                        "role": result.get("role", "user"),
                         "version": VERSION
                     })
                     print("\r" + c("  ✓ Authorization complete.          ", GREEN))
@@ -169,29 +132,27 @@ def login(args):
                 if exc.code in (404, 409):
                     pass
                 else:
-                    print(f"\n  {c('✗', RED)} Authorization error: HTTP {exc.code}", file=sys.stderr)
+                    print(f"\\n  {c('✗', RED)} Authorization error: HTTP {exc.code}", file=sys.stderr)
                     return 1
             except (urllib.error.URLError, TimeoutError, ConnectionError):
-                # A temporary network interruption must not kill an active login.
                 pass
             except Exception as exc:
-                print(f"\n  {c('✗', RED)} {exc}", file=sys.stderr)
+                print(f"\\n  {c('✗', RED)} {exc}", file=sys.stderr)
                 return 1
 
             if sys.stdout.isatty():
-                print("\b" + frames[frame % len(frames)], end="", flush=True)
+                print("\\b" + frames[frame % len(frames)], end="", flush=True)
             else:
                 print(".", end="", flush=True)
             frame += 1
             time.sleep(2)
 
-        print("\n  " + c("✗ Authorization timed out.", RED), file=sys.stderr)
+        print("\\n  " + c("✗ Authorization timed out.", RED), file=sys.stderr)
         return 1
 
     except Exception as exc:
         print(f"  {c('✗', RED)} Could not start browser authorization: {exc}", file=sys.stderr)
         return 1
-
 
 def status(args):
     cfg = load()
