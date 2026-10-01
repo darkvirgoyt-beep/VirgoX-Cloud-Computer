@@ -1,70 +1,158 @@
 #!/usr/bin/env python3
-"""VirgoX Cloud CLI — login/status/logout like a small gh-style client."""
-import argparse, getpass, json, os, pathlib, sys, time, urllib.request, urllib.error, urllib.parse, webbrowser
+"""VirgoX Cloud CLI — browser/device login, status and logout."""
+import argparse
+import json
+import os
+import pathlib
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import webbrowser
 
-CONFIG = pathlib.Path(os.environ.get("XDG_CONFIG_HOME", pathlib.Path.home()/".config")) / "vxc" / "config.json"
+CONFIG = pathlib.Path(os.environ.get("XDG_CONFIG_HOME", pathlib.Path.home() / ".config")) / "vxc" / "config.json"
 DEFAULT_SERVER = os.environ.get("VIRGOX_SERVER", "http://127.0.0.1:8888").rstrip("/")
 
+
 def load():
-    try: return json.loads(CONFIG.read_text())
-    except Exception: return {}
+    try:
+        return json.loads(CONFIG.read_text())
+    except Exception:
+        return {}
+
 
 def save(data):
     CONFIG.parent.mkdir(parents=True, exist_ok=True)
     CONFIG.write_text(json.dumps(data, indent=2))
     os.chmod(CONFIG, 0o600)
 
-def api(server, path, payload=None, query=None):
-    url = server + path
+
+def api(server, path, payload=None, query=None, token=None):
+    url = server.rstrip("/") + path
     if query:
         url += "?" + urllib.parse.urlencode(query)
     data = json.dumps(payload).encode() if payload is not None else None
-    req = urllib.request.Request(url, data=data, headers={"Content-Type":"application/json"} if data else {})
-    with urllib.request.urlopen(req, timeout=15) as r:
-        return json.loads(r.read().decode())
+    headers = {"Content-Type": "application/json"} if data else {}
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    req = urllib.request.Request(url, data=data, headers=headers)
+    with urllib.request.urlopen(req, timeout=15) as response:
+        raw = response.read().decode()
+        return json.loads(raw) if raw else {}
+
 
 def login(args):
-    cfg=load()
-    server=(args.server or cfg.get("server") or DEFAULT_SERVER).rstrip("/")
+    cfg = load()
+    server = (args.server or cfg.get("server") or DEFAULT_SERVER).rstrip("/")
     print(f"VirgoX host: {server}")
+
     try:
-        start=api(server, "/api/auth/device/start", {})
-        code=start["device_code"]
-        url=start["verification_url"]
+        start = api(server, "/api/auth/device/start", {})
+        code = start["device_code"]
+        url = start["verification_url"]
+        expires = int(start.get("expires_in", 600))
+
         print()
         print("🔐 Browser authorization required")
         print(f"Code: {code}")
         print(f"Open: {url}")
+
         try:
-            webbrowser.open(url)
-            print("✓ Opened the authorization page in your browser.")
+            opened = webbrowser.open(url)
+            if opened:
+                print("✓ Opened the authorization page in your browser.")
+            else:
+                print("Open the URL above manually.")
         except Exception:
             print("Open the URL above manually.")
+
         print()
         print("Waiting for authorization", end="", flush=True)
-        deadline=time.time()+int(start.get("expires_in",600))
+        deadline = time.time() + expires
+
         while time.time() < deadline:
             try:
-                result=api(server, "/api/auth/device/poll", query={"code":code})
+                result = api(server, "/api/auth/device/poll", query={"code": code})
                 if result.get("authenticated") and result.get("token"):
-                    email=result.get("email") or ""
-                    save({"server":server,"email":email,"token":result["token"]})
+                    email = result.get("email") or ""
+                    save({"server": server, "email": email, "token": result["token"]})
                     print()
                     print(f"✓ {email} logged in.")
                     print(f"✓ Session saved to {CONFIG}")
                     return 0
-            except urllib.error.HTTPError as e:
-                if e.code not in (404,):
-                    print(f"\n✗ Authorization error: HTTP {e.code}", file=sys.stderr)
+            except urllib.error.HTTPError as exc:
+                if exc.code not in (404,):
+                    print(f"\n✗ Authorization error: HTTP {exc.code}", file=sys.stderr)
                     return 1
-            except Exception as e:
-                print(f"\n✗ Could not reach VirgoX: {e}", file=sys.stderr)
+            except Exception as exc:
+                print(f"\n✗ Could not reach VirgoX: {exc}", file=sys.stderr)
                 return 1
+
             print(".", end="", flush=True)
             time.sleep(2)
+
         print("\n✗ Authorization timed out.", file=sys.stderr)
         return 1
-    except Exception as e:
-        print(f"✗ Could not start browser authorization: {e}", file=sys.stderr)
+
+    except Exception as exc:
+        print(f"✗ Could not start browser authorization: {exc}", file=sys.stderr)
         return 1
 
+
+def status(args):
+    cfg = load()
+    if not cfg.get("token"):
+        print("✗ Not logged in.")
+        return 1
+
+    server = (cfg.get("server") or DEFAULT_SERVER).rstrip("/")
+    try:
+        result = api(server, "/api/auth/validate_session", token=cfg["token"])
+        if result.get("valid") or result.get("authenticated"):
+            print(f"✓ {cfg.get('email') or result.get('email') or 'logged in'} logged in.")
+            return 0
+        print("✗ Session is invalid or expired.")
+        return 1
+    except Exception as exc:
+        print(f"✗ Could not reach VirgoX: {exc}", file=sys.stderr)
+        return 1
+
+
+def logout(args):
+    if CONFIG.exists():
+        CONFIG.unlink()
+        print("✓ Logged out.")
+    else:
+        print("✓ Already logged out.")
+    return 0
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="vxc", description="VirgoX Cloud Computer CLI")
+    sub = parser.add_subparsers(dest="command")
+
+    auth = sub.add_parser("auth", help="Manage VirgoX authentication")
+    auth_sub = auth.add_subparsers(dest="auth_command")
+
+    login_parser = auth_sub.add_parser("login", help="Login through browser authorization")
+    login_parser.add_argument("--server", help="VirgoX bridge URL")
+    login_parser.set_defaults(func=login)
+
+    status_parser = auth_sub.add_parser("status", help="Show login status")
+    status_parser.set_defaults(func=status)
+
+    logout_parser = auth_sub.add_parser("logout", help="Remove the local session")
+    logout_parser.set_defaults(func=logout)
+
+    args = parser.parse_args()
+
+    if not getattr(args, "func", None):
+        parser.print_help()
+        return 0
+
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
