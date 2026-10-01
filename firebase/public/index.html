@@ -9,10 +9,17 @@
 <body>
   <main class="shell">
     <section class="card">
-      <div class="brand">⚡ VIRGOX</div>
-      <h1>Authorize terminal</h1>
-      <p class="muted">Sign in to authorize this VirgoX CLI session.</p>
-      <div class="code" id="code">--------</div>
+      <div class="brand-row">
+        <div class="brand-mark" aria-hidden="true">ϟ</div>
+        <div class="brand">VIRGOX</div>
+        <div class="badge">Secure</div>
+      </div>
+      <h1>Authorize your terminal</h1>
+      <p class="muted">Sign in once to securely connect this VirgoX CLI session to your account.</p>
+      <div class="code-wrap">
+        <div class="code-label"><span>One-time code</span><span>Expires automatically</span></div>
+        <div class="code" id="code" aria-label="One-time authorization code">--------</div>
+      </div>
       <form id="login">
         <label>Email<input id="email" type="email" autocomplete="email" required></label>
         <label>Password<input id="password" type="password" autocomplete="current-password" required></label>
@@ -21,7 +28,7 @@
       <div class="divider"><span>or</span></div>
       <button id="github" type="button" class="secondary">Continue with GitHub</button>
       <p id="message" class="message"></p>
-      <p class="muted small">The one-time authorization code expires automatically.</p>
+      <div class="footer"><span class="footer-dot"></span><span class="small">Your code is single-use and expires automatically.</span></div>
     </section>
   </main>
   <script src="/__/firebase/12.0.0/firebase-app-compat.js"></script>
