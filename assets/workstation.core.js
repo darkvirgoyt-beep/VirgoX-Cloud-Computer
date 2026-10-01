@@ -5,16 +5,37 @@
 (function() {
   'use strict';
 
-  // 1. NON-BYPASSABLE INTEGRITY CHECK
-  const auth = sessionStorage.getItem('virgox_authenticated');
-  const token = sessionStorage.getItem('virgox_session_token');
-  const email = sessionStorage.getItem('virgox_user_email');
+  // 1. INTEGRITY CHECK
+  //
+  // pc.html's gate may still be redeeming a session claim from `vxc auth login`,
+  // which takes a network round trip. Checking storage during that window reads
+  // an empty session and would bounce a legitimate sign-in to the landing page
+  // while spending its one-shot claim. So the gate's verdict is read first, and
+  // a claim still in flight makes this wait for the verdict instead of guessing.
+  function sessionIsValid() {
+    return sessionStorage.getItem('virgox_authenticated') === 'true'
+      && !!sessionStorage.getItem('virgox_session_token')
+      && !!sessionStorage.getItem('virgox_user_email');
+  }
 
-  if (auth !== 'true' || !token || !email) {
+  function refuse() {
     sessionStorage.clear();
     localStorage.removeItem('virgox_active_session');
     if (document.documentElement) document.documentElement.innerHTML = '';
     window.location.replace('index.html');
+  }
+
+  const gateVerdict = document.documentElement.getAttribute('data-vxc-session');
+  const claimInFlight =
+    gateVerdict === null && document.documentElement.hasAttribute('data-vxc-claiming');
+
+  // Booting on an unverified session is the one thing this check exists to
+  // prevent, so a claim that is still being redeemed is a wait, not a refusal.
+  // Decided here but acted on at the bottom of this file: WORKSTATION_TEMPLATE
+  // is a const, and a listener that fired before it was initialised would land
+  // in its temporal dead zone and throw instead of hydrating the desktop.
+  if (!claimInFlight && (gateVerdict === 'no' || !sessionIsValid())) {
+    refuse();
     return;
   }
 
@@ -38,7 +59,12 @@
     document.body.appendChild(script);
   }
 
-  if (document.readyState === 'loading') {
+  if (claimInFlight) {
+    document.addEventListener('virgox:session', function (ev) {
+      // 'no' means the gate already cleared storage and redirected.
+      if (ev.detail === 'ok' && sessionIsValid()) hydrateWorkstation();
+    });
+  } else if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', hydrateWorkstation);
   } else {
     hydrateWorkstation();

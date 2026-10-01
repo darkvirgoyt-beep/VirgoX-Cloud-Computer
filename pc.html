@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>VirgoX Cloud Computer — Workstation</title>
-  <link rel="stylesheet" href="style.css?v=20261001_08" />
+  <link rel="stylesheet" href="style.css?v=20261001_09" />
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#0a0b10" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -60,26 +60,111 @@
   </style>
 
   <script>
-    // IMMEDIATE SYNCHRONOUS TAMPER-PROOF AUTHENTICATION GATEWAY
-    (function() {
+    // Session gate.
+    //
+    // `vxc auth login` runs on a phone and approves a session at the auth
+    // service; this page runs in a browser, and the two do not share storage.
+    // So the terminal parks the approved session at the service and gets a
+    // one-shot claim back, and the URL printed at the end of the login carries
+    // that claim. This block claims it before anything else looks at the
+    // session, which is what makes `vxc auth login` sign the PC in.
+    //
+    // The claim is consumed on first presentation, so the URL is stripped from
+    // the address bar afterwards and a reload cannot replay it.
+    (function () {
       'use strict';
-      const isAuth = sessionStorage.getItem('virgox_authenticated') === 'true';
-      const token = sessionStorage.getItem('virgox_session_token');
-      const email = (sessionStorage.getItem('virgox_user_email') || '').toLowerCase();
 
-      // Non-bypassable: If auth is missing or altered, purge and force immediate redirect to login
-      if (!isAuth || !token || !email) {
+      var params = new URLSearchParams(location.search);
+      var claim = params.get('vxc_claim');
+      var authBase = params.get('vxc_auth');
+
+      // The auth host travels with the claim so this page talks to the same
+      // service the terminal used. Only http(s), and only remembered once the
+      // claim has actually been redeemed.
+      function rememberAuthBase(raw) {
+        if (!raw) return null;
+        try {
+          var u = new URL(raw);
+          if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+          return u.origin;
+        } catch (e) { return null; }
+      }
+
+      function stripClaim() {
+        params.delete('vxc_claim');
+        params.delete('vxc_auth');
+        var q = params.toString();
+        history.replaceState(null, '', location.pathname + (q ? '?' + q : '') + location.hash);
+      }
+
+      function readSession() {
+        var ok = sessionStorage.getItem('virgox_authenticated') === 'true';
+        var token = sessionStorage.getItem('virgox_session_token');
+        var email = (sessionStorage.getItem('virgox_user_email') || '').toLowerCase();
+        return (ok && token && email) ? { token: token, email: email } : null;
+      }
+
+      /* The engine in assets/workstation.core.js checks the session as soon as it
+       * loads, which is before a network round trip can finish. So the outcome of
+       * this gate is announced on documentElement rather than left in storage:
+       * 'ok' lets the engine boot, 'no' tells it to stay shut, and a missing
+       * value means a claim is still in flight and it must wait for the event. */
+      function settle(outcome) {
+        var root = document.documentElement;
+        root.setAttribute('data-vxc-session', outcome);
+        root.removeAttribute('data-vxc-claiming');
+        document.dispatchEvent(new CustomEvent('virgox:session', { detail: outcome }));
+      }
+
+      function deny() {
         try {
           sessionStorage.clear();
           localStorage.removeItem('virgox_active_session');
-          if (document.documentElement) document.documentElement.innerHTML = '';
-        } catch(e) {}
+        } catch (e) {}
+        settle('no');
         window.location.replace('index.html');
-        throw new Error('SECURITY_VERIFICATION_REQUIRED');
       }
 
-      const role = sessionStorage.getItem('virgox_user_role') || (email === 'darkvirgoyt@gmail.com' ? 'owner' : 'guest');
-      document.documentElement.setAttribute('data-user-mode', role);
+      function accept(email) {
+        var role = sessionStorage.getItem('virgox_user_role')
+          || (email === 'darkvirgoyt@gmail.com' ? 'owner' : 'guest');
+        document.documentElement.setAttribute('data-user-mode', role);
+        settle('ok');
+      }
+
+      var base = rememberAuthBase(authBase);
+
+      if (claim && base) {
+        // Redeeming is a network round trip, so the gate waits for it rather
+        // than deciding on a session that has not been claimed yet.
+        document.documentElement.setAttribute('data-vxc-claiming', '1');
+        fetch(base + '/session/claim?claim=' + encodeURIComponent(claim), {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+          cache: 'no-store'
+        }).then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.access_token) { deny(); return; }
+            sessionStorage.setItem('virgox_authenticated', 'true');
+            sessionStorage.setItem('virgox_session_token', data.access_token);
+            sessionStorage.setItem('virgox_user_email', String(data.user_email || '').toLowerCase());
+            sessionStorage.setItem('virgox_auth_meta', JSON.stringify({
+              source: 'vxc auth login',
+              scope: data.scope || 'workstation:read'
+            }));
+            localStorage.setItem('virgox_auth_base', base);
+            stripClaim();
+            accept(String(data.user_email || '').toLowerCase());
+          })
+          .catch(function () { deny(); });
+        return;
+      }
+
+      // A claim that never arrived, or one already spent, leaves no way in.
+      stripClaim();
+      var session = readSession();
+      if (!session) { deny(); return; }
+      accept(session.email);
     })();
   </script>
 </head>
@@ -95,6 +180,6 @@
   <div id="app" class="app-container"></div>
 
   <!-- Protected Core Workstation Engine (Mounts DOM & executes app controller) -->
-  <script src="assets/workstation.core.js"></script>
+  <script src="assets/workstation.core.js?v=20261001_09"></script>
 </body>
 </html>

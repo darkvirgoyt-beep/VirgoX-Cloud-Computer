@@ -15,9 +15,21 @@
  *   POST /device/approve {user_code}                -> marks the grant approved
  *   POST /token          form-encoded, device_code  -> access_token | pending
  *
+ *   GET  /agent/status                -> is a PC attached to this session?
+ *   POST /agent/command  {argv}       -> queue a command for that PC
+ *   GET  /agent/result?id=             -> wait for the answer
+ *   POST /agent/poll     (browser)    -> long-poll: take the next command
+ *   POST /agent/report   {id,ok,...}  -> hand the answer back
+ *
  * RFC 8628 deliberately has no client_secret: the flow exists for devices that
  * cannot keep one. Authorization therefore happens entirely in this browser
  * page, which is the only thing standing between a code and a token.
+ *
+ * The agent endpoints are how `vxc pc …` drives the workstation. The terminal
+ * and the page cannot see each other directly — one is Termux, the other is a
+ * browser on another origin — so this service carries the traffic. Both sides
+ * authenticate with the same session token, so a queue only exists for a
+ * session that actually signed in.
  *
  * Zero dependencies — node 18+.
  */
@@ -62,6 +74,12 @@ function sweep() {
   for (const [code, g] of grants) {
     if (g.expires_at <= now) grants.delete(code);
   }
+  for (const [tok, s] of sessions) {
+    if (s.expires_at <= now) sessions.delete(tok);
+  }
+  for (const [tok, d] of deviceTokens) {
+    if (d.expires_at <= now) deviceTokens.delete(tok);
+  }
 }
 setInterval(sweep, 60_000).unref();
 
@@ -81,7 +99,7 @@ function send(res, status, payload) {
     // Pages), so this has to be wide open. The device flow protects itself with
     // the one-time code, not with CORS.
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Accept',
+    'Access-Control-Allow-Headers': 'Content-Type, Accept, Authorization',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Cache-Control': 'no-store',
   });
@@ -295,6 +313,15 @@ async function handleToken(req, res) {
   // client already wrote to sessionStorage.
   if (!grant.token) grant.token = newAccessToken();
 
+  // Record it, so this token is a real session everywhere else in the service
+  // and not just an opaque string the /token endpoint happens to recognise.
+  deviceTokens.set(grant.token, {
+    token: grant.token,
+    email: grant.email,
+    created_at: now,
+    expires_at: grant.expires_at,
+  });
+
   send(res, 200, {
     access_token: grant.token,
     token_type: 'Bearer',
@@ -338,7 +365,7 @@ async function handleSessionPush(req, res) {
   send(res, 200, { queued: true, claim, expires_in: HANDOFF_TTL / 1000 });
 }
 
-async function handleSessionClaim(req, res) {
+async function handleSessionClaim(req, url, res) {
   const claim = url.searchParams.get('claim') || '';
   pruneHandoffs();
   const entry = handoffs.get(claim);
@@ -363,7 +390,344 @@ async function handleSessionRevoke(req, res) {
   for (const [k, v] of handoffs) {
     if (v.token === body.token) { handoffs.delete(k); removed++; }
   }
-  send(res, 200, { revoked: removed });
+  // A revoked token must also stop being able to drive the PC. Dropping it from
+  // sessions alone left device-grant tokens working, because they live in their
+  // own store, and an agent queue keyed on the token outlives the logout.
+  const dropped = sessions.delete(body.token) || deviceTokens.delete(body.token);
+  releaseAgent(body.token);
+  send(res, 200, { revoked: removed, session_dropped: dropped });
+}
+
+/* -------------------------------------------------------------- agent bridge
+ *
+ * `vxc auth login` signs the terminal in; it cannot sign the browser in by
+ * itself, and once both are signed in they still cannot see each other. The
+ * terminal is Termux on a phone, the PC is a document in a browser, and there is
+ * no shared process, socket or storage between them. What does exist is this
+ * service, which both already talk to — so the control traffic goes through it.
+ *
+ * Shape: the browser long-polls for work, the terminal queues a command and
+ * waits for the answer. Both authenticate with the same session token, so a queue
+ * exists only for a session that really signed in, and two accounts on the same
+ * service never see each other's commands.
+ */
+
+const AGENT_IDLE_MS = 45_000;   // no poll for this long means the page is gone
+const AGENT_POLL_CAP = 30_000;  // longest a poll is held open, matching the page
+const AGENT_QUEUE_MAX = 32;     // per session; a page that stalls cannot grow it
+const AGENT_RESULT_MS = 120_000;
+
+// token -> { queue: [{id, argv, at}], pollers: [{res,timer}], waiting: [{res,id,timer}],
+//            results: Map(id -> answer), inflight: Set(id), last_seen,
+//            reported: {at, facts} }
+//
+// The two kinds of held-open request are kept apart. A poller is waiting for work
+// and a result-waiter is waiting for an answer; answering one with the other is
+// how a `vxc pc status` silently prints nothing instead of a real reading.
+const agents = new Map();
+
+function agentFor(token) {
+  let a = agents.get(token);
+  if (!a) {
+    a = {
+      queue: [],
+      pollers: [],
+      waiting: [],
+      results: new Map(),
+      inflight: new Set(),
+      last_seen: 0,
+      reported: null,
+    };
+    agents.set(token, a);
+  }
+  return a;
+}
+
+function releaseAgent(token) {
+  const a = agents.get(token);
+  if (!a) return;
+  // Both kinds of waiter are released: the page gets an empty command list and
+  // the terminal is told the answer never came, rather than both sockets being
+  // left hanging until their own timers fire.
+  for (const p of a.pollers) {
+    clearTimeout(p.timer);
+    try { send(p.res, 200, { commands: [] }); } catch (e) { /* socket already gone */ }
+  }
+  for (const w of a.waiting) {
+    clearTimeout(w.timer);
+    try { w.reply({ pending: true }); } catch (e) { /* socket already gone */ }
+  }
+  a.pollers.length = 0;
+  a.waiting.length = 0;
+  a.queue.length = 0;
+  a.results.clear();
+  a.inflight.clear();
+  agents.delete(token);
+}
+
+function pruneAgents() {
+  const now = Date.now();
+  for (const [tok, a] of agents) {
+    if (a.last_seen && now - a.last_seen > AGENT_IDLE_MS) { releaseAgent(tok); continue; }
+    for (const [id, r] of a.results) if (now - r.at > AGENT_RESULT_MS) a.results.delete(id);
+  }
+}
+setInterval(pruneAgents, 30_000).unref();
+
+/* ---- terminal side ------------------------------------------------------- */
+
+async function handleAgentStatus(req, res) {
+  const s = sessionFor(req);
+  if (!s) return send(res, 401, { error: 'not_signed_in', error_description: 'No session.' });
+  const a = agents.get(bearer(req));
+  const live = !!a && Date.now() - a.last_seen <= AGENT_IDLE_MS;
+  send(res, 200, {
+    email: s.email,
+    attached: live,
+    last_seen: live ? a.last_seen : null,
+    queued: live ? a.queue.length : 0,
+    running: live ? a.inflight.size : 0,
+    pollers: live ? a.pollers.length : 0,
+    reported: live && a.reported ? a.reported.facts : null,
+    reported_at: live && a.reported ? a.reported.at : null,
+  });
+}
+
+async function handleAgentCommand(req, res) {
+  const s = sessionFor(req);
+  if (!s) return send(res, 401, { error: 'not_signed_in', error_description: 'No session.' });
+  const body = await readAny(req);
+
+  const argv = Array.isArray(body.argv) ? body.argv : [];
+  if (!argv.length || !argv.every(a => typeof a === 'string')) {
+    return send(res, 400, { error: 'invalid_request', error_description: 'argv must be a non-empty array of strings' });
+  }
+  if (argv.length > 16 || argv.some(a => a.length > 512)) {
+    return send(res, 400, { error: 'command_too_long', error_description: 'argv is capped at 16 items of 512 chars' });
+  }
+
+  const token = bearer(req);
+  const a = agents.get(token);
+  if (!a || Date.now() - a.last_seen > AGENT_IDLE_MS) {
+    return send(res, 409, {
+      error: 'no_pc_attached',
+      error_description: 'No PC is polling this session. Open the PC page and sign in there.',
+    });
+  }
+  if (a.queue.length >= AGENT_QUEUE_MAX) {
+    return send(res, 429, { error: 'queue_full', error_description: 'Too many commands waiting for the PC.' });
+  }
+
+  const id = crypto.randomBytes(9).toString('base64url');
+  a.queue.push({ id, argv, at: Date.now() });
+
+  // A page already parked on a long-poll gets it immediately, and it is marked
+  // running for the same reason the direct-poll path marks it: the queue will
+  // not hold it by the time the terminal asks for the answer.
+  while (a.pollers.length && a.queue.length) {
+    const waiter = a.pollers.shift();
+    const handed = a.queue.splice(0, 1)[0];
+    a.inflight.add(handed.id);
+    try { send(waiter.res, 200, { commands: [handed] }); } catch (e) { /* gone */ }
+  }
+
+  send(res, 200, { queued: true, id, email: s.email, position: a.queue.length });
+}
+
+/* Renders an answer as plain text.
+ *
+ * The terminal is a POSIX shell script with no JSON parser, so asking it to
+ * un-nest a JSON object out of a JSON string is a way to ship a printer that
+ * silently prints nothing. The page hands back a nested object; this flattens it
+ * once, here, where there is a real parser, and the CLI prints lines.
+ *
+ * Scalars become "key: value", an array of strings becomes a "- item" list, and
+ * an array of objects becomes an indented block. Anything else is JSON-encoded,
+ * which is still real output rather than a guess. */
+function renderAnswer(answer) {
+  if (answer.pending) return 'pending';
+  if (answer.ok === false) return `refused\n${answer.error || 'the PC refused the command'}`;
+
+  // A command whose output is already formatted — the terminal's own output —
+  // sends it as `text` and it is printed exactly as the page produced it.
+  if (typeof answer.text === 'string' && answer.text !== '') return answer.text;
+
+  const data = answer.data;
+  if (data === null || data === undefined) return 'ok';
+  if (typeof data !== 'object') return String(data);
+
+  const out = [];
+  for (const [key, value] of Object.entries(data)) {
+    if (value === null || value === undefined) continue;
+    if (Array.isArray(value)) {
+      if (!value.length) { out.push(`${key}: (none)`); continue; }
+      out.push(`${key}:`);
+      for (const item of value) {
+        if (item !== null && typeof item === 'object') {
+          const parts = Object.entries(item)
+            .filter(([, v]) => v !== null && v !== undefined && v !== '')
+            .map(([k, v]) => `${k}=${v}`);
+          out.push(parts.length ? `  - ${parts.join('  ')}` : '  -');
+        } else {
+          out.push(`  - ${item}`);
+        }
+      }
+      continue;
+    }
+    if (typeof value === 'object') {
+      out.push(`${key}:`);
+      for (const [k, v] of Object.entries(value)) {
+        if (v === null || v === undefined) continue;
+        out.push(`  ${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`);
+      }
+      continue;
+    }
+    out.push(`${key}: ${value}`);
+  }
+  return out.length ? out.join('\n') : 'ok';
+}
+
+function sendText(res, body) {
+  res.writeHead(200, {
+    'Content-Type': 'text/plain; charset=utf-8',
+    'Content-Length': Buffer.byteLength(body),
+    'Access-Control-Allow-Origin': '*',
+    'Cache-Control': 'no-store',
+  });
+  res.end(body);
+}
+
+/* Long-poll for one command's answer. Holding the socket open is what makes
+ * `vxc pc status` feel immediate without the page having to push anything.
+ *
+ * `?format=text` returns the flattened rendering above, which is what the CLI
+ * uses; the JSON form stays for anything reading this over HTTP. */
+async function handleAgentResult(req, url, res) {
+  const s = sessionFor(req);
+  if (!s) return send(res, 401, { error: 'not_signed_in', error_description: 'No session.' });
+  const token = bearer(req);
+  const id = (url.searchParams.get('id') || '').trim();
+  if (!id) return send(res, 400, { error: 'invalid_request', error_description: 'id is required' });
+
+  const a = agentFor(token);
+  const asText = url.searchParams.get('format') === 'text';
+  const reply = payload => (asText ? sendText(res, renderAnswer(payload)) : send(res, 200, payload));
+
+  const hit = a.results.get(id);
+  if (hit) {
+    a.results.delete(id);
+    a.inflight.delete(id);
+    return reply(hit);
+  }
+  // Not queued, not running and never answered: the command id does not exist on
+  // this session. Say so immediately rather than holding the socket open. The
+  // queued check matters — a command is removed from the queue the moment the
+  // page takes it, so without this every real command would look unknown by the
+  // time the terminal asked for its answer.
+  if (!a.queue.some(c => c.id === id) && !a.inflight.has(id)) {
+    return send(res, 404, { error: 'unknown_command', error_description: 'No such command on this session.' });
+  }
+
+  const hold = Math.min(Number(url.searchParams.get('wait')) || AGENT_POLL_CAP, AGENT_POLL_CAP);
+  // The reply function is carried with the waiter, because the answer can arrive
+  // from two places — the page reporting it, or this wait expiring — and both
+  // have to honour the format the caller asked for.
+  const holder = { res, kind: 'result', id, timer: null, reply };
+  holder.timer = setTimeout(() => {
+    const i = a.waiting.indexOf(holder);
+    if (i >= 0) a.waiting.splice(i, 1);
+    if (!res.writableEnded) reply({ pending: true });
+  }, hold);
+  a.waiting.push(holder);
+  res.on('close', () => {
+    clearTimeout(holder.timer);
+    const i = a.waiting.indexOf(holder);
+    if (i >= 0) a.waiting.splice(i, 1);
+  });
+}
+
+/* ---- browser side -------------------------------------------------------- */
+
+async function handleAgentPoll(req, url, res) {
+  const s = sessionFor(req);
+  if (!s) return send(res, 401, { error: 'not_signed_in', error_description: 'No session.' });
+  const token = bearer(req);
+  const a = agentFor(token);
+  a.last_seen = Date.now();
+
+  if (a.queue.length) {
+    const cmd = a.queue.splice(0, 1)[0];
+    // Remember it as running. The queue no longer holds it, and this is what
+    // lets a terminal asking for the answer tell "still working" from "never
+    // existed" instead of getting a 404 on a command that is fine.
+    a.inflight.add(cmd.id);
+    return send(res, 200, { commands: [cmd] });
+  }
+
+  const hold = Math.min(Number(url.searchParams.get('wait')) || AGENT_POLL_CAP, AGENT_POLL_CAP);
+  const holder = { res, kind: 'poll', timer: null };
+  holder.timer = setTimeout(() => {
+    const i = a.pollers.indexOf(holder);
+    if (i >= 0) a.pollers.splice(i, 1);
+    a.last_seen = Date.now(); // an idle poll still proves the page is alive
+    if (!res.writableEnded) send(res, 200, { commands: [] });
+  }, hold);
+  a.pollers.push(holder);
+  res.on('close', () => {
+    clearTimeout(holder.timer);
+    const i = a.pollers.indexOf(holder);
+    if (i >= 0) a.pollers.splice(i, 1);
+  });
+}
+
+async function handleAgentReport(req, res) {
+  const s = sessionFor(req);
+  if (!s) return send(res, 401, { error: 'not_signed_in', error_description: 'No session.' });
+  const body = await readAny(req);
+  const token = bearer(req);
+  const a = agentFor(token);
+  a.last_seen = Date.now();
+
+  // The page states what it is, so `vxc pc status` reports the browser it is
+  // actually in rather than a string the terminal made up.
+  if (body.facts && typeof body.facts === 'object') {
+    a.reported = { at: Date.now(), facts: body.facts };
+  }
+
+  // An idle heartbeat posts facts with no id. That is not an answer to anything,
+  // so it must not be stored as one — a result keyed on the empty string would
+  // sit in the map until the pruner noticed, answering a question nobody asked.
+  const id = String(body.id || '');
+  if (!id) {
+    send(res, 200, { recorded: true, facts: !!a.reported });
+    return;
+  }
+
+  const answer = {
+    id,
+    ok: body.ok !== false,
+    data: body.data === undefined ? null : body.data,
+    // A command whose output is already laid out sends it here and the terminal
+    // prints it verbatim. Terminal output is multi-line and full of backslashes;
+    // flattening it into `key: value` lines would mangle it.
+    text: typeof body.text === 'string' ? body.text.slice(0, 16_000) : null,
+    error: body.error ? String(body.error).slice(0, 400) : null,
+    at: Date.now(),
+  };
+  a.inflight.delete(id);
+  a.results.set(id, answer);
+
+  // Hand it to the terminal waiting on this exact command, if there is one.
+  for (let i = a.waiting.length - 1; i >= 0; i--) {
+    const w = a.waiting[i];
+    if (w.kind !== 'result' || w.id !== id) continue;
+    clearTimeout(w.timer);
+    a.waiting.splice(i, 1);
+    a.results.delete(id);
+    try { w.reply(answer); } catch (e) { /* gone */ }
+  }
+
+  send(res, 200, { recorded: true });
 }
 
 /* ------------------------------------------------------------------- routing */
@@ -383,6 +747,9 @@ async function handleSessionRevoke(req, res) {
 const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 const accounts = new Map();     // email -> { email, salt, hash, created_at }
 const sessions = new Map();     // token  -> { token, email, created_at, expires_at }
+// Tokens minted by the device grant (vxc auth login). Same shape as a password
+// session, separate store so a logout of one does not silently kill the other.
+const deviceTokens = new Map(); // token  -> { token, email, created_at, expires_at }
 const SESSION_TTL = 30 * 24 * 3600 * 1000; // 30 days
 
 const DATA_FILE = process.env.VXC_DATA_FILE
@@ -438,9 +805,19 @@ function sessionFor(req) {
   const tok = bearer(req);
   if (!tok) return null;
   const s = sessions.get(tok);
-  if (!s) return null;
-  if (s.expires_at <= Date.now()) { sessions.delete(tok); return null; }
-  return s;
+  if (s) {
+    if (s.expires_at <= Date.now()) { sessions.delete(tok); return null; }
+    return s;
+  }
+  // A token minted by the device grant is the same kind of thing as a password
+  // session: it says who approved it, and for how long. It used to be minted and
+  // never recorded, which meant /account/me 401'd for a PC that had just been
+  // signed in by `vxc auth login` — the page could hold a token the service
+  // denied. It is checked here so both kinds of token mean the same thing.
+  const d = deviceTokens.get(tok);
+  if (!d) return null;
+  if (d.expires_at <= Date.now()) { deviceTokens.delete(tok); return null; }
+  return d;
 }
 
 /* Simple fixed-window throttle on password guessing. */
@@ -543,7 +920,9 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Content-Type, Accept',
+      // Authorization matters here: the browser agent sends the session token as
+      // a Bearer header, and a preflight that omits it fails the whole call.
+      'Access-Control-Allow-Headers': 'Content-Type, Accept, Authorization',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Max-Age': '86400',
     });
@@ -569,8 +948,14 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && path === '/account/me') return await handleMe(req, res);
     if (req.method === 'POST' && path === '/account/logout') return await handleLogout(req, res);
     if (req.method === 'POST' && path === '/session/push') return await handleSessionPush(req, res);
-    if (req.method === 'GET' && path === '/session/claim') return await handleSessionClaim(req, res);
+    if (req.method === 'GET' && path === '/session/claim') return await handleSessionClaim(req, url, res);
     if (req.method === 'POST' && path === '/session/revoke') return await handleSessionRevoke(req, res);
+
+    if (req.method === 'GET' && path === '/agent/status') return await handleAgentStatus(req, res);
+    if (req.method === 'POST' && path === '/agent/command') return await handleAgentCommand(req, res);
+    if (req.method === 'GET' && path === '/agent/result') return await handleAgentResult(req, url, res);
+    if (req.method === 'POST' && path === '/agent/poll') return await handleAgentPoll(req, url, res);
+    if (req.method === 'POST' && path === '/agent/report') return await handleAgentReport(req, res);
 
     return send(res, 404, { error: 'not_found', error_description: path });
   } catch (err) {

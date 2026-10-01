@@ -1,4 +1,4 @@
-#!/data/data/com.termux/files/usr/bin/sh
+#!/bin/sh
 # vxc — VirgoX Cloud PC command line
 #
 #   vxc auth login     device login: prints a one-time code and a link,
@@ -14,7 +14,7 @@
 
 set -u
 
-VXC_VERSION="1.2.0"
+VXC_VERSION="1.5.0"
 
 # ---- config ---------------------------------------------------------------
 
@@ -88,6 +88,65 @@ http_post() {
   RESP="${_out%${NL}*}"
 }
 
+# http_get <url> [bearer-token] -> same, with an Authorization header when a token
+# is given. The agent endpoints all require the session token, and a GET with a
+# body is not a thing, so this cannot be folded into http_post.
+http_get() {
+  _url="$1"; _tok="${2:-}"
+  # No arrays here: this runs under /bin/sh, which on Termux is dash-adjacent and
+  # has no "${arr[@]}". The header is appended to the curl args as one word
+  # because curl takes "Header: value" as a single argv entry either way.
+  if [ -n "$_tok" ]; then
+    _hdr="Authorization: Bearer $_tok"
+  else
+    _hdr=""
+  fi
+  if [ "$have_curl" -eq 1 ]; then
+    if [ -n "$_hdr" ]; then
+      _out=$(curl -sS -m 60 -H "$_hdr" -H 'Accept: application/json' \
+        "$_url" -w '\n%{http_code}' 2>/dev/null)
+    else
+      _out=$(curl -sS -m 60 -H 'Accept: application/json' \
+        "$_url" -w '\n%{http_code}' 2>/dev/null)
+    fi
+  elif command -v wget >/dev/null 2>&1; then
+    if [ -n "$_hdr" ]; then
+      _out=$(wget -q -O- --timeout=60 --header="$_hdr" "$_url" 2>/dev/null; printf '\n000')
+    else
+      _out=$(wget -q -O- --timeout=60 "$_url" 2>/dev/null; printf '\n000')
+    fi
+  else
+    HTTP_STATUS="000"; RESP=""
+    bad "need curl or wget — run: pkg install curl"
+    return 127
+  fi
+  HTTP_STATUS="${_out##*${NL}}"
+  RESP="${_out%${NL}*}"
+}
+
+# http_post_auth <url> <json-body> <bearer-token> -> same, authenticated
+http_post_auth() {
+  _url="$1"; _json="$2"; _tok="$3"
+  if [ "$have_curl" -eq 1 ]; then
+    _out=$(curl -sS -m 60 -X POST "$_url" \
+      -H 'Content-Type: application/json' \
+      -H 'Accept: application/json' \
+      -H "Authorization: Bearer $_tok" \
+      -d "$_json" -w '\n%{http_code}' 2>/dev/null)
+  elif command -v wget >/dev/null 2>&1; then
+    _out=$(wget -q -O- --timeout=60 --method=POST \
+      --header='Content-Type: application/json' \
+      --header="Authorization: Bearer $_tok" \
+      --body-data="$_json" "$_url" 2>/dev/null; printf '\n000')
+  else
+    HTTP_STATUS="000"; RESP=""
+    bad "need curl or wget — run: pkg install curl"
+    return 127
+  fi
+  HTTP_STATUS="${_out##*${NL}}"
+  RESP="${_out%${NL}*}"
+}
+
 # http_post_form <url> <form-encoded> -> same
 http_post_form() {
   _url="$1"; _form="$2"
@@ -121,6 +180,20 @@ json_get() {
     || true
 }
 
+# The claim is base64url from the service and the auth base is a URL, so both go
+# into a query string. Percent-encoding by hand rather than reaching for a
+# dependency, because the whole point of this script is that there isn't one.
+#
+# Everything is encoded to %XX, then the RFC 3986 unreserved set is decoded back
+# out. `&` and `=` are deliberately NOT in that set: unencoded, they would end
+# the parameter and start a new one, which is a session claim going somewhere it
+# was never meant to go.
+urlencode() {
+  printf '%s' "$1" | od -An -tx1 -v | tr -d ' \n' | sed -E 's/(..)/%&/g' \
+    | sed -E 's/%(4[1-9a-f]|5[0-9a]|6[1-9a-f]|7[0-9a]|3[0-9]|2d|2e|5f|7e)/\\x\1/g' \
+    | xargs -0 printf '%b'
+}
+
 # ---- session file ---------------------------------------------------------
 
 session_set() {
@@ -143,15 +216,16 @@ require_auth_base() {
   if [ -z "$AUTH_BASE" ]; then
     bad "no auth service configured."
     say ""
-    say "  Set one, either for this shell:"
+    say "  Normally ${C_BLD}vxc auth login${C_OFF} starts a service on this machine by"
+    say "  itself, so this only happens if VXC_AUTH was cleared. Put it back:"
     say ""
-    say "    ${C_BLD}export VXC_AUTH=https://your-auth-host${C_OFF}"
+    say "    ${C_BLD}unset VXC_AUTH${C_OFF}"
+    say "    ${C_BLD}vxc auth login${C_OFF}"
     say ""
-    say "  or permanently:"
+    say "  To use one on another machine instead, give its real address:"
     say ""
-    say "    ${C_BLD}vxc config set auth https://your-auth-host${C_OFF}"
+    say "    ${C_BLD}vxc config set auth http://<that-machine>:8787${C_OFF}"
     say ""
-    say "  Then run ${C_BLD}vxc auth login${C_OFF} again."
     exit 2
   fi
 }
@@ -313,8 +387,23 @@ cmd_login() {
     printf '%s\n' ""
     bad "could not reach the auth service at $AUTH_BASE"
     say ""
-    say "  Run ${C_BLD}vxc auth serve${C_OFF} in another tab, or point at a remote one:"
-    say "    ${C_BLD}vxc config set auth https://your-host${C_OFF}"
+    case "$AUTH_BASE" in
+      http://127.0.0.1:*|http://localhost:*)
+        say "  Start it here, in another terminal, then run this again:"
+        say ""
+        say "    ${C_BLD}vxc auth serve${C_OFF}"
+        ;;
+      *)
+        say "  That host is not on this machine, so nothing here can start it."
+        say "  Either run the service on that machine, in its own terminal:"
+        say ""
+        say "    ${C_BLD}vxc auth serve${C_OFF}"
+        say ""
+        say "  or go back to the one this machine starts by itself:"
+        ;;
+    esac
+    say ""
+    say "    ${C_BLD}vxc config unset auth${C_OFF}"
     say ""
     stop_local_service
     exit 1
@@ -386,21 +475,33 @@ granted_at=$(date +%s)"
       dim "  scope      $granted_scope"
       dim "  endpoint   $AUTH_BASE"
 
-      # Hand the session to the web workstation.
+      # Hand the session to the web workstation. The service parks the token and
+      # returns a one-shot claim; the URL below is what redeems it, so opening
+      # that URL is what signs the PC in. Without the claim the page would have
+      # no way to learn about a session approved in another process.
       http_post "$AUTH_BASE/session/push" \
         "{\"token\":\"$token\",\"email\":\"$email\",\"scope\":\"$granted_scope\"}"
       if [ "$HTTP_STATUS" = "200" ]; then
-        printf '\n'
-        ok "web workstation session queued"
-        say ""
-        say "  ${C_DIM}Open this on the same browser you use for the PC:${C_OFF}"
-        say "  ${C_BLU}$WORKSTATION_URL${C_OFF}"
-        say ""
-        say "  ${C_DIM}It will sign itself in from the queued session.${C_OFF}"
-        say ""
+        claim=$(json_get "$RESP" claim)
+        if [ -z "$claim" ]; then
+          warn "service accepted the session but returned no claim — open the PC by hand and sign in there"
+        else
+          claim_url="vxc_claim=$(urlencode "$claim")&vxc_auth=$(urlencode "$AUTH_BASE")"
+          pc_url="${WORKSTATION_URL}pc.html?$claim_url"
+          printf '\n'
+          ok "PC session queued"
+          say ""
+          say "  ${C_DIM}Open this to sign the PC in. The claim is one-shot:${C_OFF}"
+          say "  ${C_BLU}$pc_url${C_OFF}"
+          say ""
+          if command -v termux-open-url >/dev/null 2>&1; then
+            termux-open-url "$pc_url" >/dev/null 2>&1 && dim "  (opened in your browser)"
+          fi
+        fi
       else
         warn "could not queue the web session (HTTP $HTTP_STATUS)"
         dim "  the token is stored locally — vxc auth status still works"
+        say "  the PC page will still ask you to sign in there"
       fi
       return 0
     fi
@@ -481,11 +582,72 @@ cmd_logout() {
   fi
 }
 
+# A URL that was never resolved is the most likely thing to be typed here: these
+# placeholders are printed in this script's own error messages, so a user who
+# copies one gets a config file that points nowhere and every later login fails
+# with no explanation. Rejecting them at write time is cheaper than debugging it
+# three commands later.
+looks_like_placeholder() {
+  case "$1" in
+    *your-host*|*your-auth-host*|*your-auth*|*example.com*|*example.org*) return 0 ;;
+    *'<'*|*'>'*|*" "*) return 0 ;;
+  esac
+  return 1
+}
+
+valid_http_url() {
+  case "$1" in
+    http://*|https://*) return 0 ;;
+  esac
+  return 1
+}
+
+# Reached now, not at the next login. A service that answers /health is real;
+# one that does not is a typo or a machine that is not up, and either way the
+# user should find out while they are still looking at this command.
+require_reachable() {
+  _url="${1%/}"
+  if health "$_url"; then
+    return 0
+  fi
+  bad "nothing answers at $_url/health — not saving it."
+  say ""
+  say "  Check the service is running:"
+  say "    ${C_BLD}vxc auth serve${C_OFF}   ${C_DIM:-}on that machine, then re-run${C_OFF:-}"
+  say ""
+  say "  Or go back to the built-in default:"
+  say "    ${C_BLD}vxc config unset auth${C_OFF}"
+  say ""
+  exit 1
+}
+
 cmd_config() {
   case "${1:-}" in
     set)
       key="${2:-}"; val="${3:-}"
       [ -z "$key" ] && { bad "usage: vxc config set <auth|workstation> <url>"; exit 2; }
+      [ -z "$val" ] && { bad "usage: vxc config set $key <url>"; exit 2; }
+
+      if looks_like_placeholder "$val"; then
+        bad "'$val' is not a real address."
+        say ""
+        say "  That is the placeholder from this tool's own help text. Use the"
+        say "  address of a machine you control, or keep the default:"
+        say ""
+        say "    ${C_BLD}vxc auth login${C_OFF}   ${C_DIM:-}starts a service here by itself${C_OFF:-}"
+        say ""
+        exit 1
+      fi
+
+      valid_http_url "$val" || { bad "must start with http:// or https:// — got '$val'"; exit 1; }
+
+      # auth is checked against the live service. workstation is only used to
+      # build links, and probing a Pages site to save it would make a typo there
+      # fail the same way, so it is checked for shape alone.
+      if [ "$key" = "auth" ]; then
+        require_reachable "$val"
+      fi
+
       mkdir -p "$CONFIG_DIR"
       touch "$CONFIG_FILE"
       grep -v "^$key=" "$CONFIG_FILE" > "$CONFIG_FILE.tmp" 2>/dev/null || true
@@ -493,32 +655,66 @@ cmd_config() {
       mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
       ok "$key = $val"
       ;;
+    unset)
+      key="${2:-}"
+      [ -z "$key" ] && { bad "usage: vxc config unset <auth|workstation>"; exit 2; }
+      if [ -f "$CONFIG_FILE" ]; then
+        grep -v "^$key=" "$CONFIG_FILE" > "$CONFIG_FILE.tmp" 2>/dev/null || true
+        mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
+      fi
+      if [ "$key" = "auth" ]; then
+        ok "auth reset to the built-in default (127.0.0.1:8787)"
+      else
+        ok "$key reset to its default"
+      fi
+      ;;
+    get)
+      key="${2:-}"
+      [ -f "$CONFIG_FILE" ] && grep -m1 "^$key=" "$CONFIG_FILE" | cut -d= -f2- || true
+      ;;
     get)
       key="${2:-}"
       [ -f "$CONFIG_FILE" ] && grep -m1 "^$key=" "$CONFIG_FILE" | cut -d= -f2- || true
       ;;
     *)
-      say "usage: vxc config set <key> <value> | vxc config get <key>"
+      say "usage: vxc config set <key> <url> | vxc config get <key> | vxc config unset <key>"
       ;;
   esac
 }
 
+# These ids are the ones the page actually builds a window for. An id that is
+# not listed here is not rejected — it gets the honest placeholder window — but
+# nothing here should name a product the page does not open.
 cmd_apps() {
   say ""
-  say "${C_BLD}Apps in the web workstation${C_OFF}"
+  say "${C_BLD}Apps the PC can open${C_OFF}"
   say ""
-  say "  ${C_BLD}browser${C_OFF}        Microsoft Edge"
-  say "  ${C_BLD}chrome${C_OFF}         Google Chrome"
-  say "  ${C_BLD}vscode${C_OFF}         Visual Studio Code"
-  say "  ${C_BLD}blender${C_OFF}        Blender"
-  say "  ${C_BLD}photoshop${C_OFF}      Photopea  ${C_DIM}(real Photoshop alternative, runs in the browser)${C_OFF}"
-  say "  ${C_BLD}files${C_OFF}          File Explorer"
-  say "  ${C_BLD}terminal${C_OFF}       Terminal"
-  say "  ${C_BLD}settings${C_OFF}       Settings"
-  say "  ${C_BLD}taskmgr${C_OFF}        Task Manager"
+  say "  ${C_BLD}terminal${C_OFF}        Terminal          ${C_DIM}live browser readings${C_OFF}"
+  say "  ${C_BLD}files${C_OFF}           File Explorer     ${C_DIM}live HEAD requests${C_OFF}"
+  say "  ${C_BLD}settings${C_OFF}        Settings          ${C_DIM}incl. wallpaper picker${C_OFF}"
+  say "  ${C_BLD}taskmgr${C_OFF}         Task Manager      ${C_DIM}Resource Timing API${C_OFF}"
+  say "  ${C_BLD}browser${C_OFF}         Web Browser       ${C_DIM}real frame, probes blocked sites${C_OFF}"
+  say "  ${C_BLD}editor${C_OFF}          Code Studio       ${C_DIM}a text editor, no runtime behind it${C_OFF}"
+  say "  ${C_BLD}photopea${C_OFF}        Photopea          ${C_DIM}the real photopea.com, framed${C_OFF}"
+  say "  ${C_BLD}video_editor${C_OFF}    Video Converter   ${C_DIM}ffmpeg.wasm, runs in this tab${C_OFF}"
+  say "  ${C_BLD}vlc${C_OFF}            Media Player      ${C_DIM}plays a file you pick, uploads nothing${C_OFF}"
+  say "  ${C_BLD}chrome${C_OFF}          Google Chrome     ${C_DIM}links out${C_OFF}"
+  say "  ${C_BLD}edge${C_OFF}            Microsoft Edge    ${C_DIM}links out${C_OFF}"
+  say "  ${C_BLD}blender${C_OFF}         Blender           ${C_DIM}links out to blender.org${C_OFF}"
+  say "  ${C_BLD}unreal${C_OFF}          Unreal Engine     ${C_DIM}download link, no version claimed${C_OFF}"
+  say "  ${C_BLD}steam${C_OFF}           Steam             ${C_DIM}download link${C_OFF}"
+  say "  ${C_BLD}msstore${C_OFF}         Microsoft Store   ${C_DIM}download link${C_OFF}"
+  say "  ${C_BLD}playstore${C_OFF}       Play Store        ${C_DIM}download link${C_OFF}"
   say ""
-  say "  ${C_DIM}vxc app vscode${C_OFF}"
+  say "  ${C_DIM}vxc app terminal${C_OFF}   opens the PC with that window already open"
   say ""
+}
+
+# pc.html is where the desktop lives. index.html is the landing page, and it
+# redirects to pc.html after sign-in — which drops the ?open= parameter, so
+# pointing at it would open the workstation and quietly drop the app.
+pc_url() {
+  printf '%s' "${WORKSTATION_URL}pc.html${1:+?$1}"
 }
 
 cmd_app() {
@@ -527,16 +723,216 @@ cmd_app() {
     cmd_apps
     exit 2
   fi
+  url=$(pc_url "open=$(urlencode "$name")")
   say ""
   dim "  opening '$name' in the web workstation"
-  say "  ${C_BLU}$WORKSTATION_URL?open=$name${C_OFF}"
+  say "  ${C_BLU}$url${C_OFF}"
   say ""
   if command -v termux-open-url >/dev/null 2>&1; then
-    termux-open-url "$WORKSTATION_URL?open=$name" >/dev/null 2>&1 && ok "opened"
+    termux-open-url "$url" >/dev/null 2>&1 && ok "opened"
   else
-    warn "termux-api not installed — install it to open links automatically:"
+    warn "termux-api not installed — open the link by hand, or install it:"
     say "    ${C_BLD}pkg install termux-api${C_OFF}"
   fi
+}
+
+cmd_pc() {
+  say ""
+  if [ -n "$(session_get token 2>/dev/null)" ]; then
+    ok "signed in as $(session_get email 2>/dev/null)"
+  else
+    warn "not signed in"
+    say "  run ${C_BLD}vxc auth login${C_OFF} first — or just sign in on the page"
+    say ""
+  fi
+  url=$(pc_url)
+  say "  ${C_BLU}$url${C_OFF}"
+  say ""
+  if command -v termux-open-url >/dev/null 2>&1; then
+    termux-open-url "$url" >/dev/null 2>&1 && ok "opened"
+  else
+    warn "termux-api not installed — open the link by hand, or run: pkg install termux-api"
+  fi
+  say ""
+  dim "  Once it is open and signed in, drive it from here:"
+  say "    ${C_BLD}vxc pc status${C_OFF}          what the page reports about itself"
+  say "    ${C_BLD}vxc pc windows${C_OFF}         list the open windows"
+  say "    ${C_BLD}vxc pc open <app>${C_OFF}      open one"
+  say "    ${C_BLD}vxc pc run <command>${C_OFF}    run a command in its terminal"
+  say ""
+}
+
+# ---- driving the PC from the terminal -------------------------------------
+#
+# The terminal and the page are two different processes on two different hosts
+# most of the time, so there is no local socket to talk over. Both of them
+# already talk to the auth service, so the commands go through it: this queues
+# one, the page picks it up on its next poll, and the answer comes back over the
+# session token. Nothing here fabricates a result — if the page is not attached,
+# that is what it says.
+
+AGENT_WAIT="${VXC_AGENT_WAIT:-60}"
+
+# The answer comes back as text/plain, already flattened by the service.
+#
+# It used to be JSON parsed here with tr and sed, which broke the moment the page
+# returned a nested object: the fields came out misaligned or not at all, and
+# `vxc pc status` printed a blank line while exiting 0. The shell has no JSON
+# parser and should not pretend to, so the flattening happens once on the
+# service, where there is a real one.
+
+# agent_send <argv-json> -> sets $RESP to the page's answer
+#
+# The argument is a bare JSON array; it is wrapped in {"argv": …} here so the
+# service sees one documented shape and there is no second way to spell it.
+agent_send() {
+  _argv="{\"argv\":$1}"
+
+  # Read the token without a subshell. $(...) runs in a subshell, so an exit
+  # inside one only ends that subshell — the caller would carry on with an empty
+  # token and the service would answer 400 instead of the real refusal.
+  _tok=$(session_get token 2>/dev/null || true)
+  if [ -z "$_tok" ]; then
+    say ""
+    bad "not signed in."
+    say ""
+    say "  ${C_BLD}vxc auth login${C_OFF} first — a PC command runs as your account."
+    say ""
+    exit 1
+  fi
+
+  http_post_auth "$AUTH_BASE/agent/command" "$_argv" "$_tok"
+  if [ "$HTTP_STATUS" != "200" ]; then
+    err=$(json_get "$RESP" error)
+    desc=$(json_get "$RESP" error_description)
+    case "$err" in
+      no_pc_attached)
+        say ""
+        bad "no PC is listening on this session."
+        say ""
+        say "  The page has to be open and signed in with the same account."
+        say "  Open it here, then run the command again:"
+        say ""
+        say "    ${C_BLD}vxc pc${C_OFF}"
+        say ""
+        exit 1
+        ;;
+      not_signed_in)
+        say ""
+        bad "the service does not know this session any more."
+        say "  Sign in again: ${C_BLD}vxc auth login${C_OFF}"
+        say ""
+        exit 1
+        ;;
+      *)
+        bad "the service returned HTTP $HTTP_STATUS${err:+ ($err)}"
+        [ -n "$desc" ] && say "  $desc"
+        exit 1
+        ;;
+    esac
+  fi
+
+  id=$(json_get "$RESP" id)
+  if [ -z "$id" ]; then
+    bad "the service queued the command but returned no id"
+    exit 1
+  fi
+
+  # Wait for the page's answer. The service holds this open, so a command on a
+  # live page comes back as fast as the page's poll allows. format=text means the
+  # body is already printable — see agent_print_data.
+  http_get "$AUTH_BASE/agent/result?id=$(urlencode "$id")&wait=$((AGENT_WAIT * 1000))&format=text" "$_tok"
+  case "$HTTP_STATUS" in
+    200) : ;;
+    404) bad "that command is not on this session any more"; exit 1 ;;
+    000) bad "the service stopped answering while the PC worked"; exit 1 ;;
+    *)   bad "the service returned HTTP $HTTP_STATUS waiting for the answer"; exit 1 ;;
+  esac
+
+  case "$RESP" in
+    pending)
+      say ""
+      bad "the PC did not answer within ${AGENT_WAIT}s."
+      say "  It may have been closed, or lost the network."
+      say ""
+      exit 1
+      ;;
+    refused*)
+      say ""
+      bad "the PC refused it:"
+      # sed, not `tail -n +2`. On the phone this ships to, tail is the uutils
+      # coreutils build and `tail -n +2` never returns — the refusal print
+      # hung the whole command until it was killed.
+      printf '%s\n' "$RESP" | sed -n '2,$p' | sed -E 's/^/  /'
+      say ""
+      exit 1
+      ;;
+  esac
+}
+
+# Builds a JSON array from the arguments, quoting each one. Only strings are ever
+# sent, so this is a join with escaping — not a JSON writer.
+agent_argv_json() {
+  _out='['
+  _first=1
+  for _a in "$@"; do
+    if [ "$_first" -eq 0 ]; then _out="$_out,"; fi
+    _first=0
+    _esc=$(printf '%s' "$_a" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+    _out="$_out\"$_esc\""
+  done
+  printf '%s]' "$_out"
+}
+
+cmd_agent() {
+  _sub="${1:-}"
+  shift 2>/dev/null || true
+  case "$_sub" in
+    status|windows|open|close|focus|run)
+      case "$_sub" in
+        open|close|focus|run)
+          # Each one says what it actually wants, because "open needs something
+          # to open" tells the person nothing they could not already guess.
+          if [ $# -eq 0 ]; then
+            case "$_sub" in
+              open)   bad "open needs an app id.";    _usage="vxc pc open <app>     ${C_DIM}vxc apps${C_OFF} lists the ids" ;;
+              close)  bad "close needs a window id."; _usage="vxc pc close <app>    ${C_DIM}vxc pc windows${C_OFF} lists what is open" ;;
+              focus)  bad "focus needs a window id."; _usage="vxc pc focus <app>    ${C_DIM}vxc pc windows${C_OFF} lists what is open" ;;
+              *)      bad "run needs a command.";    _usage="vxc pc run <command>  runs it in the PC's terminal window" ;;
+            esac
+            say "  ${C_BLD}${_usage}${C_OFF}"
+            exit 2
+          fi
+          agent_send "$(agent_argv_json "$_sub" "$@")"
+          ;;
+        *)
+          agent_send "$(agent_argv_json "$_sub")"
+          ;;
+      esac
+      say ""
+      printf '%s\n' "$RESP"
+      say ""
+      ;;
+    ""|help|-h)
+      say ""
+      say "  ${C_BLD}vxc pc${C_OFF} <command>"
+      say ""
+      say "    ${C_BLD}status${C_OFF}            what the open PC reports about itself"
+      say "    ${C_BLD}windows${C_OFF}           the windows it has open"
+      say "    ${C_BLD}open <app>${C_OFF}        open an app  (${C_BLD}vxc apps${C_OFF} lists ids)"
+      say "    ${C_BLD}close <app>${C_OFF}       close an open window"
+      say "    ${C_BLD}focus <app>${C_OFF}       bring an open window to the front"
+      say "    ${C_BLD}run <command>${C_OFF}     run a command in the PC's terminal window"
+      say ""
+      say "  The PC has to be open and signed in with the same account."
+      say ""
+      ;;
+    *)
+      bad "unknown: vxc pc $_sub"
+      say "  run ${C_BLD}vxc pc help${C_OFF} for the list"
+      exit 2
+      ;;
+  esac
 }
 
 usage() {
@@ -550,15 +946,25 @@ ${C_BLD}USAGE${C_OFF}
   vxc auth logout             clear the session
   vxc auth token              print the session token
   vxc auth serve [port]       run the auth service here (default 8787)
-  vxc app <name>              open an app in the web workstation
-  vxc apps                    list available apps
-  vxc config set auth <url>   point at your auth service
+  vxc pc                      open the PC (prints the URL, opens it if it can)
+  vxc pc status               ask the open PC what it is
+  vxc pc windows              list the windows it has open
+  vxc pc open <app>           open an app in it
+  vxc pc close <app>          close a window
+  vxc pc focus <app>          bring a window to the front
+  vxc pc run <command>        run a command in its terminal window
+  vxc app <name>              open an app inside the PC
+  vxc apps                    list the app ids the PC accepts
+  vxc config set auth <url>   point at your auth service (checked live)
+  vxc config unset auth       go back to the built-in default
+  vxc config get auth         show what is configured
   vxc version
 
 ${C_BLD}ENV${C_OFF}
   VXC_AUTH            auth service base URL
   VXC_WORKSTATION     workstation URL
   VXC_SCOPE           OAuth scope (default: $SCOPE)
+  VXC_AGENT_WAIT      seconds to wait for the PC to answer (default 60)
 
 EOF
 }
@@ -581,6 +987,8 @@ case "${1:-}" in
         ;;
     esac
     ;;
+  pc)      shift 2>/dev/null || true
+           if [ $# -gt 0 ]; then cmd_agent "$@"; else cmd_pc; fi ;;
   app)     shift; cmd_app "$@" ;;
   apps)    cmd_apps ;;
   config)  shift; cmd_config "$@" ;;

@@ -707,6 +707,254 @@
   }
 
   // Initialize
+  /* `vxc app <name>` prints and opens a URL ending in ?open=<name>. Nothing used
+   * to read it, so the command opened the workstation and then did nothing —
+   * the app it named stayed shut. This runs last, after the desktop and the
+   * installed-apps drawer exist, because openAppWindow needs them.
+   *
+   * The parameter is removed from the address bar afterwards, so a reload does
+   * not reopen the window the user already closed. */
+  function openFromUrl() {
+    let wanted;
+    try {
+      wanted = new URLSearchParams(location.search).get('open');
+    } catch (e) { return; }
+    if (!wanted) return;
+
+    try {
+      const u = new URL(location.href);
+      u.searchParams.delete('open');
+      const q = u.searchParams.toString();
+      history.replaceState(null, '', u.pathname + (q ? '?' + q : '') + u.hash);
+    } catch (e) { /* history is not essential; the window still opens */ }
+
+    // The installed-apps drawer only lists what the service reports, so an app
+    // it does not know about has no tile to focus. openAppWindow still builds a
+    // real window for any id, and shows the honest placeholder when there is
+    // nothing real behind that id.
+    if (typeof openAppWindow === 'function') {
+      openAppWindow(String(wanted).slice(0, 64));
+    }
+  }
+
+  /* ------------------------------------------------------------ vxc agent link
+   *
+   * The terminal that ran `vxc auth login` and this page cannot see each other:
+   * one is a shell on a phone, this is a document in a browser, and they share no
+   * process, socket or storage. The auth service they both already talk to
+   * carries the traffic instead — this polls it, runs what arrives, and posts
+   * the answer back. That is what makes `vxc pc status` report this machine and
+   * `vxc pc run …` do something here.
+   *
+   * It only starts when this page holds a session token and knows which service
+   * issued it, so it cannot be pointed at a host that was never configured.
+   */
+  const VXC_AGENT = {
+    base: null,
+    token: null,
+    running: false,
+    stop: false,
+    pollWaitMs: 20000,
+    backoffMs: 1000,
+    maxBackoffMs: 30000,
+  };
+
+  function agentBase() {
+    let raw = null;
+    try { raw = localStorage.getItem('virgox_auth_base'); } catch (e) {}
+    if (!raw) return null;
+    try {
+      const u = new URL(raw);
+      // http/https only. A page that will POST a session token must not be talked
+      // into sending it to a javascript: or file: origin.
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+      return u.origin;
+    } catch (e) { return null; }
+  }
+
+  function agentToken() {
+    try { return sessionStorage.getItem('virgox_session_token') || ''; } catch (e) { return ''; }
+  }
+
+  /* Every command below reports what it actually did. Nothing here answers with
+   * a value it did not read from this document. */
+  const VXC_AGENT_COMMANDS = {
+    status() {
+      const f = platformFacts();
+      const wins = Object.keys(openWindows);
+      return {
+        email: sessionStorage.getItem('virgox_user_email') || null,
+        origin: location.origin,
+        page: location.pathname,
+        windows: wins.length,
+        window_ids: wins,
+        logical_cores: f.logicalCores,
+        device_memory_gb: f.deviceMemoryGb,
+        screen: f.screenWidth && f.screenHeight ? `${f.screenWidth}x${f.screenHeight}` : null,
+        viewport: f.viewportWidth && f.viewportHeight ? `${f.viewportWidth}x${f.viewportHeight}` : null,
+        user_agent: f.ua,
+        platform: f.platform,
+        online: f.online,
+        page_age_ms: Math.round(f.pageAgeMs),
+        storage_estimate: typeof navigator.storage && navigator.storage.estimate
+          ? 'navigator.storage.estimate()' : null,
+      };
+    },
+
+    windows() {
+      return Object.keys(openWindows).map(id => {
+        const win = openWindows[id];
+        return {
+          id,
+          title: (win.querySelector('.win-title-left span:first-child')?.textContent || '').trim(),
+          focused: win.classList.contains('active') && !win.classList.contains('minimized'),
+          minimized: win.classList.contains('minimized'),
+        };
+      });
+    },
+
+    open({ argv }) {
+      const id = argv[1];
+      if (!id) return { ok: false, error: 'open needs an app id — see `vxc apps`' };
+      openAppWindow(id);
+      return { ok: true, opened: id, windows: Object.keys(openWindows) };
+    },
+
+    close({ argv }) {
+      const id = argv[1];
+      const win = id ? openWindows[id] : null;
+      if (!win) return { ok: false, error: `no window open for '${id || ''}'` };
+      win.querySelector('.win-btn.close')?.click();
+      return { ok: true, closed: id, windows: Object.keys(openWindows) };
+    },
+
+    focus({ argv }) {
+      const id = argv[1];
+      const win = id ? openWindows[id] : null;
+      if (!win) return { ok: false, error: `no window open for '${id || ''}'` };
+      bringToFront(win);
+      return { ok: true, focused: id };
+    },
+
+    /* Runs a command in the page's own terminal window by putting it in the
+     * input and pressing Enter, so it goes through exactly the same handler a
+     * person typing at the keyboard would. It is the same limited shell that
+     * window has: it reports live browser readings and says so when the browser
+     * withholds something. It is not a shell on this device. */
+    run({ argv }) {
+      const line = argv.slice(1).join(' ').trim();
+      if (!line) return { ok: false, error: 'run needs a command' };
+      let win = openWindows['terminal'];
+      if (!win) {
+        openAppWindow('terminal');
+        win = openWindows['terminal'];
+      }
+      if (!win) return { ok: false, error: 'the terminal window did not open' };
+      const input = win.querySelector('#native-term-input');
+      const output = win.querySelector('#term-output-stream');
+      if (!input || !output) return { ok: false, error: 'the terminal window has no input element' };
+
+      input.value = line;
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      // The handler is async (some commands read the network), so the output is
+      // read after a turn of the event loop rather than immediately.
+      return new Promise(resolve => setTimeout(() => {
+        const text = (output.textContent || '').split('\n').slice(-40).join('\n').trim();
+        resolve({
+          ok: true,
+          command: line,
+          output: text,
+          // Terminal output is multi-line and full of backslashes. It is sent as
+          // text so the terminal prints it exactly, instead of being flattened
+          // into `key: value` lines that lose half of it.
+          text: text || '(no output)',
+        });
+      }, 350));
+    },
+
+    help() {
+      return {
+        commands: ['status', 'windows', 'open <app>', 'close <app>', 'focus <app>', 'run <line>', 'help'],
+        note: 'run executes inside this page\'s terminal window, which is a live browser shell, not a device shell.',
+      };
+    },
+  };
+
+  async function agentRequest(path, body, method) {
+    const headers = { Authorization: 'Bearer ' + VXC_AGENT.token };
+    if (method !== 'GET') headers['Content-Type'] = 'application/json';
+    const r = await fetch(VXC_AGENT.base + path, {
+      method: method || 'POST',
+      headers,
+      cache: 'no-store',
+      body: method === 'GET' ? undefined : JSON.stringify(body || {}),
+    });
+    return r.json().catch(() => ({}));
+  }
+
+  async function vxcAgentRun(argv) {
+    const name = String(argv[0] || '').toLowerCase();
+    const fn = VXC_AGENT_COMMANDS[name];
+    if (!fn) {
+      return {
+        ok: false,
+        error: `unknown command '${argv[0] || ''}' — try: ${Object.keys(VXC_AGENT_COMMANDS).join(', ')}`,
+      };
+    }
+    try {
+      return await fn({ argv });
+    } catch (err) {
+      return { ok: false, error: err && err.message ? err.message : String(err) };
+    }
+  }
+
+  async function vxcAgentLoop() {
+    if (VXC_AGENT.running) return;
+    VXC_AGENT.running = true;
+    VXC_AGENT.stop = false;
+
+    while (!VXC_AGENT.stop) {
+      try {
+        const data = await agentRequest('/agent/poll', null, 'POST');
+        VXC_AGENT.backoffMs = 1000;
+
+        const commands = Array.isArray(data.commands) ? data.commands : [];
+        for (const c of commands) {
+          const answer = await vxcAgentRun(c.argv || []);
+          await agentRequest('/agent/report', {
+            id: c.id,
+            ok: answer.ok !== false,
+            data: answer,
+            text: typeof answer.text === 'string' ? answer.text : null,
+            error: answer.error || null,
+            facts: VXC_AGENT_COMMANDS.status(),
+          });
+        }
+
+        // An idle poll still proves this page is alive, so the facts go up on
+        // every pass rather than only when something was asked.
+        if (!commands.length) {
+          await agentRequest('/agent/report', { id: '', facts: VXC_AGENT_COMMANDS.status() });
+        }
+      } catch (err) {
+        if (VXC_AGENT.stop) break;
+        // The service may be down or the network may be gone. Back off, and do
+        // not spin: this loop runs for as long as the page is open.
+        await new Promise(r => setTimeout(r, VXC_AGENT.backoffMs));
+        VXC_AGENT.backoffMs = Math.min(VXC_AGENT.backoffMs * 2, VXC_AGENT.maxBackoffMs);
+      }
+    }
+    VXC_AGENT.running = false;
+  }
+
+  function setupVxcAgent() {
+    VXC_AGENT.base = agentBase();
+    VXC_AGENT.token = agentToken();
+    if (!VXC_AGENT.base || !VXC_AGENT.token) return;   // nothing to talk to, no loop
+    vxcAgentLoop();
+    window.addEventListener('pagehide', () => { VXC_AGENT.stop = true; });
+  }
+
   function init() {
     const tasks = [
       setupUserProfile, loadConfig, setupFrames, setupTabs,
@@ -717,7 +965,8 @@
       setupDesktopRefresh, setupDesktopTrackpadOverlay, setupVirtualPcKeyboard,
       setupExternalMouseCapture, setupCopilot, setupFullscreen,
       checkConnectionStatus, setupSecurityGate, setupInstalledAppsDrawer,
-      setupNetworkControl, setupExternalKeyboard, setupBackupAndPrivacy
+      setupNetworkControl, setupExternalKeyboard, setupBackupAndPrivacy,
+      openFromUrl, setupVxcAgent
     ];
     tasks.forEach(fn => {
       try {
@@ -1993,7 +2242,7 @@ id="explorer-quota" title="navigator.storage.estimate() — what the browser all
             </div>
           </div>
           <div style="display:flex; flex-direction:column; gap:4px; max-height:240px; overflow-y:auto;">
-            <button class="cyber-btn sm" data-start-app="terminal" style="text-align:left; justify-content:flex-start;">💻 Terminal CLI (Root Bash)</button>
+            <button class="cyber-btn sm" data-start-app="terminal" style="text-align:left; justify-content:flex-start;">💻 Terminal</button>
             <button class="cyber-btn sm" data-start-app="msstore" style="text-align:left; justify-content:flex-start;">🛍️ Microsoft Store (Web Hub)</button>
             <button class="cyber-btn sm" data-start-app="browser" style="text-align:left; justify-content:flex-start;">🌐 Chrome Web Browser</button>
             <button class="cyber-btn sm" data-start-app="files" style="text-align:left; justify-content:flex-start;">📁 This PC</button>
@@ -2020,16 +2269,16 @@ id="explorer-quota" title="navigator.storage.estimate() — what the browser all
     const APPS = [
       { id: 'terminal', name: 'Terminal CLI', icon: '💻' },
       { id: 'msstore', name: 'Microsoft Store', icon: '🛍️' },
-      { id: 'browser', name: 'Chrome Web', icon: '🌐' },
-      { id: 'files', name: 'This PC (5TB)', icon: '📁' },
+      { id: 'browser', name: 'Web Browser', icon: '🌐' },
+      { id: 'files', name: 'This PC', icon: '📁' },
       { id: 'editor', name: 'Code Studio', icon: '📝' },
       { id: 'taskmgr', name: 'Task Manager', icon: '📊' },
-      { id: 'photopea', name: 'Photoshop', icon: '🎨' },
+      { id: 'photopea', name: 'Photopea', icon: '🎨' },
       { id: 'shotcut', name: 'Video Converter', icon: '🎬' },
-      { id: 'steam', name: 'Steam Hub', icon: '🎮' },
+      { id: 'steam', name: 'Steam', icon: '🎮' },
       { id: 'blender', name: 'Blender', icon: '🚀' },
       { id: 'unreal', name: 'Unreal Engine', icon: '⚡' },
-      { id: 'settings', name: 'Stream Config', icon: '⚙️' }
+      { id: 'settings', name: 'Settings', icon: '⚙️' }
     ];
 
     if (iconsContainer && iconsContainer.children.length === 0) {
@@ -2175,7 +2424,7 @@ id="explorer-quota" title="navigator.storage.estimate() — what the browser all
         content: getBrowserHtml()
       },
       terminal: {
-        title: isWinTheme ? 'Windows Terminal (PowerShell / CMD)' : 'Terminal CLI (Root Bash — Port 7681/8888)',
+        title: isWinTheme ? 'Windows Terminal (PowerShell / CMD)' : 'Terminal',
         icon: isWinTheme ? WIN11_ICONS.terminal : '💻',
         width: Math.min(540, window.innerWidth - 30),
         height: 340,
@@ -3126,7 +3375,7 @@ OAuth 2.0 device flow against server/auth-service.js.\n`;
   const MS_STORE_APPS = [
     { id: 'vscode', name: 'Visual Studio Code', cat: 'dev', icon: '💻', desc: "Microsoft's editor, at vscode.dev. It sets frame-ancestors 'none', so this page shows you the real header that blocks it and links out.", action: 'editor', btnText: 'Open Code Studio' },
     { id: 'browser', name: 'Web Browser', cat: 'apps', icon: '🌐', desc: 'A real frame pointed at a real site, with a live probe for sites that refuse to be framed.', action: 'browser', btnText: 'Open Browser' },
-    { id: 'terminal', name: 'Terminal CLI (Root Bash)', cat: 'dev', icon: '⚡', desc: 'A real terminal over this page. Every reading comes from a live browser API, and anything the browser withholds is printed as \'not exposed\'. apt and python3 are not implemented, because there is no shell here to run them.', action: 'terminal', btnText: 'Open Terminal' },
+    { id: 'terminal', name: 'Terminal', cat: 'dev', icon: '⚡', desc: 'A real terminal over this page. Every reading comes from a live browser API, and anything the browser withholds is printed as \'not exposed\'. apt and python3 are not implemented, because there is no shell here to run them.', action: 'terminal', btnText: 'Open Terminal' },
     { id: 'photopea', name: 'Photopea', cat: 'media', icon: '🎨', desc: 'The real photopea.com, framed live. It is an independent editor by Ivan Kutskir — it is not Adobe Photoshop, and this page does not ship a licence for anything.', action: 'photopea', btnText: 'Open Studio' },
     { id: 'shotcut', name: 'FFmpeg WASM Converter', cat: 'media', icon: '🎬', desc: 'Real ffmpeg compiled to WebAssembly, running in this tab. It converts the file you pick, on this machine, with no upload.', action: 'shotcut', btnText: 'Open Converter' },
     { id: 'steam', name: 'Steam Gaming Platform', pub: 'Valve Corporation', cat: 'gaming', icon: '🎮', desc: 'Access the world of PC gaming, cloud synchronization and community hubs.', action: 'steam', btnText: 'Open Steam' },
@@ -4198,7 +4447,7 @@ print("All systems operational.")
           </div>
           <div style="display:flex; flex-direction:column; gap:4px; max-height:240px; overflow-y:auto;">
             <button class="cyber-btn sm" data-start-app="chrome" style="text-align:left; justify-content:flex-start;">🌐 Google Chrome Browser</button>
-            <button class="cyber-btn sm" data-start-app="terminal" style="text-align:left; justify-content:flex-start;">💻 Terminal CLI (Root Bash)</button>
+            <button class="cyber-btn sm" data-start-app="terminal" style="text-align:left; justify-content:flex-start;">💻 Terminal</button>
             <button class="cyber-btn sm" data-start-app="msstore" style="text-align:left; justify-content:flex-start;">🛍️ Microsoft Store (Web Hub)</button>
             <button class="cyber-btn sm" data-start-app="files" style="text-align:left; justify-content:flex-start;">📁 This PC</button>
             <button class="cyber-btn sm" data-start-app="editor" style="text-align:left; justify-content:flex-start;">📝 Code Studio Editor</button>
@@ -4219,19 +4468,19 @@ print("All systems operational.")
       if (iconsContainer) {
         iconsContainer.innerHTML = '';
         const APPS = [
-          { id: 'chrome', name: 'Chrome', icon: '🌐' },
+          { id: 'chrome', name: 'Google Chrome', icon: '🌐' },
           { id: 'terminal', name: 'Terminal CLI', icon: '💻' },
           { id: 'msstore', name: 'Microsoft Store', icon: '🛍️' },
-          { id: 'files', name: 'This PC (5TB)', icon: '📁' },
+          { id: 'files', name: 'This PC', icon: '📁' },
           { id: 'editor', name: 'Code Studio', icon: '📝' },
           { id: 'taskmgr', name: 'Task Manager', icon: '📊' },
-          { id: 'photopea', name: 'Photoshop', icon: '🎨' },
+          { id: 'photopea', name: 'Photopea', icon: '🎨' },
           { id: 'shotcut', name: 'Video Converter', icon: '🎬' },
-          { id: 'steam', name: 'Steam Hub', icon: '🎮' },
+          { id: 'steam', name: 'Steam', icon: '🎮' },
           { id: 'vlc', name: 'Media Player', icon: '🟧' },
           { id: 'blender', name: 'Blender', icon: '🚀' },
           { id: 'unreal', name: 'Unreal Engine', icon: '⚡' },
-          { id: 'settings', name: 'Stream Config', icon: '⚙️' }
+          { id: 'settings', name: 'Settings', icon: '⚙️' }
         ];
         APPS.forEach(app => {
           const item = document.createElement('div');
@@ -5584,7 +5833,7 @@ storage" behind this page. The old version of this answer listed all three.`;
         }
       } else if (viewName === 'setup') {
         if (authTitle) authTitle.textContent = 'VIRGOX PC SECURITY SETUP';
-        if (authSubtitle) authSubtitle.textContent = 'Verify your Gmail once & set your personal Cloud PC password';
+        if (authSubtitle) authSubtitle.textContent = 'Get a code and set your PC password';
         if (authLockIcon) authLockIcon.textContent = '✨';
         if (viewSetup) viewSetup.classList.remove('hidden');
         if (inputSetupEmail && !inputSetupEmail.value && savedEmail) {
@@ -5617,7 +5866,7 @@ storage" behind this page. The old version of this answer listed all three.`;
         }
       } else if (viewName === 'otp') {
         if (authTitle) authTitle.textContent = 'PASSWORD RESET VIA EMAIL';
-        if (authSubtitle) authSubtitle.textContent = 'Enter the 6-digit recovery code sent to your email';
+        if (authSubtitle) authSubtitle.textContent = 'Enter the 6-digit code';
         if (authLockIcon) authLockIcon.textContent = '📩';
         if (viewOtp) viewOtp.classList.remove('hidden');
         if (inputResetOtp) {
@@ -6004,17 +6253,23 @@ storage" behind this page. The old version of this answer listed all three.`;
             } catch (e) {}
           }
 
+          // No mail service is configured, so nothing was sent to anyone. This
+          // used to say a code had been emailed and then printed the code on
+          // screen — which reads as a real email that never happened. It is
+          // generated here, in this tab, and shown here because that is what it
+          // is: a second factor only against someone looking over your shoulder
+          // in this browser. It is not a recovery route if you lose the machine.
           if (!codeSent) {
-            const tempCode = Math.floor(100000 + Math.random() * 900000).toString();
+            const tempCode = String(Math.floor(100000 + Math.random() * 900000));
             sessionStorage.setItem('virgox_temp_setup_otp', tempCode);
-            hintMsg = ` (Local Code: ${tempCode})`;
+            hintMsg = ` Your code is ${tempCode}.`;
             codeSent = true;
           }
 
           if (codeSent) {
-            btnSendSetupCode.textContent = '✓ CODE SENT';
+            btnSendSetupCode.textContent = '✓ CODE READY';
             if (setupStep2) setupStep2.classList.remove('hidden');
-            showAlert(`📩 6-digit verification code sent to ${email}! Enter the code and set your master password below.${hintMsg}`, 'info');
+            showAlert(`Code generated in this browser. Nothing was emailed.${hintMsg}`, 'info');
             setTimeout(() => inputSetupOtp && inputSetupOtp.focus(), 150);
           }
         } catch (err) {
@@ -6091,7 +6346,7 @@ storage" behind this page. The old version of this answer listed all three.`;
         const p2 = (inputSetupConfirm ? inputSetupConfirm.value : '').trim();
 
         if (!otpVal || otpVal.length < 6) {
-          showAlert('Please enter the 6-digit verification code sent to your email.');
+          showAlert('Please enter the 6-digit code.');
           if (inputSetupOtp) inputSetupOtp.focus();
           return;
         }
@@ -6333,16 +6588,20 @@ storage" behind this page. The old version of this answer listed all three.`;
           } catch (e) {}
         }
 
+        // Same as the setup code: no mail service configured means no email.
+        // The code is made here and shown here. Calling it a recovery code sent
+        // to an inbox nobody sent it to is the one thing this must not say —
+        // it is the message a locked-out user would act on.
         if (!sentOk) {
-          const fakeOtp = Math.floor(100000 + Math.random() * 900000).toString();
-          sessionStorage.setItem('virgox_temp_reset_otp', fakeOtp);
-          hintMsg = ` (Local Code: ${fakeOtp})`;
+          const localCode = String(Math.floor(100000 + Math.random() * 900000));
+          sessionStorage.setItem('virgox_temp_reset_otp', localCode);
+          hintMsg = ` Your code is ${localCode}.`;
           sentOk = true;
         }
 
         if (otpTargetEmail) otpTargetEmail.textContent = masked || 'your registered email';
         switchView('otp');
-        showAlert(`📩 6-digit recovery code sent to your email!${hintMsg}`, 'info');
+        showAlert(`Code generated in this browser. Nothing was emailed.${hintMsg}`, 'info');
       } catch (err) {
         showAlert('Failed to dispatch recovery code: ' + err.message);
       } finally {
@@ -6370,7 +6629,7 @@ storage" behind this page. The old version of this answer listed all three.`;
       btnVerifyResetOtp.addEventListener('click', async () => {
         const otpVal = (inputResetOtp ? inputResetOtp.value : '').trim();
         if (!otpVal || otpVal.length < 6) {
-          showAlert('Please enter the 6-digit recovery code.');
+          showAlert('Please enter the 6-digit code.');
           if (inputResetOtp) inputResetOtp.focus();
           return;
         }

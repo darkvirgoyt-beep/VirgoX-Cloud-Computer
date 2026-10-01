@@ -3,7 +3,6 @@
 <div align="center">
 
 [![Web Client](https://img.shields.io/badge/Web%20Client-GitHub%20Pages-00e5ff?style=for-the-badge&logo=githubpages&logoColor=white)](https://darkvirgoyt-beep.github.io/VirgoX-Cloud-Computer/)
-[![Computer Status](https://img.shields.io/badge/Computer-Online%20%26%20Ready-00ff66?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/darkvirgoyt-beep/VirgoX-Cloud-Computer)
 [![Multi-Device](https://img.shields.io/badge/Architecture-Dual%20Phone%20%2B%20AI-ff007f?style=for-the-badge&logo=android)](https://github.com/darkvirgoyt-beep/VirgoX-Cloud-Computer)
 [![Developer](https://img.shields.io/badge/Developer-Prince%20%C2%B7%20VirgoYT-b026ff?style=for-the-badge&logo=github)](https://github.com/darkvirgoyt-beep)
 
@@ -15,57 +14,62 @@
 
 ---
 
-## 🚀 Unified Architecture: The Page + The Computer
+## 🚀 What Is In Here
 
-This project bridges a high-performance **Ubuntu Linux Desktop** with a responsive **Cyberpunk Web Interface (PWA)**, designed for dual-phone operation and direct AI pair-programming:
+Two separate things, often confused:
+
+**The web page** (`gh-pages`, static, no backend). A Windows 11 Fluent desktop in a
+browser tab, plus a terminal that reports what the browser can actually observe,
+an app drawer, and a wall to sign in through. It runs entirely in the tab.
+
+**The container / VM** (`setup_pc.sh`, `docker-compose.yml`). A real XFCE desktop,
+or a real Windows 11 VM. These need Docker on a machine you control and are not
+part of the Pages deployment.
 
 ```
-                    ┌────────────────────────────────────────────────────────┐
-                    │               ⚡ VIRGOX CLOUD COMPUTER ⚡               │
-                    │         (Google Cloud Shell / Docker / Ubuntu)         │
-                    └──────────────────────────┬─────────────────────────────┘
-                                               │
-             ┌─────────────────────────────────┼─────────────────────────────────┐
-             │                                 │                                 │
-             ▼                                 ▼                                 ▼
-    🌐 THE WEB PAGE (GitHub Pages)    🖥️ THE COMPUTER (Backend)         🤖 AI AGENT (Antigravity)
-  - Virtual Touchpad with Crosshair   - Ubuntu XFCE Desktop (Webtop)    - Full system pair programming
-  - Pinch-to-zoom desktop screen      - Google Chrome (Saved Logins)    - Sees live screen via scrot
-  - Phone 1 & Phone 2 dual switch     - Fastboot, ADB, ROM tools        - Automates mouse & keyboard
-  - Quick app deck & screen inspector - Bridge API server (Port 8888)   - Asks before major changes!
+  THE WEB PAGE (GitHub Pages, static)        THE COMPUTER (your machine)
+  ────────────────────────────────           ─────────────────────────
+  pc.html   Fluent desktop in a tab          setup_pc.sh linux
+  app.js    terminal, apps, wallpaper        docker-compose.yml (webtop XFCE)
+  pc.html   session gate, no backend         setup_pc.sh win11
+  server/auth-service.js  accounts           setup_windows11.sh (dockurr/windows)
+
+  no server, no container, no VM             needs Docker, KVM, your host
 ```
 
 ---
 
-## 🌐 Live Web Page & Multi-Device Links
+## 🌐 The Pages
 
-* **🌐 Web Control Interface (GitHub Pages):**  
-  👉 **[https://darkvirgoyt-beep.github.io/VirgoX-Cloud-Computer/](https://darkvirgoyt-beep.github.io/VirgoX-Cloud-Computer/)**  
-  *(Open this URL on any phone or browser. It gives you the Touchpad, Crosshairs, Desktop view, Terminal view, and Split screen!)*
+| Page | URL |
+| --- | --- |
+| Landing page | <https://darkvirgoyt-beep.github.io/VirgoX-Cloud-Computer/> |
+| The PC | <https://darkvirgoyt-beep.github.io/VirgoX-Cloud-Computer/pc.html> |
+| Sign-in | <https://darkvirgoyt-beep.github.io/VirgoX-Cloud-Computer/auth.html> |
 
-* **🖥️ Phone 2 (Desktop GUI Direct):**  
-  * Public Tunnel: `https://bzlbb-136-85-52-180.run.pinggy-free.link`
-  * Cloud Shell Web Preview: `https://3000-cs-e1715999-1267-4b18-adac-54fdcdde97fd.cs-asia-southeast1-palm.cloudshell.dev/`
+`pc.html` asks for a session before it renders anything. See
+[Setup](#-setup-install-the-cli-and-sign-in) below.
 
-* **💻 Phone 1 (Terminal CLI Direct):**  
-  * Public Tunnel: `https://misgt-136-85-52-180.run.pinggy-free.link`
-  * Cloud Shell Web Preview: `https://7681-cs-e1715999-1267-4b18-adac-54fdcdde97fd.cs-asia-southeast1-palm.cloudshell.dev/`
+To reach a real desktop on your own machine, run the container or VM yourself and
+use the address it prints — see [What The PC Is](#-what-the-pc-is). The tunnel and
+Cloud Shell preview addresses that used to be listed here were temporary and are
+all dead.
 
 ---
 
 ## 🎯 Virtual Touchpad & Mouse Crosshair
 
-The Web Page includes a custom virtual trackpad designed specifically for touchscreens:
+On the landing page (`index.html`), for driving a desktop you are streaming from
+your own machine:
 
-1. **🎯 Crosshair Pointer Overlay:**
-   - Tap **"🎯 Crosshair: ON"** in the Desktop toolbar to show a glowing neon crosshair overlay.
-   - Moving your finger across the touchpad moves the crosshair with live `(X, Y)` coordinate readout.
-2. **👆 Touchpad Gestures:**
-   - **One Finger Drag:** Glides the cursor smoothly with adjustable sensitivity slider (0.5x to 3.0x).
-   - **Two Finger Pinch:** Pinch in to Zoom Out, Pinch out to Zoom In on the desktop screen.
-   - **Left / Right Click Buttons:** Dedicated large touch buttons for Left-Click, Right-Click, and Double-Click.
-   - **Drag Lock:** Toggle "DRAG LOCK" to hold the left mouse button down while dragging windows or selecting files.
+1. **Crosshair overlay:** turn on **🎯 Crosshair** in the toolbar to get a
+   crosshair with a live `(X, Y)` readout.
+2. **Gestures:** one finger drags, two fingers pinch to zoom the desktop view,
+   and there are left/right/double-click buttons plus a drag lock for holding the
+   button down.
 
+None of this exists on `pc.html` — that page is the desktop itself, not a
+controller for one.
 
 ---
 
@@ -164,28 +168,194 @@ docker exec -u abc -e DISPLAY=:1 virgox-desktop xdotool key ctrl+t
 
 ---
 
-## ⚡ 1-Line Setup (Boot on Any New Cloud Instance)
+## ⚡ Setup: Install the CLI and Sign In
 
-To spin up this entire environment on any fresh Google Cloud Shell or Linux VPS:
+### One command installs everything
+
+This installs the `vxc` command, `node` (needed to run the auth service),
+`curl`, and `termux-api` so approval links open by themselves. Then it signs in:
+
+```bash
+curl -fsSL https://darkvirgoyt-beep.github.io/VirgoX-Cloud-Computer/install.sh | sh -s -- --login
+```
+
+Drop `--login` to install without signing in:
+
+```bash
+curl -fsSL https://darkvirgoyt-beep.github.io/VirgoX-Cloud-Computer/install.sh | sh
+```
+
+The installer installs into `$HOME/.local/bin` and adds it to your shell's rc
+file, so start a new terminal or run `export PATH="$PATH:$HOME/.local/bin"` once
+before `vxc` is found.
+
+### What signing in actually does
+
+```bash
+vxc auth login
+```
+
+1. The CLI starts the auth service on `127.0.0.1:8787` if nothing is listening,
+   and prints a one-time code and a link.
+2. Open the link, sign in with an account, and type the code. The code is
+   prefilled.
+3. Press **Authorise**. The CLI polls until the grant lands.
+4. On success it prints a URL ending in `?vxc_claim=…`. Open it. That page
+   redeems the claim, writes the session, and loads the PC.
+
+The claim is one-shot and expires in five minutes. A link that was already used,
+or copied out of a chat log, does not work a second time.
+
+### Commands
+
+```bash
+vxc auth login            # sign in with a one-time code
+vxc auth status           # who this machine is signed in as
+vxc auth token            # print the session token
+vxc auth logout           # drop the session
+vxc auth serve [port]     # run the auth service yourself (default 8787)
+vxc pc                    # print and open the PC page
+vxc app <name>            # open the PC with one window already open
+vxc apps                  # list the app ids the PC accepts
+vxc config set auth <url> # point at a different auth service
+vxc config get auth       # show the service address in use
+vxc config unset auth     # forget it and go back to the local default
+vxc version
+vxc help
+```
+
+### Driving the PC from the terminal
+
+With the PC open and signed in as the same account, the terminal can drive it:
+
+```bash
+vxc pc status             # what the PC reports about itself, read in the browser
+vxc pc windows            # the windows it has open
+vxc pc open terminal      # open an app   (vxc apps lists the ids)
+vxc pc close terminal     # close a window
+vxc pc focus terminal     # bring a window to the front
+vxc pc run ver            # run a command in the PC's terminal window
+```
+
+Nothing here is typed into a remote machine. The browser is the computer, and
+the command is carried to the open page over your auth service, which is the only
+party both sides already talk to. The page has to be open the whole time — close
+the tab and the commands have nowhere to go, and the terminal says so instead of
+printing something it made up.
+
+`vxc pc run` runs a command in the PC's own in-page terminal window. That is a
+shell in your browser tab, not a shell on your phone: it runs the commands that
+window implements, and it cannot reach your phone's filesystem.
+
+```bash
+# add the PC to this terminal, then open it
+vxc auth login
+vxc pc
+
+# open a specific app inside the PC
+vxc apps
+vxc app terminal
+
+# then drive it
+vxc pc status
+vxc pc run ver
+```
+
+### Pointing at your own auth service
+
+By default the service runs on this machine and `vxc auth login` starts it for
+you. To use one that is already running somewhere else:
+
+```bash
+vxc config set auth http://auth.example.com:8787
+
+# or per-invocation
+VXC_AUTH=http://auth.example.com:8787 vxc auth login
+```
+
+`vxc config set auth` does not take the address on trust. It rejects
+`your-host`-style placeholders, insists on `http://` or `https://`, and calls
+`/health` on the address before writing it. A wrong address fails at the point
+you set it, not later at the point you need it.
+
+If an earlier install left a placeholder address behind, clear it:
+
+```bash
+vxc config get auth
+vxc config unset auth
+vxc auth login
+```
+
+### Running the auth service by hand
+
+Useful when you want it on another host, or to keep it alive across sessions:
 
 ```bash
 git clone https://github.com/darkvirgoyt-beep/VirgoX-Cloud-Computer.git
 cd VirgoX-Cloud-Computer
 
-# 🐧 Boot Linux (Ubuntu XFCE Desktop + ROM Tools + Wine):
-./setup_pc.sh linux
-
-# 🪟 Boot Windows 11 Pro Cloud PC (KVM VM / Web Stream & RDP):
-./setup_pc.sh win11
+PORT=8787 node server/auth-service.js
 ```
 
-### 🪟 Windows 11 Features & Integration:
-* **Web VNC / RDP Stream:** Connect directly in your browser on port `8006` or via native Remote Desktop on port `3389`.
-* **Zero-Touch ISO Download:** Uses `dockurr/windows` with automatic Windows 11 ISO retrieval, VirtIO drivers, and KVM hardware acceleration.
-* **Dual OS Switcher:** Toggle smoothly between Linux and Windows 11 directly from the Web Control Center toolbar.
+Accounts live in `data/accounts.json` (`0600`), hashed with scrypt and a
+per-user salt. Passwords are never stored. The service also accepts
+`VXC_DATA_FILE`, `VXC_POLL_INTERVAL` and `VXC_VERIFY_URL`.
 
+### Full example
+
+```bash
+curl -fsSL https://darkvirgoyt-beep.github.io/VirgoX-Cloud-Computer/install.sh | sh -s -- --login
+export PATH="$PATH:$HOME/.local/bin"
+
+# add the PC to this terminal
+vxc auth login
+
+# open the PC
+vxc pc
+
+# see what it reports, and drive it
+vxc pc status
+vxc pc windows
+vxc pc run ver
+```
 
 ---
+
+## 🪟 What The PC Is
+
+`pc.html` is a Windows 11 Fluent desktop that runs in a browser tab. It has no
+server behind it, so it is worth being exact about what that means:
+
+* **Real, read live from your browser:** core count, GPU string, device memory
+  quota, page age, frame rate, JS heap, network type, storage usage and file
+  sizes (via `HEAD` requests). Anything the browser withholds is reported as not
+  exposed rather than replaced with a plausible number.
+* **Real apps:** Photopea, VS Code, ffmpeg.wasm for video conversion, and a media
+  player that plays a file you pick locally. Nothing is uploaded.
+* **Links out:** Chrome, Edge, Blender, Steam, Unreal, Microsoft Store. These open
+  the real site in a new tab; this page does not bundle them, so it names no
+  version numbers for them.
+* **Not real:** there is no Windows 11, no container, and no VM. The terminal
+  reports what this page can observe and says so when it cannot run something.
+
+### Booting a real Linux desktop alongside it
+
+The repository also ships a container definition for a real XFCE desktop, which
+is a different thing from the web page and needs Docker on your machine:
+
+```bash
+git clone https://github.com/darkvirgoyt-beep/VirgoX-Cloud-Computer.git
+cd VirgoX-Cloud-Computer
+
+# XFCE desktop in Docker (webtop), ports 3000/3001
+bash setup_pc.sh linux
+
+# Windows 11 VM via dockurr/windows (needs KVM; port 8006)
+bash setup_pc.sh win11
+```
+
+Those scripts need Docker, privileged mode and KVM. They are not part of the
+GitHub Pages deployment, and nothing on the page depends on them.
 
 ## 🛠️ Repository File Structure
 
@@ -201,13 +371,20 @@ VirgoX-Cloud-Computer/
 ├── server.py                   # 🔗 Bridge API server (Port 8888) for remote web control
 ├── scripts/
 │   └── start_tunnels.sh        # 🌐 Live SSH tunnel generator for multi-device URLs
+├── pc.html                     # 🪟 The Windows 11 Fluent desktop (real session gate)
+├── auth.html                   # 🔑 Sign-in and one-time code approval
+├── install.sh                  # ⚡ One-curl installer for the vxc CLI
+├── tools/
+│   └── vxc                     # 💻 The vxc command (POSIX sh, no dependencies)
+├── server/
+│   └── auth-service.js         # 🔐 Accounts, device flow, session handoff (node)
 ├── assets/
-│   ├── current_screen.png      # 📸 Live desktop screenshot preview
-│   └── screen_placeholder.png
-├── .github/
-│   └── workflows/
-│       └── deploy-pages.yml    # 🚀 Auto-deploys Web Interface to GitHub Pages on git push
-└── README.md                   # 📖 Full documentation & AI assistant control protocols
+│   ├── workstation.core.js     # 🖥️ Injects the desktop, then loads app.js
+│   ├── win11_flow.jpg          # 🖼️ Wallpapers
+│   ├── win11_bloom_light.jpg
+│   ├── win11_bloom_dark.jpg
+│   └── win11_sunrise.jpg
+└── README.md                   # 📖 Documentation & setup
 ```
 
 ---
