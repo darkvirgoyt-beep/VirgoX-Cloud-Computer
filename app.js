@@ -4771,7 +4771,12 @@ if __name__ == '__main__':
             const res = await fetch(`${state.config.bridgeUrl}/api/ai_chat`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ message: promptMsg, image: base64Img, email })
+              body: JSON.stringify({
+                message: promptMsg,
+                image: base64Img,
+                email,
+                token: sessionStorage.getItem('virgox_client_token') || ''
+              })
             });
             if (res.ok) {
               const data = await res.json();
@@ -5037,7 +5042,11 @@ if __name__ == '__main__':
           const res = await fetch(`${state.config.bridgeUrl}/api/ai_chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: text, email })
+            body: JSON.stringify({
+              message: text,
+              email,
+              token: sessionStorage.getItem('virgox_client_token') || ''
+            })
           });
           if (res.ok) {
             const data = await res.json();
@@ -5752,7 +5761,11 @@ if __name__ == '__main__':
           });
           if (res.ok) {
             const data = await res.json();
-            if (data.status === 'ok') authorized = true;
+            if (data.status === 'ok') {
+              authorized = true;
+              if (data.token) sessionStorage.setItem('virgox_client_token', data.token);
+              sessionStorage.setItem('virgox_user_email', data.email || 'darkvirgoyt@gmail.com');
+            }
           }
         } catch (e) {}
       }
@@ -6062,6 +6075,8 @@ if __name__ == '__main__':
           const data = await res.json();
           if (res.ok && data.status === 'ok') {
             authorized = true;
+            if (data.token) sessionStorage.setItem('virgox_client_token', data.token);
+            sessionStorage.setItem('virgox_user_email', data.raw_email || emailVal || 'darkvirgoyt@gmail.com');
             if (data.raw_email) {
               localStorage.setItem('virgox_registered_email', data.raw_email);
             } else if (emailVal) {
