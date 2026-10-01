@@ -4,6 +4,10 @@ set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$DIR"
 
+if [ "${VIRGOX_RUNTIME:-}" = "native" ] || [ "${VIRGOX_RUNTIME:-}" = "android" ]; then
+    exec bash "$DIR/start_native.sh"
+fi
+
 echo "=== [1/5] Checking Desktop Container ==="
 if ! docker ps --filter "name=virgox-desktop" --format "{{.Names}}" | grep -q "virgox-desktop"; then
     echo "[*] Starting virgox-desktop container..."

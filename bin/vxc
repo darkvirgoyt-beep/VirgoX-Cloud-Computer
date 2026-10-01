@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""VirgoX Cloud CLI — login/status/logout like a small gh-style client."""
+import argparse, getpass, json, os, pathlib, sys, urllib.request, urllib.error
+
+CONFIG = pathlib.Path(os.environ.get("XDG_CONFIG_HOME", pathlib.Path.home()/".config")) / "vxc" / "config.json"
+DEFAULT_SERVER = os.environ.get("VIRGOX_SERVER", "http://127.0.0.1:8888").rstrip("/")
+
+def load():
+    try: return json.loads(CONFIG.read_text())
+    except Exception: return {}
+
+def save(data):
+    CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    CONFIG.write_text(json.dumps(data, indent=2))
+    os.chmod(CONFIG, 0o600)
+
+def request(server, payload):
+    body=json.dumps(payload).encode()
+    req=urllib.request.Request(server+"/api/auth/login", data=body, headers={"Content-Type":"application/json"})
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return json.loads(r.read().decode())
+
+def login(args):
+    cfg=load()
+    server=(args.server or cfg.get("server") or DEFAULT_SERVER).rstrip("/")
+    print(f"VirgoX host: {server}")
+    email=args.email or input("Email: ").strip()
+    password=args.password or getpass.getpass("Password: ")
+    try:
+        result=request(server, {"email":email,"password":password})
+    except urllib.error.HTTPError as e:
+        try: result=json.loads(e.read().decode())
+        except Exception: result={"error":f"HTTP {e.code}"}
+    except Exception as e:
+        print(f"✗ Could not reach VirgoX: {e}", file=sys.stderr); return 1
+    if not result.get("authenticated"):
+        print("✗ Login failed:", result.get("error") or result.get("message") or "invalid credentials", file=sys.stderr); return 1
+    save({"server":server,"email":result.get("raw_email") or email,"token":result["token"]})
+    print(f"✓ Logged in as {result.get('raw_email') or email}")
+    print(f"✓ Session saved to {CONFIG}")
+    return 0
+
+def status(_args):
+    cfg=load()
+    if not cfg.get("token"):
+        print("Not logged in."); return 1
+    server=cfg.get("server",DEFAULT_SERVER)
+    req=urllib.request.Request(server+"/api/auth/validate_session?token="+urllib.parse.quote(cfg["token"]))
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r: data=json.loads(r.read().decode())
+        if data.get("authenticated"):
+            print(f"✓ Logged in as {data.get('email') or cfg.get('email')}")
+            print(f"  Host: {server}"); return 0
+    except Exception: pass
+    print("✗ Session is invalid or expired."); return 1
+
+def logout(_args):
+    try: CONFIG.unlink()
+    except FileNotFoundError: pass
+    print("✓ Logged out.")
+    return 0
+
+def main():
+    p=argparse.ArgumentParser(prog="vxc",description="VirgoX Cloud Computer CLI")
+    sub=p.add_subparsers(dest="group")
+    auth=sub.add_parser("auth")
+    a=auth.add_subparsers(dest="action")
+    lp=a.add_parser("login"); lp.add_argument("--server"); lp.add_argument("--email"); lp.add_argument("--password")
+    a.add_parser("status"); a.add_parser("logout")
+    args=p.parse_args()
+    if args.group=="auth" and args.action=="login": return login(args)
+    if args.group=="auth" and args.action=="status": return status(args)
+    if args.group=="auth" and args.action=="logout": return logout(args)
+    p.print_help(); return 2
+
+if __name__=="__main__": sys.exit(main())

@@ -323,9 +323,29 @@ def send_native_input(payload):
     except Exception:
         return False
 
+NATIVE_RUNTIME = os.environ.get("VIRGOX_RUNTIME", "").strip().lower() in ("native", "android", "arm64")
+NATIVE_HOME = os.path.expanduser(os.environ.get("VIRGOX_HOME", "~"))
+NATIVE_DESKTOP = os.path.join(NATIVE_HOME, "VirgoX-Files")
+os.makedirs(NATIVE_DESKTOP, exist_ok=True)
+
 def run_container_cmd(cmd, user="abc"):
-    full_cmd = f"docker exec -u {user} -e DISPLAY=:1 {CONTAINER_NAME} {cmd}"
+    """Run a desktop command through Docker or the Android/ARM64 native runtime."""
     try:
+        if NATIVE_RUNTIME:
+            # Translate Webtop paths to the native VirgoX workspace.
+            native_cmd = str(cmd).replace("/config/Desktop/VirgoX-Files", NATIVE_DESKTOP)
+            native_cmd = native_cmd.replace("/config", NATIVE_HOME)
+            env = os.environ.copy()
+            env.setdefault("DISPLAY", ":1")
+            env.setdefault("XDG_RUNTIME_DIR", f"/tmp/virgox-runtime-{os.getuid()}")
+            os.makedirs(env["XDG_RUNTIME_DIR"], exist_ok=True)
+            res = subprocess.run(
+                ["bash", "-lc", native_cmd],
+                capture_output=True, text=True, timeout=15, env=env
+            )
+            return res.returncode, res.stdout, res.stderr
+
+        full_cmd = f"docker exec -u {user} -e DISPLAY=:1 {CONTAINER_NAME} {cmd}"
         res = subprocess.run(full_cmd, shell=True, capture_output=True, text=True, timeout=5)
         return res.returncode, res.stdout, res.stderr
     except Exception as e:

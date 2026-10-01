@@ -9,6 +9,13 @@ set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET_OS="${1:-linux}"
 
+# Android ARM64 / PRoot fallback: Docker requires kernel namespaces, cgroups and
+# nftables that are not available in this environment. Use the native backend.
+if [ "$TARGET_OS" = "linux" ] && ! docker info >/dev/null 2>&1; then
+    echo "[!] Docker backend unavailable; switching to VirgoX native ARM64 runtime."
+    exec bash "$DIR/setup_android.sh"
+fi
+
 echo "=============================================================================="
 echo "       ⚡ Starting VirgoX Cloud Computer & Multi-Device Workspace ⚡"
 echo "                     Developer: Prince · VirgoYT"
