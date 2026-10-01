@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""VirgoX Cloud Computer CLI — polished terminal UX for VirgoX."""
+"""VirgoX Cloud Computer CLI — polished terminal UX + Firebase browser authorization."""
 import argparse
 import json
 import os
 import pathlib
-import shutil
+import secrets
 import sys
 import time
 import urllib.error
@@ -14,7 +14,9 @@ import webbrowser
 
 CONFIG = pathlib.Path(os.environ.get("XDG_CONFIG_HOME", pathlib.Path.home() / ".config")) / "vxc" / "config.json"
 DEFAULT_SERVER = os.environ.get("VIRGOX_SERVER", "http://127.0.0.1:8888").rstrip("/")
-VERSION = "0.2.0"
+AUTH_BACKEND = os.environ.get("VIRGOX_AUTH_BACKEND", "").rstrip("/")
+AUTH_WEB = os.environ.get("VIRGOX_AUTH_WEB", "").rstrip("/")
+VERSION = "0.3.0"
 
 USE_COLOR = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
 RESET = "\033[0m"
@@ -43,7 +45,7 @@ def save(data):
     os.chmod(CONFIG, 0o600)
 
 
-def api(server, path, payload=None, query=None, token=None):
+def api(server, path, payload=None, query=None, token=None, timeout=15):
     url = server.rstrip("/") + path
     if query:
         url += "?" + urllib.parse.urlencode(query)
@@ -52,7 +54,7 @@ def api(server, path, payload=None, query=None, token=None):
     if token:
         headers["Authorization"] = "Bearer " + token
     req = urllib.request.Request(url, data=data, headers=headers)
-    with urllib.request.urlopen(req, timeout=15) as response:
+    with urllib.request.urlopen(req, timeout=timeout) as response:
         raw = response.read().decode()
         return json.loads(raw) if raw else {}
 
@@ -66,38 +68,42 @@ def logo():
     print()
 
 
-def spinner(label, seconds=0):
-    if not sys.stdout.isatty():
-        print(label)
-        return
-    frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
-    if seconds <= 0:
-        print(label, end="", flush=True)
-        return
-    end = time.time() + seconds
-    i = 0
-    while time.time() < end:
-        print("\r" + frames[i % len(frames)] + " " + label, end="", flush=True)
-        time.sleep(0.08)
-        i += 1
-    print("\r" + " " * (len(label) + 2) + "\r", end="", flush=True)
-
-
 def login(args):
     cfg = load()
     server = (args.server or cfg.get("server") or DEFAULT_SERVER).rstrip("/")
+    backend = (args.backend or cfg.get("auth_backend") or AUTH_BACKEND).rstrip("/")
+    web = (args.web or cfg.get("auth_web") or AUTH_WEB).rstrip("/")
 
     logo()
     print(c("  Authentication", BOLD))
     print(c("  ──────────────", DIM))
-    print(f"  Host     {server}")
+    print(f"  Host       {server}")
+    print(f"  Auth       {backend or 'not configured'}")
+
+    if not backend or not web:
+        print()
+        print(c("  ✗ Firebase authorization is not configured.", RED), file=sys.stderr)
+        print("  Set VIRGOX_AUTH_BACKEND and VIRGOX_AUTH_WEB, then retry.", file=sys.stderr)
+        print("  Example:")
+        print("    export VIRGOX_AUTH_BACKEND=https://<region>-<project>.cloudfunctions.net/vxcAuth")
+        print("    export VIRGOX_AUTH_WEB=https://<project>.web.app")
+        return 2
 
     try:
         start = api(server, "/api/auth/device/start", {})
         code = start["device_code"]
-        url = start["verification_url"]
         expires = int(start.get("expires_in", 600))
+        client_secret = secrets.token_urlsafe(32)
 
+        # Keep code creation on the local VirgoX bridge, but register the
+        # correlation pair with Firebase so the browser never needs localhost.
+        api(backend, "", {
+            "action": "register",
+            "code": code,
+            "client_secret": client_secret
+        }, timeout=15)
+
+        url = web + "/?code=" + urllib.parse.quote(code, safe="")
         print()
         print(c("  🔐 Browser authorization", CYAN))
         print()
@@ -121,10 +127,28 @@ def login(args):
 
         while time.time() < deadline:
             try:
-                result = api(server, "/api/auth/device/poll", query={"code": code})
-                if result.get("authenticated") and result.get("token"):
-                    email = result.get("email") or "user"
-                    save({"server": server, "email": email, "token": result["token"], "version": VERSION})
+                result = api(backend, "", {
+                    "action": "poll",
+                    "code": code,
+                    "client_secret": client_secret
+                })
+                if result.get("authenticated") and result.get("exchange_ticket"):
+                    local = api(server, "/api/auth/device/complete", {
+                        "code": code,
+                        "client_secret": client_secret,
+                        "exchange_ticket": result["exchange_ticket"]
+                    })
+                    if not local.get("authenticated") or not local.get("token"):
+                        raise RuntimeError("Local VirgoX session exchange failed")
+                    email = local.get("email") or result.get("email") or "user"
+                    save({
+                        "server": server,
+                        "auth_backend": backend,
+                        "auth_web": web,
+                        "email": email,
+                        "token": local["token"],
+                        "version": VERSION
+                    })
                     print("\r" + c("  ✓ Authorization complete.          ", GREEN))
                     print()
                     print(c("  ┌─ Signed in", GREEN))
@@ -135,11 +159,11 @@ def login(args):
                     print(c("  VirgoX is ready.", BOLD))
                     return 0
             except urllib.error.HTTPError as exc:
-                if exc.code != 404:
+                if exc.code not in (404,):
                     print(f"\n  {c('✗', RED)} Authorization error: HTTP {exc.code}", file=sys.stderr)
                     return 1
             except Exception as exc:
-                print(f"\n  {c('✗', RED)} Could not reach VirgoX: {exc}", file=sys.stderr)
+                print(f"\n  {c('✗', RED)} {exc}", file=sys.stderr)
                 return 1
 
             if sys.stdout.isatty():
@@ -212,8 +236,10 @@ def main():
     auth = sub.add_parser("auth", help="Manage VirgoX authentication")
     auth_sub = auth.add_subparsers(dest="auth_command")
 
-    login_parser = auth_sub.add_parser("login", help="Sign in through browser authorization")
+    login_parser = auth_sub.add_parser("login", help="Sign in through Firebase browser authorization")
     login_parser.add_argument("--server", help="VirgoX bridge URL")
+    login_parser.add_argument("--backend", help="Firebase Cloud Function URL")
+    login_parser.add_argument("--web", help="Firebase Hosting URL")
     login_parser.set_defaults(func=login)
 
     status_parser = auth_sub.add_parser("status", help="Show current session status")
