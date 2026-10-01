@@ -4,3 +4,11 @@ __pycache__/
 current_screen.png
 google_auth.json
 .vercel
+
+# Runtime account store. This holds real salts and password hashes created by
+# whoever used the machine, so it must never be committed.
+data/
+*.pid
+virgox_auth.json
+otp_codes.log
+virgox_user_clouds/

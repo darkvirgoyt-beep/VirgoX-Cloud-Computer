@@ -1,5 +1,7 @@
 #!/bin/bash
 # ⚡ VirgoX Unreal Engine 6 & 3D Game Studio
+
+. "$(dirname "$0")/vxc-paths.sh"
 export DISPLAY="${DISPLAY:-:1}"
 export MESA_GLTHREAD=true
 export vblank_mode=0
@@ -9,7 +11,7 @@ export GALLIUM_DRIVER=llvmpipe
 
 notify-send "🚀 Unreal Engine 6 Studio" "Launching Native 3D Game Engine Editor..." -i /usr/share/icons/virgox/unrealengine.svg 2>/dev/null || true
 
-UE_DIR="/config/Desktop/VirgoX-Files/UnrealEngine6"
+UE_DIR=""$VXC_FILES_DIR/UnrealEngine6""
 mkdir -p "$UE_DIR/Projects" "$UE_DIR/Templates" "$UE_DIR/Builds" "$UE_DIR/VirgoX_3D_Game_Studio"
 
 if [ -f "$UE_DIR/Engine/Binaries/Linux/UnrealEditor" ]; then

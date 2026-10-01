@@ -4,6 +4,8 @@
 # Developer: Prince · VirgoYT (@darkvirgoyt-beep)
 # Inspects, installs, and manages Android .apk files directly on the desktop
 # ==============================================================================
+
+. "$(dirname "$0")/vxc-paths.sh"
 export DISPLAY="${DISPLAY:-:1}"
 
 if [ -z "$1" ]; then
@@ -82,7 +84,7 @@ case "$CHOICE" in
     rm -f "$TMP_DUMP"
     ;;
   EXTRACT)
-    DEST_DIR="/config/Desktop/$(basename "$APK" .apk)_extracted"
+    DEST_DIR="$VXC_DESKTOP_DIR/$(basename "$APK" .apk)_extracted"
     mkdir -p "$DEST_DIR"
     unzip -q "$APK" -d "$DEST_DIR"
     zenity --info --title="APK Extracted" --text="Extracted to:\n<b>$DEST_DIR</b>" 2>/dev/null

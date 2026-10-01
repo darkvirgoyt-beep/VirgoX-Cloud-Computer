@@ -12,6 +12,28 @@ import readline
 import shutil
 import time
 
+
+def _resolve_vxc_root():
+    """Where the user's files actually live.
+
+    The webtop image puts them under /config. Outside a container that path
+    does not exist, so a hardcoded "/config" silently resolved to nothing.
+    VXC_CONFIG_ROOT overrides it; the docker backend keeps /config because
+    there it is correct by definition.
+    """
+    override = os.environ.get("VXC_CONFIG_ROOT", "").strip()
+    if override:
+        return override
+    if os.environ.get("VXC_BACKEND", "auto") == "docker":
+        return "/config"
+    return os.environ.get("VXC_HOME") or os.path.expanduser("~")
+
+
+VXC_ROOT = _resolve_vxc_root()
+VXC_FILES_DIR = os.environ.get("VXC_FILES_DIR") or os.path.join(VXC_ROOT, "Desktop", "VirgoX-Files")
+VXC_DESKTOP_DIR = os.environ.get("VXC_DESKTOP_DIR") or os.path.join(VXC_ROOT, "Desktop")
+
+
 BANNER = """\
 Windows PowerShell
 Copyright (C) Microsoft Corporation. All rights reserved.
@@ -20,7 +42,7 @@ Install the latest PowerShell for new features and improvements! https://aka.ms/
 """
 
 def get_win_path(path):
-    rel = os.path.relpath(path, "/config")
+    rel = os.path.relpath(path, VXC_ROOT)
     if rel == ".":
         return "C:\\Users\\VirgoX"
     win_rel = rel.replace("/", "\\")
@@ -102,7 +124,7 @@ def cmd_dir():
 def main():
     print(BANNER)
     try:
-        os.chdir("/config/Desktop")
+        os.chdir(VXC_DESKTOP_DIR)
     except Exception:
         pass
 
@@ -135,7 +157,7 @@ def main():
             print(win_path)
         elif cmd in ("cd", "set-location", "sl"):
             if not args or args[0] in ("~", "\\", "c:\\"):
-                os.chdir("/config")
+                os.chdir(VXC_ROOT)
             else:
                 target = args[0].replace("\\", "/")
                 try:

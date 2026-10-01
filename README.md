@@ -22,20 +22,100 @@ Two separate things, often confused:
 browser tab, plus a terminal that reports what the browser can actually observe,
 an app drawer, and a wall to sign in through. It runs entirely in the tab.
 
-**The container / VM** (`setup_pc.sh`, `docker-compose.yml`). A real XFCE desktop,
-or a real Windows 11 VM. These need Docker on a machine you control and are not
-part of the Pages deployment.
+**The real machine** (`setup_pc.sh`). An actual Linux desktop you can see over
+noVNC, with a real terminal next to it. Two backends, chosen automatically:
+
+- **native** — the desktop runs as ordinary processes in your own userspace.
+  No Docker, no root, works on **Android under proot-distro (ARM64)**.
+- **docker** — the original XFCE webtop container, still used wherever Docker
+  actually works.
+
+`setup_pc.sh auto` probes the machine and picks one. `setup_pc.sh native` or
+`setup_pc.sh linux` forces it. Nothing is removed: the Docker path is intact
+and still the default on a machine where the daemon starts.
 
 ```
   THE WEB PAGE (GitHub Pages, static)        THE COMPUTER (your machine)
   ────────────────────────────────           ─────────────────────────
-  pc.html   Fluent desktop in a tab          setup_pc.sh linux
-  app.js    terminal, apps, wallpaper        docker-compose.yml (webtop XFCE)
-  pc.html   session gate, no backend         setup_pc.sh win11
+  pc.html   Fluent desktop in a tab          setup_pc.sh auto
+  app.js    terminal, apps, wallpaper        scripts/vxc-native-desktop.sh
+  pc.html   session gate, no backend         docker-compose.yml (webtop XFCE)
   server/auth-service.js  accounts           setup_windows11.sh (dockurr/windows)
 
-  no server, no container, no VM             needs Docker, KVM, your host
+  no server, no container, no VM             native needs nothing but apt
 ```
+
+### Why the native backend exists
+
+Docker cannot run under proot-distro, and the reason is specific rather than
+"it's slow" or "unsupported":
+
+| Requirement | proot-distro on Android |
+| --- | --- |
+| `/proc/self/ns/pid` | **missing** — `stat` returns ENOENT |
+| `/sys/fs/cgroup` writable | **no** — `mkdir` returns EPERM |
+| Namespaces (`pid`, `mount`, `net`, `uts`, `user`) | available |
+| `runc run` (a real container) | fails: no cgroup freezer |
+
+Docker 29 initialises BuildKit unconditionally — `features.buildkit=false` and
+`DOCKER_BUILDKIT=0` are both ignored — and the builder dies on the missing pid
+namespace. Even with BuildKit out of the way, `runc` cannot create a container
+without a writable cgroup tree. So on this class of machine the answer is not a
+newer Docker; it is no Docker.
+
+Everything else in the project is unchanged. `server.py` keeps all of its
+`docker exec` call sites; one function dispatches to `docker exec` or to a local
+`bash -c` depending on what the probe found. Ports are chosen to match, so the
+web page and the tunnel scripts needed no changes.
+
+### What the native backend actually runs
+
+```
+Xvfb :1        virtual display, 1280x800x24
+openbox        window manager
+x11vnc -noshm  RFB server on 5900  (-noshm is mandatory; proot shmget fails)
+websockify     serves /usr/share/novnc on 6080
+ttyd           web terminal on 7681
+server.py      bridge API on 8888 (defaults, all overridable)
+```
+
+Check the machine yourself before trusting any of the above:
+
+```bash
+bash scripts/vxc-doctor.sh          # human-readable capability report
+bash scripts/vxc-doctor.sh --json   # machine-readable, for scripting
+```
+
+### Known limits on Android/proot, verified rather than assumed
+
+- **No desktop browser.** Google's arm64 Chrome installs and reports
+  `Google 154.0.8037.92`, then traps with SIGTRAP or hangs starting its
+  zygote. `chromium-browser` on Ubuntu is a snap shim that refuses to run.
+  Termux's Firefox needs `/system/bin/linker64`, absent inside proot, and
+  Mozilla's `linux64` download is x86-64. `setup_pc.sh` verifies a browser by
+  executing it and tells you plainly if none works, rather than leaving you a
+  launcher that dies on click.
+- **No containers**, for the reasons in the table above.
+- **Everything else works**: the desktop, the file manager, the terminal, the
+  bridge API, the whole cloud-PC flow including `vxc auth login`.
+
+### Environment overrides
+
+Every path and port is configurable, so the same scripts work in a container, in
+a native userspace, or somewhere else entirely:
+
+| Variable | Meaning | Default |
+| --- | --- | --- |
+| `VXC_BACKEND` | `auto`, `native`, `docker` | `auto` |
+| `VXC_HOME` | where user files live | `$HOME` |
+| `VXC_DESKTOP_DIR` | Desktop folder | `$VXC_HOME/Desktop` |
+| `VXC_DISPLAY` | X display | `:1` |
+| `VXC_PORT` | bridge API port | `8888` |
+| `VXC_RUN_DIR` | pidfiles and logs | `$HOME/.local/state/virgox` |
+
+Under the Docker backend `VXC_HOME` resolves to `/config`, which is where those
+paths genuinely are inside the webtop image — the container layout is preserved,
+not translated away.
 
 ---
 
@@ -95,13 +175,23 @@ The web control suite includes a dedicated cybersecurity lock screen and authent
 
 ## ☁️ Cloud Storage & Cloud RAM Architecture (Zero Local Device Usage)
 
-* **💾 100% Cloud Storage:**
-  * All browser downloads, Git repositories, ROM files, payload extractions, and caches are stored directly on the Cloud VM filesystem (`/home/darkvirgoyt/Downloads` and `/config/Desktop/VirgoX-Files/Downloads`).
-  * Google Chrome is configured with `prompt_for_download: false` and auto-saves directly to `/config/Desktop/VirgoX-Files/Downloads`.
-  * **0 MB used on your phone storage.**
-* **🧠 100% Cloud RAM & CPU:**
-  * All active apps, Chrome tabs, compilers, and Docker services run using the Cloud VM's **8 GB RAM** and multi-core CPU.
-  * Your phone only acts as a thin-client display controller. No phone lag, no device heating, and zero battery drain from heavy builds.
+Where files and compute actually live depends on the backend, and this matters
+more than any marketing line:
+
+| | **docker backend** | **native backend** |
+| --- | --- | --- |
+| Files | `/config/Desktop/VirgoX-Files` inside the container | `$VXC_HOME/Desktop/VirgoX-Files` on the host |
+| RAM & CPU | the VM's, separate from your device | **your device's own**, measured via `/health` |
+| Phone storage used | ~0 MB (plus the container image) | whatever the desktop actually writes |
+| Phone battery | display controller only | also doing the work — it will heat up |
+
+* **💾 File storage:**
+  * All downloads, Git repositories, ROM files, payload extractions and caches go to the VirgoX-Files directory of whichever backend is active — `/config/Desktop/VirgoX-Files` under Docker, `$VXC_HOME/Desktop/VirgoX-Files` natively.
+  * On the docker backend the VM's disk is genuinely separate from the phone, so usage there does not consume phone storage.
+  * **On the native backend the desktop is running on your phone.** Builds, caches and installed apps all consume real phone storage and real battery. `curl -s localhost:8888/health` reports the actual `disk_free_bytes` and `mem_total_bytes` so you can see what you have rather than trust a figure.
+* **🧠 RAM & CPU:**
+  * Under Docker, apps and containers run on the VM's memory and cores, and the phone is only a display controller.
+  * Natively, apps run on your device's own memory and cores. The reported numbers are read from the machine; they are not a product specification.
 * **🤖 AI Agent Vision & File Execution:**
   * Because all files are stored in the shared cloud workspace, the AI assistant (Antigravity) can instantly view, edit, inspect, and execute any file:
     * ROM zips, payloads, scripts, and APKs can be inspected and run directly via CLI or Desktop.
@@ -113,49 +203,63 @@ The web control suite includes a dedicated cybersecurity lock screen and authent
 
 When resuming or starting a new session with this repository, the AI assistant can immediately take full control using the following steps:
 
-### 1. Verify Container & Bridge Server:
-```bash
-# Check if container is running
-docker ps | grep virgox-desktop || bash setup_pc.sh
+### 1. Verify the desktop and bridge are up
 
-# Check if Bridge API is online
-curl -s http://localhost:8888/api/status
+Do not assume a backend. Ask the machine which one it is using:
+
+```bash
+curl -s http://localhost:8888/health
 ```
 
-### 2. Live Screen Vision (See What the User Sees):
-```bash
-# Capture full screen
-docker exec -e DISPLAY=:1 virgox-desktop scrot -o /config/Desktop/VirgoX-Files/current_screen.png
+`/health` reports the real backend, architecture, kernel, display, pid, memory
+and disk. `"backend": "native"` means the commands below run directly; `"docker"`
+means they need the `docker exec` prefix.
 
-# View the image with your view tool:
-# /home/darkvirgoyt/current_screen.png
+Set the prefix once and it works either way:
+
+```bash
+# native:  VXC="env DISPLAY=:1"
+# docker:  VXC="docker exec -u abc -e DISPLAY=:1 virgox-desktop"
+if [ "$(curl -s http://localhost:8888/health | grep -o '"backend":"[a-z]*"' | cut -d'"' -f4)" = docker ]; then
+  VXC="docker exec -u abc -e DISPLAY=:1 virgox-desktop"
+else
+  VXC="env DISPLAY=:1"
+fi
+
+bash setup_pc.sh auto    # start whichever backend this machine supports
 ```
 
-### 3. Window Management:
+### 2. Live Screen Vision (see what the user sees)
+
 ```bash
-# List all open windows
-docker exec -e DISPLAY=:1 virgox-desktop wmctrl -l
-
-# Focus Google Chrome
-docker exec -u abc -e DISPLAY=:1 virgox-desktop wmctrl -xa "google-chrome"
-
-# Unshade or bring window to primary workspace
-docker exec -u abc -e DISPLAY=:1 virgox-desktop wmctrl -r "Google Chrome" -b remove,shaded
-docker exec -u abc -e DISPLAY=:1 virgox-desktop wmctrl -r "Google Chrome" -t 0
+SHOT="$HOME/current_screen.png"
+$VXC scrot -o "$SHOT"
 ```
 
-### 4. Mouse & Keyboard Automation:
+### 3. Window management
+
 ```bash
-# Move mouse and click (e.g. at coordinates 500, 300)
-docker exec -u abc -e DISPLAY=:1 virgox-desktop xdotool mousemove 500 300 click 1
-
-# Type text
-docker exec -u abc -e DISPLAY=:1 virgox-desktop xdotool type "Hello VirgoX"
-
-# Send shortcut (e.g. Enter, Ctrl+T, Ctrl+W)
-docker exec -u abc -e DISPLAY=:1 virgox-desktop xdotool key Return
-docker exec -u abc -e DISPLAY=:1 virgox-desktop xdotool key ctrl+t
+$VXC wmctrl -l                                    # list windows
+$VXC wmctrl -r "Google Chrome" -b remove,shaded    # unmaximise
+$VXC wmctrl -r "Google Chrome" -t 0               # move to workspace 1
 ```
+
+### 4. Mouse & keyboard automation
+
+```bash
+$VXC xdotool mousemove 500 300 click 1   # move and click
+$VXC xdotool type "Hello VirgoX"        # type text
+$VXC xdotool key Return                 # Enter
+$VXC xdotool key ctrl+t                 # Ctrl+T
+```
+
+### 5. Facts, not product copy
+
+`/api/status` and the assistant's spoken replies read the machine. They report
+measured RAM, CPU count, disk totals and display resolution, and `null` for
+anything they cannot observe. Do not quote a specification that no tool has
+actually observed — the earlier "64 GB ZRAM / 5.0 TB / 1000+ FPS" block was a
+hardcoded string that described nothing, and it has been removed.
 
 ---
 
@@ -374,22 +478,37 @@ server behind it, so it is worth being exact about what that means:
 
 ### Booting a real Linux desktop alongside it
 
-The repository also ships a container definition for a real XFCE desktop, which
-is a different thing from the web page and needs Docker on your machine:
+The repository also ships a real Linux desktop, which is a different thing from
+the web page. Which backend you get depends on the machine, so ask first:
 
 ```bash
 git clone https://github.com/darkvirgoyt-beep/VirgoX-Cloud-Computer.git
 cd VirgoX-Cloud-Computer
 
-# XFCE desktop in Docker (webtop), ports 3000/3001
-bash setup_pc.sh linux
-
-# Windows 11 VM via dockurr/windows (needs KVM; port 8006)
-bash setup_pc.sh win11
+bash scripts/vxc-doctor.sh      # what does this machine support?
 ```
 
-Those scripts need Docker, privileged mode and KVM. They are not part of the
-GitHub Pages deployment, and nothing on the page depends on them.
+```
+docker ps >/dev/null 2>&1 && echo "docker works" || echo "docker cannot run here"
+```
+
+**If Docker works** (most desktops and servers):
+
+```bash
+bash setup_pc.sh linux          # XFCE webtop in Docker, ports 3000/3001
+bash setup_pc.sh win11          # Windows 11 VM via dockurr/windows, needs KVM, port 8006
+```
+
+**If Docker cannot run** — which is the case under proot-distro on Android, and
+also on many rootless/containerless environments:
+
+```bash
+bash setup_pc.sh native         # desktop in your own userspace, no Docker
+```
+
+NoVNC is then on 6080 and the terminal on 7681. `setup_pc.sh auto` picks the
+right one without you deciding. The Windows 11 path stays on Docker regardless,
+because a KVM VM genuinely requires it.
 
 ## 🛠️ Repository File Structure
 
@@ -400,10 +519,16 @@ VirgoX-Cloud-Computer/
 ├── app.js                      # ⚙️ Touchpad, crosshair, pinch-zoom, and multi-device logic
 ├── manifest.json               # 📱 PWA manifest for Home Screen installation
 ├── sw.js                       # ⚡ Service Worker for offline performance
-├── docker-compose.yml          # 🐳 Webtop XFCE Desktop Container configuration
-├── setup_pc.sh                 # 🚀 One-click setup script (boots desktop, tools & server)
+├── docker-compose.yml          # 🐳 Webtop XFCE Desktop Container configuration (docker backend)
+├── setup_pc.sh                 # 🚀 One-click setup (auto | native | linux | win11)
 ├── server.py                   # 🔗 Bridge API server (Port 8888) for remote web control
 ├── scripts/
+│   ├── vxc-doctor.sh           # 🩺 Capability probe: namespaces, cgroups, runc, arch
+│   ├── vxc-native-desktop.sh   # 🖥️ Native backend: Xvfb + openbox + x11vnc + ttyd
+│   ├── render-shortcuts.sh     # 🖱️ Resolves .desktop entries for the real runtime
+│   ├── fix-dev-fd.sh           # 🔧 Repairs /dev/fd under proot (Chrome's launcher needs it)
+│   ├── install_cloudflared.sh  # ☁️ Arch-aware cloudflared installer
+│   ├── desktop/                # 🧰 Desktop helper scripts (CMD, Wine, APK, engines)
 │   └── start_tunnels.sh        # 🌐 Live SSH tunnel generator for multi-device URLs
 ├── pc.html                     # 🪟 The Windows 11 Fluent desktop (real session gate)
 ├── auth.html                   # 🔑 Sign-in and one-time code approval

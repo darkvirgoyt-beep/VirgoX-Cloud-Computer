@@ -4,8 +4,10 @@
 # Developer: Prince · VirgoYT (@darkvirgoyt-beep)
 # Runs Windows .exe files with full simulated Administrator rights
 # ==============================================================================
+
+. "$(dirname "$0")/vxc-paths.sh"
 export DISPLAY="${DISPLAY:-:1}"
-export WINEPREFIX="${WINEPREFIX:-/config/.wine}"
+export WINEPREFIX="$VXC_WINE_PREFIX"
 export WINEDEBUG="-all"
 
 if [ -z "$1" ]; then

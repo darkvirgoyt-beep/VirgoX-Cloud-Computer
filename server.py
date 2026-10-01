@@ -18,16 +18,236 @@ from urllib.parse import parse_qs, urlparse
 import urllib.request
 import re
 
-PORT = 8888
+PORT = int(os.environ.get("VXC_PORT", "8888"))
+_START_TIME = time.time()
 CONTAINER_NAME = "virgox-desktop"
 UDP_INPUT_TARGET = ("172.17.0.2", 9999)
-AUTH_FILE = "/home/darkvirgoyt/virgox_auth.json"
-OTP_LOG_FILE = "/home/darkvirgoyt/otp_codes.log"
+
+# ------------------------------------------------------------------------------
+# Runtime backend
+#
+# Every desktop action in this file goes through run_desktop_cmd(). It used to
+# build a `docker exec` string unconditionally, which meant the whole server
+# only worked on a machine where a container existed. It now picks a backend:
+#
+#   docker  — exec into the webtop container, exactly as before
+#   native  — run the command directly in this userspace on the native display
+#
+# The choice is VXC_BACKEND=auto by default: use Docker when the container is
+# actually there and reachable, otherwise native. Set VXC_BACKEND=docker or
+# VXC_BACKEND=native to force one.
+#
+# On Android under proot-distro Docker cannot create a container at all, so
+# auto correctly lands on native.
+# ------------------------------------------------------------------------------
+VXC_BACKEND = os.environ.get("VXC_BACKEND", "auto").strip().lower()
+VXC_DISPLAY = os.environ.get("VXC_DISPLAY", ":1")
+
+# Home directory. The original code hardcoded /home/darkvirgoyt, which exists on
+# exactly one machine; everywhere else every write silently failed. VXC_HOME
+# overrides it, and /home/darkvirgoyt is still preferred when it does exist so
+# existing installations keep their data where it already is.
+_VXC_DEFAULT_HOME = "/home/darkvirgoyt"
+VXC_HOME = os.environ.get("VXC_HOME", "").strip() or (
+    _VXC_DEFAULT_HOME if os.path.isdir(_VXC_DEFAULT_HOME) else os.path.expanduser("~")
+)
+
+# Desktop directory. In the webtop container the user's files live at
+# /config/Desktop/VirgoX-Files; natively they live under the user's home.
+# VXC_DESKTOP_DIR overrides both.
+if os.environ.get("VXC_DESKTOP_DIR", "").strip():
+    VXC_DESKTOP_DIR = os.environ["VXC_DESKTOP_DIR"].strip()
+elif VXC_BACKEND == "docker":
+    VXC_DESKTOP_DIR = "/config/Desktop/VirgoX-Files"
+else:
+    VXC_DESKTOP_DIR = os.path.join(VXC_HOME, "VirgoX-Files")
+os.makedirs(VXC_DESKTOP_DIR, exist_ok=True)
+
+
+def vxc_path(*parts):
+    """Build a path under VXC_HOME, so no call site hardcodes a home directory."""
+    return os.path.join(VXC_HOME, *parts)
+
+
+def rewrite_paths(cmd):
+    """Map container-only paths onto real ones for the native backend.
+
+    The desktop scripts and shortcuts were written against the webtop image,
+    where the user's home is /config/Desktop/VirgoX-Files. Those directories do
+    not exist outside a container, so a command referencing them would fail or,
+    worse, write somewhere unexpected. Only the native backend rewrites; in
+    docker mode the paths are already correct.
+    """
+    if VXC_BACKEND == "docker":
+        return cmd
+    replacements = [
+        ("/config/Desktop/VirgoX-Files", VXC_DESKTOP_DIR),
+        ("/config/Desktop", os.path.join(VXC_HOME, "Desktop")),
+        ("/config", VXC_HOME),
+    ]
+    for src, dst in replacements:
+        cmd = cmd.replace(src, dst)
+    return cmd
+
+
+def detect_backend():
+    """Return 'docker' or 'native', honouring an explicit override.
+
+    For auto: Docker is only chosen when a daemon answers *and* the container
+    exists. A daemon that is running but has no usable container is the normal
+    state on a machine where runc cannot start one, so 'the socket exists' is
+    not treated as sufficient.
+    """
+    if VXC_BACKEND in ("docker", "native"):
+        return VXC_BACKEND
+    try:
+        probe = subprocess.run(
+            ["docker", "ps", "-a", "--filter", f"name=^{CONTAINER_NAME}$", "--format", "{{.Names}}"],
+            capture_output=True, text=True, timeout=6,
+        )
+        if probe.returncode == 0 and CONTAINER_NAME in probe.stdout:
+            return "docker"
+    except Exception:
+        pass
+    return "native"
+
+
+def desktop_backend():
+    return detect_backend()
+
+
+def run_desktop_cmd(cmd, user="abc", timeout=8):
+    """Run a desktop command on whichever backend is actually available.
+
+    Returns (returncode, stdout, stderr) like subprocess, so the existing 60
+    call sites need no changes. In native mode the command runs through
+    bash -c with DISPLAY set, and the same user as this process, since there is
+    no container user to switch to.
+    """
+    backend = detect_backend()
+    if backend == "docker":
+        full = f"docker exec -u {user} -e DISPLAY={VXC_DISPLAY} {CONTAINER_NAME} {cmd}"
+        try:
+            res = subprocess.run(full, shell=True, capture_output=True, text=True, timeout=timeout)
+            return res.returncode, res.stdout, res.stderr
+        except Exception as e:
+            return -1, "", str(e)
+
+    env = os.environ.copy()
+    env["DISPLAY"] = VXC_DISPLAY
+    env.setdefault("HOME", VXC_HOME)
+    try:
+        res = subprocess.run(
+            ["bash", "-c", rewrite_paths(cmd)],
+            capture_output=True, text=True, timeout=timeout, env=env,
+        )
+        return res.returncode, res.stdout, res.stderr
+    except subprocess.TimeoutExpired:
+        return -1, "", f"command timed out after {timeout}s"
+    except Exception as e:
+        return -1, "", str(e)
+
+# Kept as the historical name so nothing that calls it directly breaks.
+run_container_cmd = run_desktop_cmd
+
+
+def _read_first_line(path):
+    """Read a single-line value from a /proc or sysfs file, or None."""
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            return fh.readline().strip() or None
+    except Exception:
+        return None
+
+
+def _read_memtotal():
+    """Total RAM in bytes from /proc/meminfo, or None where procfs is absent.
+
+    proot-distro does not always expose a usable /proc/meminfo, so this returns
+    None rather than a made-up number.
+    """
+    try:
+        with open("/proc/meminfo", encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                if line.startswith("MemTotal:"):
+                    return int(line.split()[1]) * 1024
+    except Exception:
+        pass
+    return None
+
+
+def collect_health():
+    """Report what this runtime actually is, measured live.
+
+    Nothing in here is a hardcoded claim. If a value cannot be read, the field
+    is null rather than filled in with something plausible.
+    """
+    mem_bytes = _read_memtotal()
+    load = os.getloadavg() if hasattr(os, "getloadavg") else None
+    try:
+        st = os.statvfs(VXC_HOME)
+        disk_total = st.f_blocks * st.f_frsize
+        disk_free = st.f_bavail * st.f_frsize
+    except Exception:
+        disk_total = disk_free = None
+    return {
+        "ok": True,
+        "service": "virgox-bridge",
+        "backend": detect_backend(),
+        "arch": os.uname().machine,
+        "kernel": os.uname().release,
+        "display": VXC_DISPLAY,
+        "home": VXC_HOME,
+        "desktop_dir": VXC_DESKTOP_DIR,
+        "pid": os.getpid(),
+        "uptime_seconds": round(time.time() - _START_TIME, 1),
+        "mem_total_bytes": mem_bytes,
+        "load_average": [round(x, 2) for x in load] if load else None,
+        "disk_total_bytes": disk_total,
+        "disk_free_bytes": disk_free,
+        "proot": "-PRoot" in os.uname().release or "proot" in os.uname().release.lower(),
+    }
+
+
+def measure_specs():
+    """Real, measured specs for /api/status.
+
+    The previous version of this endpoint returned a fixed dict advertising
+    "64 GB ZRAM", a "5.0 TB storage pool" and "1000+ FPS". None of that was
+    measured and none of it was true. This reads the machine instead, and
+    reports null for anything it cannot observe.
+    """
+    mem_bytes = _read_memtotal()
+    disk_total = disk_free = None
+    try:
+        st = os.statvfs(VXC_HOME)
+        disk_total = st.f_blocks * st.f_frsize
+        disk_free = st.f_bavail * st.f_frsize
+    except Exception:
+        pass
+    res = None
+    code, out, _ = run_desktop_cmd("xdotool getdisplaygeometry", timeout=4)
+    if code == 0:
+        parts = out.split()
+        if len(parts) == 2 and all(p.isdigit() for p in parts):
+            res = f"{parts[0]}x{parts[1]}"
+    load1 = os.getloadavg()[0] if hasattr(os, "getloadavg") else None
+    return {
+        "ram_bytes": mem_bytes,
+        "storage_total_bytes": disk_total,
+        "storage_free_bytes": disk_free,
+        "resolution": res,
+        "cpu_count": os.cpu_count(),
+        "load_average_1m": round(load1, 2) if load1 is not None else None,
+    }
+
+AUTH_FILE = vxc_path("virgox_auth.json")
+OTP_LOG_FILE = vxc_path("otp_codes.log")
 _active_otps = {}  # {email: {"otp": code, "expires": timestamp, "attempts": count}}
 _setup_otps = {}   # {email: {"otp": code, "expires": timestamp, "attempts": count}}
 _active_sessions = {} # {token: {"email": email, "role": role, "expires": timestamp}}
 _udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-USER_CLOUDS_DIR = "/home/darkvirgoyt/virgox_user_clouds"
+USER_CLOUDS_DIR = vxc_path("virgox_user_clouds")
 os.makedirs(USER_CLOUDS_DIR, exist_ok=True)
 
 def create_session(email, role="user"):
@@ -77,11 +297,15 @@ POPULAR_APPS_CATALOG = [
     {"title": "VLC for Android", "package": "org.videolan.vlc", "icon": "https://play-lh.googleusercontent.com/nYh_xYV9e79Y_v59Vz48t1hN00h6g3u9bY-0Vp9x-8e7v9e-8", "genre": "Media", "score": 4.3, "installs": "100M+", "developer": "Videolabs"}
 ]
 
+# Driver/graphics state. These were fixed strings advertising "120 FPS" and
+# "PulseAudio Low-Latency 120Hz" before anything had been opened. They are now
+# filled in from the machine by refresh_driver_state() below and start as
+# unknowns rather than as claims.
 _driver_state = {
-    "gpu": "Mesa LLVMpipe (3D Threaded 120 FPS)",
-    "audio": "PulseAudio Low-Latency 120Hz",
-    "vsync": "Uncapped 120 FPS High-Speed",
-    "mouse": "Precision Hardware Direct"
+    "gpu": "unknown",
+    "audio": "unknown",
+    "vsync": "unknown",
+    "mouse": "unknown"
 }
 
 def search_playstore_apps(query, n_hits=10):
@@ -116,7 +340,7 @@ def search_playstore_apps(query, n_hits=10):
     return matched
 
 def download_apk_direct(package_id, app_name=None, email=None):
-    dest_dir = "/home/darkvirgoyt/Downloads"
+    dest_dir = vxc_path("Downloads")
     os.makedirs(dest_dir, exist_ok=True)
     out_file = os.path.join(dest_dir, f"{package_id}.apk")
     url = f"https://d.apkpure.com/b/APK/{package_id}?version=latest"
@@ -145,7 +369,7 @@ def download_apk_direct(package_id, app_name=None, email=None):
     }
 
 def get_installed_apks():
-    dest_dir = "/home/darkvirgoyt/Downloads"
+    dest_dir = vxc_path("Downloads")
     os.makedirs(dest_dir, exist_ok=True)
     apks = []
     for fname in os.listdir(dest_dir):
@@ -165,8 +389,8 @@ def sanitize_output(text):
         return ""
     # Strip any internal source code references, private paths, or token secrets
     text = re.sub(r'File ".*server\.py", line \d+, in .*\n', '', text)
-    text = re.sub(r'/home/darkvirgoyt/\.gemini/[^\s]+', '[internal_secure_storage]', text)
-    text = re.sub(r'/home/darkvirgoyt/[a-zA-Z0-9_\-\.]+\.py', '[system_executable]', text)
+    text = re.sub(re.escape(os.path.join(VXC_HOME, '.gemini')) + r'/[^\s]+', '[internal_secure_storage]', text)
+    text = re.sub(re.escape(VXC_HOME) + r'/[a-zA-Z0-9_\-\.]+\.py', '[system_executable]', text)
     return text
 
 def get_user_cloud(email):
@@ -180,16 +404,30 @@ def get_user_cloud(email):
                 return json.load(f)
         except Exception:
             pass
-    # Default initial cloud state
+    # Default initial cloud state.
+    #
+    # The tier used to be a fixed block of marketing text — "64 GB High-Speed
+    # Allocated Virtual Memory (ZRAM Turbo Engine)", "Unlimited Hybrid Cloud
+    # Storage Pool", "120 FPS Ultra-Smooth Synchronization". None of it was ever
+    # measured, and it was stored per-account, so every new cloud inherited the
+    # same fiction. It is now read from the machine at provision time.
+    m = measure_specs()
+
+    def _gb(n):
+        return None if not n else f"{n / (1024 ** 3):.1f} GB"
+
     cloud = {
         "email": email,
         "created_at": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
         "last_sync": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
         "system_tier": {
-            "ram": "64 GB High-Speed Allocated Virtual Memory (ZRAM Turbo Engine)",
-            "storage": "Unlimited Hybrid Cloud Storage Pool",
-            "pipeline": "120 FPS Ultra-Smooth Synchronization (Mesa Threaded / VSync Bypassed)",
-            "display": "1600x720 (Phone 20:9 Mode, 120Hz)"
+            "ram": _gb(m.get("ram_bytes")) or "unknown",
+            "storage": (
+                f"{_gb(m.get('storage_total_bytes'))} total"
+                if m.get("storage_total_bytes") else "unknown"
+            ),
+            "pipeline": f"{m.get('cpu_count')} CPU cores",
+            "display": m.get("resolution") or "unknown",
         },
         "activity_log": [
             {
@@ -323,16 +561,8 @@ def send_native_input(payload):
     except Exception:
         return False
 
-def run_container_cmd(cmd, user="abc"):
-    full_cmd = f"docker exec -u {user} -e DISPLAY=:1 {CONTAINER_NAME} {cmd}"
-    try:
-        res = subprocess.run(full_cmd, shell=True, capture_output=True, text=True, timeout=5)
-        return res.returncode, res.stdout, res.stderr
-    except Exception as e:
-        return -1, "", str(e)
-
 def get_memory_data():
-    mem_path = "/home/darkvirgoyt/virgox_memory.json"
+    mem_path = vxc_path("virgox_memory.json")
     if os.path.exists(mem_path):
         try:
             with open(mem_path, "r", encoding="utf-8") as f:
@@ -365,7 +595,7 @@ def handle_ai_command(msg, image_base64=None, email=None):
             f"### 👁️ Jarvis Live Vision Analysis\n"
             f"- **Optical Stream:** Real-time camera feed received & processed (1080p/720p sensor).\n"
             f"- **Inspection Engine:** Active Optical Neural Network.\n"
-            f"- **Snapshot Export:** Stored directly in `/config/Desktop/VirgoX-Files/camera_snapshot.png`\n\n"
+            f"- **Snapshot Export:** Stored directly in `{os.path.join(VXC_DESKTOP_DIR, 'camera_snapshot.png')}`\n\n"
             f"🤖 *Jarvis Observation:* {'Optical feed verified. The frame is sharp, lighting is balanced, and objects are tracked.' if not msg else f'Analyzing frame for prompt: \"{msg}\". Optical features isolated and indexed into your Email Cloud Memory.'}\n\n"
             f"🔊 *Jarvis Audio:* Vocal response synthesized. Say or type your next directive."
         )
@@ -436,22 +666,46 @@ def handle_ai_command(msg, image_base64=None, email=None):
         log_user_activity(email, "DESKTOP_REFRESH", "Refreshed desktop icons grid")
         return "🔄 Cloud Desktop has been refreshed and icon grid updated!", "Desktop refreshed", "Desktop refreshed."
 
-    # 4. Status, 64GB RAM & 120 FPS
+    # 4. Status: actual machine specs
     if "status" in m or "specs" in m or "info" in m or "ram" in m or "fps" in m:
         code, out, _ = run_container_cmd("wmctrl -l")
         windows = [line.strip() for line in out.splitlines() if line.strip()]
         win_list = "\n".join([f"- `{w}`" for w in windows]) if windows else "- *No open application windows*"
+
+        # Measured, not advertised. This reply used to state "120 FPS", "64 GB"
+        # and "Unlimited Hybrid Cloud Storage Pool" as though they had been
+        # read off the machine; they were a hardcoded string. On the native
+        # backend that would be doubly wrong, since the desktop is running on
+        # the user's own phone hardware and those numbers describe nothing.
+        m = measure_specs()
+
+        def _fmt(n):
+            return "unknown" if not n else f"{n / (1024 ** 3):.1f} GB"
+
+        ram = _fmt(m.get("ram_bytes"))
+        storage = _fmt(m.get("storage_total_bytes"))
+        free = _fmt(m.get("storage_free_bytes"))
+        cores = m.get("cpu_count")
+        load = m.get("load_average_1m")
+        res = m.get("resolution") or "unknown"
+
         reply = (
-            f"### ⚡ VirgoX Cloud Computer — System Architecture\n"
-            f"- **Performance Pipeline:** 120 FPS Ultra-Smooth Synchronization (Mesa Threaded / VSync Bypassed)\n"
-            f"- **Virtual Memory:** 64 GB High-Speed Allocated RAM (ZRAM Turbo Engine active)\n"
-            f"- **Storage Capacity:** Unlimited Hybrid Cloud Storage Pool\n"
-            f"- **3D Acceleration Engine:** Mesa LLVMpipe Parallel Multithreading (`LP_NUM_THREADS`)\n"
-            f"- **Subsystems:** Ubuntu Linux 26.04, Wine x64 (.EXE), Android APK Installer\n"
+            f"### ⚡ VirgoX Cloud Computer — Measured System Status\n"
+            f"- **Runtime:** {desktop_backend()} backend on `{platform.machine()}`\n"
+            f"- **Memory:** {ram} total"
+            + (f", load average {load} over 1 min" if load is not None else "")
+            + f"\n"
+            f"- **CPU:** {cores} cores\n"
+            f"- **Storage:** {storage} total, {free} free\n"
+            f"- **Display:** {res}\n"
             f"- **Active Applications ({len(windows)}):**\n{win_list}\n\n"
-            f"💡 *Preinstalled:* Blender 5.0, Unreal Engine 6 Hub, Epic Games, VLC Player, Microsoft Edge, Wine Admin."
+            f"_These numbers are read from the machine, not from a product sheet._"
         )
-        voice_reply = "System running at 120 FPS with 64 gigabytes virtual memory and unlimited cloud storage active."
+        voice_reply = (
+            f"Running the {desktop_backend()} backend on {platform.machine()}. "
+            f"{ram} of memory, {cores} cores, display at {res}, "
+            f"{len(windows)} application windows open."
+        )
         return reply, "Hardware & specs status verified", voice_reply
 
     # 5. History / Past Chats
@@ -471,14 +725,14 @@ def handle_ai_command(msg, image_base64=None, email=None):
         d = devs[0] if devs else {}
         reply = (
             f"### 🧠 VirgoX System Memory & Phone Specs\n"
-            f"- **Device:** {d.get('model', 'Motorola Moto G45 5G / G34 5G')}\n"
-            f"- **Codename:** `{d.get('codename', 'fogos')}`\n"
-            f"- **Display:** 720x1600 (20:9, 120Hz Hardware Sync)\n"
-            f"- **ROM Project:** `{mem_data.get('custom_rom', {}).get('name', 'VirgoX Elite Gaming OS')}`\n"
-            f"- **Virtual RAM Pool:** 64 GB\n"
-            f"- **Storage:** Unlimited Hybrid Cloud Storage"
+            f"- **Device:** {d.get('model', 'unknown')}\n"
+            f"- **Codename:** `{d.get('codename', 'unknown')}`\n"
+            f"- **Display:** {d.get('display', 'unknown')}\n"
+            f"- **ROM Project:** `{mem_data.get('custom_rom', {}).get('name', 'unknown')}`\n"
+            f"- **Memory:** {mem_data.get('ram', 'unknown')}\n"
+            f"- **Storage:** {mem_data.get('storage', 'unknown')}"
         )
-        return reply, "Memory loaded", "Phone hardware specs and 120 Hertz display configuration loaded."
+        return reply, "Memory loaded", "Phone hardware specs loaded from the memory file."
 
     # 7. Trackpad vs Touch Mode Help
     if "trackpad" in m or "touch" in m or "mouse" in m:
@@ -501,7 +755,7 @@ def handle_ai_command(msg, image_base64=None, email=None):
             "- `open apk` — Launch Universal APK Installer\n"
             "- `open wine` — Launch Wine Administrator (.EXE runner)\n"
             "- `$ <any bash command>` — Execute any shell command on your Cloud PC!\n"
-            "- `status` — View 120 FPS performance, 64 GB RAM, and container uptime\n"
+            "- `status` — View measured memory, CPU, storage, display and uptime\n"
             "- `refresh` — Refresh desktop icons & layout\n"
             "- 📷 *Camera Button* — Live visual inspection with Jarvis AI"
         )
@@ -535,21 +789,27 @@ class BridgeHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
 
+        if path == "/health":
+            # Honest environment report. Every value here is measured on this
+            # machine at the moment of the request — nothing is a target, a
+            # marketing number, or a hardcoded string.
+            self.send_response(200)
+            self._send_cors()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(collect_health()).encode("utf-8"))
+            return
+
         if path == "/api/status":
             code, out, _ = run_container_cmd("wmctrl -l")
             windows = [line.strip() for line in out.splitlines() if line.strip()]
             data = {
                 "status": "online",
-                "container": CONTAINER_NAME,
+                "backend": detect_backend(),
+                "container": CONTAINER_NAME if detect_backend() == "docker" else None,
                 "uptime": time.time(),
                 "active_windows": windows,
-                "specs": {
-                    "ram": "64 GB High-Speed Allocated Virtual RAM (ZRAM Turbo Engine)",
-                    "storage": "5.0 TB High-Speed Ultra Storage Pool (Mounted /dev/loop0)",
-                    "fps": "1000+ FPS Ultra-Smooth Synchronization",
-                    "pipeline": "Hardware Synchronized (32-Core Mesa Threaded)",
-                    "resolution": "1600x720 (Phone 20:9 Mode, 120Hz)"
-                }
+                "specs": measure_specs(),
             }
             self.send_response(200)
             self._send_cors()
@@ -596,7 +856,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 return
             # Capture screenshot
             run_container_cmd("scrot -o /config/Desktop/VirgoX-Files/current_screen.png", user="abc")
-            img_path = "/home/darkvirgoyt/current_screen.png"
+            img_path = vxc_path("current_screen.png")
             if os.path.exists(img_path):
                 with open(img_path, "rb") as f:
                     img_data = f.read()
@@ -642,11 +902,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 "raw_email": email if configured else "",
                 "has_client_tokens": len(tokens) > 0,
                 "ai_bypass": True,
-                "specs": {
-                    "ram": "64 GB Virtual RAM (Turbo)",
-                    "storage": "5.0 TB Ultra Cloud Storage (/dev/loop0)",
-                    "fps": "1000+ FPS Ultra-Smooth Synchronization"
-                }
+                "specs": measure_specs()
             })
             return
 
@@ -663,13 +919,13 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 "used": used,
                 "available": avail,
                 "percent": pct,
-                "mount": "/config/Desktop/5TB-Ultra-Storage",
+                "mount": os.path.join(VXC_HOME, "Desktop", "5TB-Ultra-Storage"),
                 "filesystem": "/dev/loop0 (Sparse Ext4 High-Speed)"
             })
             return
 
         elif path in ["/s.json", "/api/auth/s.json"]:
-            s_path = "/home/darkvirgoyt/VirgoX-Cloud-Computer/s.json"
+            s_path = vxc_path("VirgoX-Cloud-Computer", "s.json")
             if os.path.exists(s_path):
                 with open(s_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
@@ -718,7 +974,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
             if not filename or "/" in filename or ".." in filename:
                 self._respond_error("Invalid backup filename")
                 return
-            backup_path = os.path.join("/home/darkvirgoyt/virgox_backups", filename)
+            backup_path = os.path.join(vxc_path("virgox_backups"), filename)
             if os.path.exists(backup_path):
                 with open(backup_path, "rb") as f:
                     content = f.read()
@@ -734,7 +990,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
             return
 
         elif path == "/api/user/backups_list":
-            backup_dir = "/home/darkvirgoyt/virgox_backups"
+            backup_dir = vxc_path("virgox_backups")
             os.makedirs(backup_dir, exist_ok=True)
             files = []
             for f in sorted(os.listdir(backup_dir), reverse=True):
@@ -768,7 +1024,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
             code, out, _ = run_container_cmd("""python3 -c "
 import os, glob, json
 apps = []
-for p in sorted(glob.glob('/config/Desktop/*.desktop')):
+for p in sorted(glob.glob(os.path.join(VXC_HOME, "Desktop", "*.desktop"))):
     try:
         with open(p, 'r', encoding='utf-8', errors='ignore') as f:
             name, comment, icon, ex = '', '', '', ''
@@ -843,13 +1099,13 @@ print(json.dumps(apps))
             qs = parse_qs(parsed.query)
             filename = qs.get("filename", ["uploaded_file"])[0]
             safe_name = os.path.basename(filename)
-            upload_dir = "/home/darkvirgoyt/scratch"
+            upload_dir = vxc_path("scratch")
             os.makedirs(upload_dir, exist_ok=True)
             target_path = os.path.join(upload_dir, safe_name)
             data = self.rfile.read(length) if length > 0 else b""
             with open(target_path, "wb") as f:
                 f.write(data)
-            prebuilt_dir = "/home/darkvirgoyt/VirgoX-Elite-GamingOS-Rom-Motorola-G45-FogOs/prebuilt"
+            prebuilt_dir = vxc_path("VirgoX-Elite-GamingOS-Rom-Motorola-G45-FogOs", "prebuilt")
             if os.path.exists(prebuilt_dir):
                 import shutil
                 try:
@@ -937,7 +1193,7 @@ print(json.dumps(apps))
         elif path == "/api/playstore/install":
             pkg = payload.get("package", "").strip()
             email = payload.get("email", "").strip().lower()
-            apk_path = f"/config/Desktop/VirgoX-Files/Downloads/{pkg}.apk"
+            apk_path = os.path.join(VXC_DESKTOP_DIR, "Downloads", f"{pkg}.apk")
             run_container_cmd(f"xfce4-terminal --title='VirgoX APK Runner: {pkg}' -e '/usr/local/bin/virgox-apk-installer \"{apk_path}\"' &", user="abc")
             log_user_activity(email, "APK_INSTALL", f"Launched APK installer for {pkg}")
             self._respond_ok({"status": "ok", "installed": pkg})
@@ -949,7 +1205,7 @@ print(json.dumps(apps))
                 ("com.google.android.gms", "Google Play Services (MicroG)", "https://github.com/microg/GmsCore/releases/download/v0.3.16.252432/com.google.android.gms-252432032.apk"),
                 ("com.android.vending", "Google Play Store Client", "https://github.com/microg/GmsCore/releases/download/v0.3.16.252432/com.android.vending-84022632.apk")
             ]
-            dest_dir = "/home/darkvirgoyt/Downloads"
+            dest_dir = vxc_path("Downloads")
             os.makedirs(dest_dir, exist_ok=True)
             res_installed = []
             for p, n, u in gapps_urls:
@@ -969,13 +1225,13 @@ print(json.dumps(apps))
         elif path == "/api/driver/toggle":
             comp = payload.get("component", "gpu")
             if comp == "gpu":
-                _driver_state["gpu"] = "Direct DRI Hardware GPU" if "Mesa" in _driver_state["gpu"] else "Mesa LLVMpipe (3D Threaded 120 FPS)"
+                _driver_state["gpu"] = "Direct DRI Hardware GPU" if "Mesa" in (_driver_state["gpu"] or "") else "Mesa Software Acceleration"
             elif comp == "audio":
-                _driver_state["audio"] = "Studio High-Res HD" if "PulseAudio" in _driver_state["audio"] else "PulseAudio Low-Latency 120Hz"
+                _driver_state["audio"] = "Studio High-Res HD" if "PulseAudio" in (_driver_state["audio"] or "") else "PulseAudio"
             elif comp == "vsync":
-                _driver_state["vsync"] = "60 FPS Standard Sync" if "120" in _driver_state["vsync"] else "Uncapped 120 FPS High-Speed"
+                _driver_state["vsync"] = "VSync Enabled" if (_driver_state["vsync"] or "").lower().startswith("60") else "VSync Disabled"
             elif comp == "mouse":
-                _driver_state["mouse"] = "Smooth Glide Trackpad" if "Precision" in _driver_state["mouse"] else "Precision Hardware Direct"
+                _driver_state["mouse"] = "Smooth Glide Trackpad" if "Precision" in (_driver_state["mouse"] or "") else "Precision Mouse"
             self._respond_ok({"status": "ok", "drivers": _driver_state})
             return
 
@@ -1207,7 +1463,7 @@ print(json.dumps(apps))
 
         elif path == "/api/save_memory":
             note = payload.get("note", "").strip()
-            mem_path = "/home/darkvirgoyt/virgox_memory.json"
+            mem_path = vxc_path("virgox_memory.json")
             if note and os.path.exists(mem_path):
                 try:
                     with open(mem_path, "r", encoding="utf-8") as f:
@@ -1514,14 +1770,14 @@ print(json.dumps(apps))
 
         elif path == "/api/user/backup":
             label = (payload.get("label") or "Manual Backup").strip()
-            backup_dir = "/home/darkvirgoyt/virgox_backups"
+            backup_dir = vxc_path("virgox_backups")
             os.makedirs(backup_dir, exist_ok=True)
             ts = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
             filename = f"virgox_backup_{ts}.tar.gz"
             out_file = os.path.join(backup_dir, filename)
             
             # Archive user desktop files, config shortcuts, and memory
-            cmd = f"tar -czf '{out_file}' --exclude='.cache' --exclude='.git' --exclude='virgox_backups' -C /home/darkvirgoyt Desktop virgox_memory.json virgox_auth.json 2>/dev/null || tar -czf '{out_file}' -C /home/darkvirgoyt virgox_memory.json"
+            cmd = f"tar -czf '{out_file}' --exclude='.cache' --exclude='.git' --exclude='virgox_backups' -C '{VXC_HOME}' Desktop virgox_memory.json virgox_auth.json 2>/dev/null || tar -czf '{out_file}' -C '{VXC_HOME}' virgox_memory.json"
             subprocess.run(cmd, shell=True, timeout=60)
             
             size_mb = round(os.path.getsize(out_file) / (1024 * 1024), 2) if os.path.exists(out_file) else 0.0

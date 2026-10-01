@@ -3,10 +3,12 @@
 # ⚡ VirgoX Windows Command Prompt (CMD) Launcher
 # Developer: Prince · VirgoYT (@darkvirgoyt-beep)
 # ==============================================================================
-export DISPLAY="${DISPLAY:-:1}"
-export WINEPREFIX="${WINEPREFIX:-/config/.wine}"
 
-if which wine >/dev/null 2>&1 && [ -f /config/.wine/system.reg ]; then
+. "$(dirname "$0")/vxc-paths.sh"
+export DISPLAY="${DISPLAY:-:1}"
+export WINEPREFIX="$VXC_WINE_PREFIX"
+
+if which wine >/dev/null 2>&1 && [ -f "$VXC_WINE_PREFIX/system.reg" ]; then
     CMD_BIN="wine cmd.exe"
 else
     CMD_BIN="/usr/local/bin/virgox-cmd"
