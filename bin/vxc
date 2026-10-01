@@ -70,10 +70,8 @@ def logo():
 def login(args):
     cfg = load()
     server = (args.server or cfg.get("server") or DEFAULT_SERVER).rstrip("/")
-    # The bridge URL is authoritative: it points to the authorization route
-    # that can update this exact running session. A hosted page is opt-in via
-    # --web so stale VIRGOX_AUTH_WEB values cannot hijack login.
-    auth_web = (args.web or "").rstrip("/")
+    # Always use the hosted login gateway; the local bridge remains the API target.
+    auth_web = (args.web or DEFAULT_AUTH_WEB).rstrip("/")
 
     logo()
     print(c("  Authentication", BOLD))
@@ -86,15 +84,13 @@ def login(args):
         code = start["device_code"]
         bridge_url = start.get("verification_url")
         if auth_web:
-            verification_url = auth_web + ("&" if "?" in auth_web else "?") + urllib.parse.urlencode({"device_code": code, "bridge": bridge_url or server})
-        elif bridge_url:
-            parsed_bridge = urllib.parse.urlparse(str(bridge_url))
-            if parsed_bridge.scheme == "https" and parsed_bridge.hostname not in ("127.0.0.1", "localhost"):
-                verification_url = DEFAULT_AUTH_WEB + "?" + urllib.parse.urlencode({"device_code": code, "bridge": str(bridge_url).rsplit("/cli-authorize", 1)[0]})
-            else:
-                verification_url = str(bridge_url)
+            bridge_base = server
+            if bridge_url:
+                parsed_bridge = urllib.parse.urlparse(str(bridge_url))
+                if parsed_bridge.scheme and parsed_bridge.netloc:
+                    bridge_base = str(bridge_url).rsplit("/cli-authorize", 1)[0]
+            verification_url = auth_web + ("&" if "?" in auth_web else "?") + urllib.parse.urlencode({"device_code": code, "bridge": bridge_base})
         else:
-            # Compatibility with older bridge builds that omitted the URL.
             verification_url = server + "/cli-authorize?" + urllib.parse.urlencode({"code": code})
         expires = int(start.get("expires_in", 600))
 
