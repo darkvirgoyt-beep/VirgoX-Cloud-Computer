@@ -16,7 +16,9 @@ CONFIG = pathlib.Path(os.environ.get("XDG_CONFIG_HOME", pathlib.Path.home() / ".
 DEFAULT_SERVER = os.environ.get("VIRGOX_SERVER", "http://127.0.0.1:8888").rstrip("/")
 AUTH_BACKEND = os.environ.get("VIRGOX_AUTH_BACKEND", "").rstrip("/")
 AUTH_WEB = os.environ.get("VIRGOX_AUTH_WEB", "").rstrip("/")
-VERSION = "0.3.0"
+DEFAULT_AUTH_WEB = "https://virgoxcloud.web.app"
+DEFAULT_AUTH_BACKEND = "https://asia-south1-virgoxcloud.cloudfunctions.net/vxcAuth"
+VERSION = "0.4.0"
 
 USE_COLOR = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
 RESET = "\033[0m"
@@ -71,23 +73,14 @@ def logo():
 def login(args):
     cfg = load()
     server = (args.server or cfg.get("server") or DEFAULT_SERVER).rstrip("/")
-    backend = (args.backend or cfg.get("auth_backend") or AUTH_BACKEND).rstrip("/")
-    web = (args.web or cfg.get("auth_web") or AUTH_WEB).rstrip("/")
+    backend = (args.backend or cfg.get("auth_backend") or AUTH_BACKEND or DEFAULT_AUTH_BACKEND).rstrip("/")
+    web = (args.web or cfg.get("auth_web") or AUTH_WEB or DEFAULT_AUTH_WEB).rstrip("/")
 
     logo()
     print(c("  Authentication", BOLD))
     print(c("  ──────────────", DIM))
     print(f"  Host       {server}")
     print(f"  Auth       {backend or 'not configured'}")
-
-    if not backend or not web:
-        print()
-        print(c("  ✗ Firebase authorization is not configured.", RED), file=sys.stderr)
-        print("  Set VIRGOX_AUTH_BACKEND and VIRGOX_AUTH_WEB, then retry.", file=sys.stderr)
-        print("  Example:")
-        print("    export VIRGOX_AUTH_BACKEND=https://<region>-<project>.cloudfunctions.net/vxcAuth")
-        print("    export VIRGOX_AUTH_WEB=https://<project>.web.app")
-        return 2
 
     try:
         start = api(server, "/api/auth/device/start", {})
@@ -159,9 +152,14 @@ def login(args):
                     print(c("  VirgoX is ready.", BOLD))
                     return 0
             except urllib.error.HTTPError as exc:
-                if exc.code not in (404,):
+                if exc.code in (404, 409):
+                    pass
+                else:
                     print(f"\n  {c('✗', RED)} Authorization error: HTTP {exc.code}", file=sys.stderr)
                     return 1
+            except (urllib.error.URLError, TimeoutError, ConnectionError):
+                # A temporary network interruption must not kill an active login.
+                pass
             except Exception as exc:
                 print(f"\n  {c('✗', RED)} {exc}", file=sys.stderr)
                 return 1
