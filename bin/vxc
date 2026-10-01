@@ -216,6 +216,124 @@ def logout(args):
     return 0
 
 
+def _runtime_root():
+    candidates = [
+        os.environ.get("VIRGOX_ROOT", ""),
+        str(pathlib.Path.home() / ".virgox-cloud-computer"),
+        str(pathlib.Path(__file__).resolve().parent.parent),
+    ]
+    for candidate in candidates:
+        if candidate and (pathlib.Path(candidate) / "start_native.sh").exists():
+            return pathlib.Path(candidate)
+    return None
+
+
+def _port_open(port, host="127.0.0.1", timeout=1.0):
+    import socket
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def run_pc(args):
+    root = _runtime_root()
+    if root is None:
+        print(c("  ✗ VirgoX runtime is not installed.", RED), file=sys.stderr)
+        print("  Reinstall with the official installer:")
+        print("  curl -fsSL https://raw.githubusercontent.com/darkvirgoyt-beep/VirgoX-Cloud-Computer/android-arm64-native-vxc/install.sh | bash")
+        return 1
+
+    state = pathlib.Path.home() / ".virgox-native"
+    state.mkdir(parents=True, exist_ok=True)
+    server_pid = state / "server.pid"
+
+    if _port_open(8888) and _port_open(3000):
+        print(c("✓ VirgoX Cloud PC is already running.", GREEN))
+        print("  Desktop  : http://127.0.0.1:3000/vnc.html?autoconnect=true")
+        print("  Terminal : http://127.0.0.1:7681/")
+        print("  Bridge   : http://127.0.0.1:8888/")
+        return 0
+
+    log = state / "startup.log"
+    env = os.environ.copy()
+    env["VIRGOX_RUNTIME"] = "native"
+    env["VIRGOX_HOME"] = str(pathlib.Path.home())
+
+    try:
+        with log.open("ab") as fh:
+            import subprocess
+            subprocess.Popen(
+                ["bash", str(root / "start_native.sh")],
+                cwd=str(root),
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=fh,
+                stderr=fh,
+                start_new_session=True,
+            )
+    except Exception as exc:
+        print(c(f"  ✗ Could not start VirgoX: {exc}", RED), file=sys.stderr)
+        return 1
+
+    print(c("  Starting VirgoX Cloud PC...", CYAN), flush=True)
+    deadline = time.time() + max(5, int(args.timeout))
+    while time.time() < deadline:
+        if _port_open(8888) and _port_open(3000):
+            print(c("  ✓ VirgoX Cloud PC is running.", GREEN))
+            print("  Desktop  : http://127.0.0.1:3000/vnc.html?autoconnect=true")
+            print("  Terminal : http://127.0.0.1:7681/")
+            print("  Bridge   : http://127.0.0.1:8888/")
+            if args.open:
+                try:
+                    webbrowser.open("http://127.0.0.1:3000/vnc.html?autoconnect=true")
+                except Exception:
+                    pass
+            return 0
+        time.sleep(0.5)
+
+    print(c("  ✗ VirgoX did not become ready in time.", RED), file=sys.stderr)
+    print(f"  Check log: {log}", file=sys.stderr)
+    return 1
+
+
+def stop_pc(args):
+    state = pathlib.Path.home() / ".virgox-native"
+    stopped = False
+    for name in ("server.pid", "xvfb.pid"):
+        pidfile = state / name
+        try:
+            pid = int(pidfile.read_text().strip())
+            os.kill(pid, 15)
+            stopped = True
+        except Exception:
+            pass
+    import subprocess
+    patterns = [
+        "websockify.*3000",
+        "x11vnc.*-rfbport 5900",
+        "ttyd.*7681",
+        "startxfce4",
+    ]
+    for pattern in patterns:
+        subprocess.run(["pkill", "-f", pattern], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    print(c("✓ VirgoX Cloud PC stopped." if stopped else "✓ VirgoX Cloud PC is not running.", GREEN))
+    return 0
+
+
+def status_pc(args):
+    desktop = _port_open(3000)
+    terminal = _port_open(7681)
+    bridge = _port_open(8888)
+    print(c("  VirgoX Cloud PC", BOLD))
+    print(c("  ───────────────", DIM))
+    print(f"  Desktop  : {c('ONLINE', GREEN) if desktop else c('OFFLINE', RED)}")
+    print(f"  Terminal : {c('ONLINE', GREEN) if terminal else c('OFFLINE', RED)}")
+    print(f"  Bridge   : {c('ONLINE', GREEN) if bridge else c('OFFLINE', RED)}")
+    return 0 if bridge else 1
+
+
 def version(args):
     print(f"VirgoX Cloud Computer CLI {VERSION}")
 
@@ -224,10 +342,29 @@ def main():
     parser = argparse.ArgumentParser(
         prog="vxc",
         description="VirgoX Cloud Computer — secure terminal client",
-        epilog="Examples: vxc auth login   |   vxc auth status   |   vxc auth logout",
+        epilog="Examples: vxc run --open | vxc pc status | vxc auth login",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
     sub = parser.add_subparsers(dest="command")
+
+    run_parser = sub.add_parser("run", help="Start the native VirgoX Cloud PC in the background")
+    run_parser.add_argument("--open", action="store_true", help="Open the desktop in the browser")
+    run_parser.add_argument("--timeout", type=int, default=30, help="Startup wait time in seconds")
+    run_parser.set_defaults(func=run_pc)
+
+    pc = sub.add_parser("pc", help="Manage the local VirgoX Cloud PC")
+    pc_sub = pc.add_subparsers(dest="pc_command")
+
+    pc_status = pc_sub.add_parser("status", help="Show desktop, terminal and bridge status")
+    pc_status.set_defaults(func=status_pc)
+
+    pc_stop = pc_sub.add_parser("stop", help="Stop the local VirgoX Cloud PC")
+    pc_stop.set_defaults(func=stop_pc)
+
+    pc_restart = pc_sub.add_parser("restart", help="Restart the local VirgoX Cloud PC")
+    pc_restart.set_defaults(func=lambda args: (stop_pc(args), run_pc(args))[1])
+    pc_restart.add_argument("--open", action="store_true", help="Open the desktop in the browser")
+    pc_restart.add_argument("--timeout", type=int, default=30, help="Startup wait time in seconds")
 
     auth = sub.add_parser("auth", help="Manage VirgoX authentication")
     auth_sub = auth.add_subparsers(dest="auth_command")
