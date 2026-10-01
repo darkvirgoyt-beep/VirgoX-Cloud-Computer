@@ -201,10 +201,11 @@ def logout(args):
 
 
 def _runtime_root():
+    explicit = os.environ.get("VIRGOX_ROOT", "")
     candidates = [
-        os.environ.get("VIRGOX_ROOT", ""),
-        str(pathlib.Path.home() / ".virgox-cloud-computer"),
+        explicit,
         str(pathlib.Path(__file__).resolve().parent.parent),
+        str(pathlib.Path.home() / ".virgox-cloud-computer"),
     ]
     for candidate in candidates:
         if candidate and (pathlib.Path(candidate) / "start_native.sh").exists():

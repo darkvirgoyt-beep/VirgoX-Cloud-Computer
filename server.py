@@ -34,7 +34,7 @@ os.makedirs(USER_CLOUDS_DIR, exist_ok=True)
 
 def public_bridge_url():
     configured = os.environ.get("VIRGOX_PUBLIC_BRIDGE_URL", "").strip().rstrip("/")
-    if configured:
+    if configured.startswith(("http://", "https://")) and "YOUR-BRIDGE" not in configured:
         return configured
     tunnel_log = os.path.join(VIRGOX_HOME, ".virgox-native", "cf_bridge.log")
     try:
