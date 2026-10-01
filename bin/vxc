@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""VirgoX Cloud Computer CLI — polished terminal UX + Firebase browser authorization."""
+"""VirgoX Cloud Computer CLI — browser-assisted device authorization."""
 import argparse
 import json
 import os
@@ -14,9 +14,10 @@ import webbrowser
 
 CONFIG = pathlib.Path(os.environ.get("XDG_CONFIG_HOME", pathlib.Path.home() / ".config")) / "vxc" / "config.json"
 DEFAULT_SERVER = os.environ.get("VIRGOX_SERVER", "http://127.0.0.1:8888").rstrip("/")
-AUTH_BACKEND = os.environ.get("VIRGOX_AUTH_BACKEND", "https://asia-south1-darkvirgoyt.cloudfunctions.net/vxcAuth").rstrip("/")
-AUTH_WEB = os.environ.get("VIRGOX_AUTH_WEB", "https://darkvirgoyt-beep.github.io/VirgoX-Cloud-Computer").rstrip("/")
-VERSION = "0.4.1"
+# Optional override for deployments that host a dedicated authorization page.
+# Normally the bridge returns the correct verification URL for its own host.
+AUTH_WEB = os.environ.get("VIRGOX_AUTH_WEB", "").rstrip("/")
+VERSION = "0.4.2"
 
 USE_COLOR = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
 RESET = "\033[0m"
@@ -71,17 +72,25 @@ def logo():
 def login(args):
     cfg = load()
     server = (args.server or cfg.get("server") or DEFAULT_SERVER).rstrip("/")
+    auth_web = (args.web or AUTH_WEB).rstrip("/")
 
     logo()
     print(c("  Authentication", BOLD))
     print(c("  ──────────────", DIM))
     print(f"  Host       {server}")
-    print(f"  Auth       {AUTH_WEB}")
+    print(f"  Auth       {auth_web or 'bridge verification page'}")
 
     try:
         start = api(server, "/api/auth/device/start", {})
         code = start["device_code"]
-        verification_url = AUTH_WEB + "/?code=" + urllib.parse.quote(code, safe="")
+        bridge_url = start.get("verification_url")
+        if auth_web:
+            verification_url = auth_web + ("&" if "?" in auth_web else "?") + urllib.parse.urlencode({"code": code})
+        elif bridge_url:
+            verification_url = str(bridge_url)
+        else:
+            # Compatibility with older bridge builds that omitted the URL.
+            verification_url = server + "/cli-authorize?" + urllib.parse.urlencode({"code": code})
         expires = int(start.get("expires_in", 600))
 
         print()
@@ -344,7 +353,7 @@ def main():
     auth = sub.add_parser("auth", help="Manage VirgoX authentication")
     auth_sub = auth.add_subparsers(dest="auth_command")
 
-    login_parser = auth_sub.add_parser("login", help="Sign in through Firebase browser authorization")
+    login_parser = auth_sub.add_parser("login", help="Sign in through bridge browser authorization")
     login_parser.add_argument("--server", help="VirgoX bridge URL")
     login_parser.add_argument("--backend", help="Firebase Cloud Function URL")
     login_parser.add_argument("--web", help="Firebase Hosting URL")
