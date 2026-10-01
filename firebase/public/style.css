@@ -8,8 +8,8 @@
   --line-strong:rgba(143,156,255,.34);
   --text:#f7f8ff;
   --muted:#929bb5;
-  --accent:#7c83ff;
-  --accent-2:#9b7cff;
+  --accent:#6f7cff;
+  --accent-2:#b05cff;
   --success:#55e6a5;
 }
 *{box-sizing:border-box}
@@ -40,10 +40,21 @@ body:before{
 }
 .brand-row{display:flex;align-items:center;gap:11px}
 .brand-mark{
-  width:38px;height:38px;display:grid;place-items:center;border-radius:12px;
-  background:linear-gradient(135deg,var(--accent),var(--accent-2));
-  box-shadow:0 8px 28px rgba(124,131,255,.28);font-size:19px;
+  position:relative;width:42px;height:42px;display:grid;place-items:center;border-radius:14px;
+  background:conic-gradient(from 210deg,#00e5ff,#5b7cff 28%,#a855f7 55%,#ff4fd8 78%,#00e5ff);
+  box-shadow:0 0 0 1px rgba(255,255,255,.16),0 8px 30px rgba(91,124,255,.34),0 0 34px rgba(168,85,247,.18);
+  font-size:22px;font-weight:950;color:#fff;overflow:hidden;
 }
+.brand-mark:before{
+  content:"";position:absolute;inset:2px;border-radius:12px;
+  background:linear-gradient(145deg,#111a35,#080b18 72%);
+}
+.brand-mark:after{
+  content:"";position:absolute;width:12px;height:12px;border-radius:50%;
+  background:#fff;filter:blur(7px);opacity:.8;top:4px;right:5px;
+}
+.brand-mark{isolation:isolate}
+.brand-mark::marker{display:none}
 .brand{font-weight:850;letter-spacing:.12em;color:#fff;font-size:13px}
 .badge{
   margin-left:auto;padding:6px 9px;border:1px solid rgba(85,230,165,.18);
