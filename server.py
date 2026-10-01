@@ -568,6 +568,46 @@ class BridgeHandler(BaseHTTPRequestHandler):
             self.wfile.write(html.encode("utf-8"))
             return
 
+        if path == "/api/auth/device/complete":
+            code = (payload.get("code") or "").strip().upper()
+            exchange = (payload.get("exchange_ticket") or "").strip()
+            backend = os.environ.get("VIRGOX_AUTH_BACKEND", "").strip().rstrip("/")
+            client_secret = (payload.get("client_secret") or "").strip()
+            if not backend or not code or not exchange or not client_secret:
+                self._respond_error("Remote authorization backend is not configured or exchange data is incomplete", code=400)
+                return
+            try:
+                req_data = json.dumps({
+                    "action": "exchange",
+                    "code": code,
+                    "client_secret": client_secret,
+                    "exchange_ticket": exchange
+                }).encode("utf-8")
+                req = urllib.request.Request(
+                    backend,
+                    data=req_data,
+                    headers={"Content-Type": "application/json"}
+                )
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    result = json.loads(resp.read().decode("utf-8"))
+                if not result.get("authenticated") or not result.get("email"):
+                    self._respond_error("Remote authorization exchange failed", code=401)
+                    return
+                email = result["email"].strip().lower()
+                role = "owner" if email in ("darkvirgoyt@gmail.com", "darkvirgoyt") else "user"
+                token = create_session(email, role=role)
+                log_user_activity(email, "FIREBASE_CLI_LOGIN", "Authorized VirgoX CLI through Firebase browser authentication")
+                self._respond_ok({
+                    "status": "ok",
+                    "authenticated": True,
+                    "token": token,
+                    "email": email,
+                    "role": role
+                })
+            except Exception as exc:
+                self._respond_error(f"Remote authorization exchange error: {exc}", code=502)
+            return
+
         if path == "/api/auth/device/poll":
             qs = parse_qs(parsed.query)
             code = (qs.get("code", [""])[0] or "").strip().upper()
