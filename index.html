@@ -522,7 +522,6 @@
     // GitHub Official OAuth 2.0 Integration
     // ==========================================
     const GITHUB_CLIENT_ID = 'Ov23li2jipwEXKXqH55s';
-    const GITHUB_CLIENT_SECRET = 'ec861b988a94d083665f90f8c63cf5af03dc3297';
 
     function loginWithGitHub() {
       const redirectUri = window.location.origin + window.location.pathname;
@@ -550,7 +549,7 @@
 
       // 1. Try local bridge server exchange if active
       try {
-        const bridgeRes = await fetch('/api/auth/github_exchange', {
+        const bridgeRes = cliBridge ? await fetch(`${cliBridge}/api/auth/github_exchange`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ code })
