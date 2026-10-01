@@ -67,6 +67,40 @@
     }
   }
 
+  // Universal Safe Open Tab Utility (Popup Blocker & CSP Proof)
+  function safeOpenTab(rawUrl) {
+    if (!rawUrl) return;
+    let target = String(rawUrl).trim();
+    if (!target.startsWith('http://') && !target.startsWith('https://')) {
+      if (target.includes('.') && !target.includes(' ')) {
+        target = 'https://' + target;
+      } else {
+        target = 'https://duckduckgo.com/?q=' + encodeURIComponent(target);
+      }
+    }
+    try {
+      const w = window.open(target, '_blank', 'noopener,noreferrer');
+      if (!w || w.closed || typeof w.closed === 'undefined') {
+        const a = document.createElement('a');
+        a.href = target;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => a.remove(), 150);
+      }
+    } catch(e) {
+      const a = document.createElement('a');
+      a.href = target;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => a.remove(), 150);
+    }
+  }
+  window.safeOpenTab = safeOpenTab;
+
   // DOM Elements
   const tabs = document.querySelectorAll('.tab-btn');
   const tabContents = document.querySelectorAll('.tab-content');
@@ -280,46 +314,27 @@
       loadFrames();
     }
 
-    async function verifyOrOpenExternal(url) {
-      if (sessionStorage.getItem('virgox_authenticated') === 'true') {
-        window.open(url, '_blank');
-        return;
-      }
-      const pass = prompt('🔑 Enter Master/PC Security Key to open Cloud PC in a new tab:');
-      if (pass) {
-        const p = pass.trim();
-        const pHash = await sha256Hex(p.toLowerCase());
-        const validHashes = [
-          '558c93a71d924e65977c7152aa6260596825d8c118d5d30f43dcfb1797d9bbf0',
-          '0a7a37ae29ae8cb4326cf7684fbded25330bba38b65b501449e9ca8ba67b4de1',
-          '2b90cb3a6ffa02f386e4ad8290a62d4f3d33c8db010e02feb92c1655ea799a2a'
-        ];
-        const valid = ['virgox-pro-client-2026', 'vx_sec_darkvirgoyt20_7a9f82d1'];
-        if (valid.includes(p.toLowerCase()) || validHashes.includes(pHash)) {
-          sessionStorage.setItem('virgox_master_unlocked', 'true');
-          sessionStorage.setItem('virgox_authenticated', 'true');
-          localStorage.setItem('virgox_auth_configured', 'true');
-          if (authOverlay) authOverlay.classList.add('hidden');
-          loadFrames();
-          window.open(url, '_blank');
-          return;
-        } else {
-          alert('❌ Incorrect Password. Please enter your valid Master Security Key.');
-        }
-      }
-      if (authOverlay) {
-        authOverlay.classList.remove('hidden');
-        switchView('master');
-      }
+    function verifyOrOpenExternal(url, fallback) {
+      const dest = (url && url.trim()) ? url.trim() : (fallback || window.location.href);
+      safeOpenTab(dest);
     }
 
-    document.getElementById('open-external-desktop').addEventListener('click', () => {
-      verifyOrOpenExternal(state.config.desktopUrl);
-    });
+    const extDeskBtn = document.getElementById('open-external-desktop');
+    if (extDeskBtn) {
+      extDeskBtn.addEventListener('click', () => {
+        const dest = (state.config.desktopUrl && state.config.desktopUrl.trim()) ? state.config.desktopUrl.trim() : window.location.href;
+        safeOpenTab(dest);
+      });
+    }
 
-    document.getElementById('open-external-terminal').addEventListener('click', () => {
-      verifyOrOpenExternal(state.config.terminalUrl);
-    });
+    const extTermBtn = document.getElementById('open-external-terminal');
+    if (extTermBtn) {
+      extTermBtn.addEventListener('click', () => {
+        const defaultTerm = window.location.protocol + '//' + (window.location.hostname || 'localhost') + ':7681';
+        const dest = (state.config.terminalUrl && state.config.terminalUrl.trim()) ? state.config.terminalUrl.trim() : defaultTerm;
+        safeOpenTab(dest);
+      });
+    }
 
     document.getElementById('reload-desktop').addEventListener('click', () => {
       if (sessionStorage.getItem('virgox_authenticated') === 'true') {
@@ -927,6 +942,7 @@
   const WIN11_ICONS = {
     start: '<svg width="22" height="22" viewBox="0 0 88 88" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M0 12.4955L35.7273 7.63636V41.4545H0V12.4955ZM0 46.5455H35.7273V80.3636L0 75.5045V46.5455ZM41.0909 6.90909L88 0V41.4545H41.0909V6.90909ZM41.0909 46.5455H88V88L41.0909 81.0909V46.5455Z" fill="#00ADEF"/></svg>',
     chrome: '<svg width="34" height="34" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path fill="#4CAF50" d="M44 24c0 11.045-8.955 20-20 20S4 35.045 4 24 12.955 4 24 4s20 8.955 20 20z"/><path fill="#FFC107" d="M43.7 20.3L31.5 20.3C29.8 15.6 25.3 12.3 20 12.3c-4.2 0-7.9 2-10.3 5.1L3.9 11.6C7.9 6.9 13.6 4 20 4c10.4 0 19.1 7.1 21.7 16.3h2z"/><path fill="#FF3D00" d="M20 4c-5.7 0-10.9 2.4-14.6 6.3l6.5 11.2C13.2 16.7 16.3 14 20 14h23.7C41.1 7.1 32.4 4 20 4z"/><circle fill="#FFF" cx="24" cy="24" r="10"/><circle fill="#1976D2" cx="24" cy="24" r="7.5"/></svg>',
+    chromium: '<svg width="34" height="34" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path fill="#1976D2" d="M44 24c0 11.045-8.955 20-20 20S4 35.045 4 24 12.955 4 24 4s20 8.955 20 20z"/><path fill="#42A5F5" d="M43.7 20.3L31.5 20.3C29.8 15.6 25.3 12.3 20 12.3c-4.2 0-7.9 2-10.3 5.1L3.9 11.6C7.9 6.9 13.6 4 20 4c10.4 0 19.1 7.1 21.7 16.3h2z"/><path fill="#1E88E5" d="M20 4c-5.7 0-10.9 2.4-14.6 6.3l6.5 11.2C13.2 16.7 16.3 14 20 14h23.7C41.1 7.1 32.4 4 20 4z"/><circle fill="#FFF" cx="24" cy="24" r="10"/><circle fill="#0D47A1" cx="24" cy="24" r="7.5"/></svg>',
     edge: '<svg width="34" height="34" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path fill="#0c59a4" d="M40.9 33.1C39.4 39.5 33.7 44 26.9 44 18.1 44 11 36.9 11 28.1c0-7.7 5.4-14.1 12.7-15.6-.4 1.1-.6 2.3-.6 3.5 0 5.5 4.5 10 10 10 2.8 0 5.3-1.1 7.1-2.9.5 3.3.6 6.8.7 10z"/><path fill="#1193d4" d="M35 15.1c0-4.4-3.6-8-8-8-4.2 0-7.7 3.3-8 7.4 1.5-.3 3.1-.5 4.7-.5 6.2 0 11.3 5.1 11.3 11.3v.8c0-3.9-3.1-7.1-7.1-7.1-1.6 0-3 .5-4.2 1.4.3-3.6 3.4-6.4 7.2-6.4 3.9 0 7.1 3.2 7.1 7.1 0 .4 0 .7-.1 1.1 1.2-1.7 1.9-3.8 1.9-6.1z"/><path fill="#2dd5c4" d="M26.9 4c-3.1 0-6 1-8.3 2.7 1.7 1.4 3.9 2.3 6.3 2.3 5.5 0 10 4.5 10 10 0 1.2-.2 2.3-.6 3.4 3.8-1.5 6.5-5.2 6.5-9.4 0-5-4.5-9-13.9-9z"/></svg>',
     msstore: '<svg width="34" height="34" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="12" width="36" height="32" rx="4" fill="#0078D4"/><path d="M16 12V10C16 5.6 19.6 2 24 2C28.4 2 32 5.6 32 10V12H28V10C28 7.8 26.2 6 24 6C21.8 6 20 7.8 20 10V12H16Z" fill="#60A5FA"/><rect x="18" y="22" width="5" height="5" fill="#F25022"/><rect x="25" y="22" width="5" height="5" fill="#7FBA00"/><rect x="18" y="29" width="5" height="5" fill="#00A4EF"/><rect x="25" y="29" width="5" height="5" fill="#FFB900"/></svg>',
     files: '<svg width="34" height="34" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path d="M4 12C4 9.8 5.8 8 8 8H20L24 14H40C42.2 14 44 15.8 44 18V38C44 40.2 42.2 42 40 42H8C5.8 42 4 40.2 4 38V12Z" fill="#FBBF24"/><path d="M4 20H44V38C44 40.2 42.2 42 40 42H8C5.8 42 4 40.2 4 38V20Z" fill="#F59E0B"/><path d="M8 14H24L20 20H4V18C4 15.8 5.8 14 8 14Z" fill="#60A5FA"/></svg>',
@@ -970,12 +986,8 @@
       <div class="chrome-window-wrap">
         <!-- Chrome Tab Strip -->
         <div class="chrome-tabbar">
-          <div class="chrome-tab active" id="chrome-main-tab">
-            <span style="display:flex; align-items:center; width:18px; height:18px;">${WIN11_ICONS.chrome}</span>
-            <span id="chrome-tab-title" style="margin-left:4px;">Google Search</span>
-            <span style="font-size:0.7rem; opacity:0.6; margin-left:6px;">✕</span>
-          </div>
-          <button class="cyber-btn xs" id="chrome-btn-newtab" title="New Tab" style="padding:2px 8px; border-radius:50%; margin-bottom:4px;">+</button>
+          <div class="chrome-tabs-strip" id="chrome-tabs-strip" style="display:flex; align-items:flex-end; gap:4px; overflow-x:auto; flex:1;"></div>
+          <button class="cyber-btn xs" id="chrome-btn-newtab" title="New Tab" style="padding:2px 8px; border-radius:50%; margin-bottom:4px; font-weight:700;">+</button>
         </div>
 
         <!-- Chrome Navigation Toolbar -->
@@ -991,7 +1003,7 @@
           </div>
 
           <button class="cyber-btn xs neon-cyan" id="chrome-btn-go">Go</button>
-          <button class="cyber-btn xs neon-purple" id="chrome-btn-open-tab" title="Open current URL in full external Chrome tab to bypass frame restrictions">
+          <button class="cyber-btn xs neon-purple" id="chrome-btn-open-tab" title="Open current URL in real browser tab (popup-safe)">
             🌐 Open Tab ↗
           </button>
           <div style="width:26px; height:26px; border-radius:50%; overflow:hidden; border:1px solid #8ab4f8; flex-shrink:0;">
@@ -1018,7 +1030,60 @@
     `;
   }
 
-  function initChromeActions(win) {
+  // ==========================================================================
+  // 🌐 Chromium Official Open Source Web Browser Engine
+  // ==========================================================================
+  function getChromiumHtml() {
+    return `
+      <div class="chrome-window-wrap">
+        <!-- Chromium Tab Strip -->
+        <div class="chrome-tabbar" style="background:#141b27; border-bottom:1px solid rgba(66,165,245,0.25);">
+          <div class="chrome-tabs-strip" id="chrome-tabs-strip" style="display:flex; align-items:flex-end; gap:4px; overflow-x:auto; flex:1;"></div>
+          <button class="cyber-btn xs" id="chrome-btn-newtab" title="New Tab" style="padding:2px 8px; border-radius:50%; margin-bottom:4px; background:#1976D2; border-color:#42A5F5; color:#fff; font-weight:700;">+</button>
+        </div>
+
+        <!-- Chromium Navigation Toolbar -->
+        <div class="chrome-toolbar" style="background:#1e2738; border-bottom:1px solid rgba(66,165,245,0.2);">
+          <button class="cyber-btn xs" id="chrome-nav-back" title="Back">◀</button>
+          <button class="cyber-btn xs" id="chrome-nav-fwd" title="Forward">▶</button>
+          <button class="cyber-btn xs" id="chrome-nav-reload" title="Reload">🔄</button>
+          <button class="cyber-btn xs" id="chrome-nav-home" title="Chromium Home">🏠</button>
+          
+          <div class="chrome-omnibox" style="background:#101520; border-color:rgba(66,165,245,0.35);">
+            <span style="font-size:0.8rem; color:#42a5f5;">🌐</span>
+            <input type="text" id="chrome-url-input" value="https://duckduckgo.com" placeholder="Search Chromium or type a URL" autocomplete="off" spellcheck="false" />
+          </div>
+
+          <button class="cyber-btn xs neon-cyan" id="chrome-btn-go">Go</button>
+          <button class="cyber-btn xs neon-purple" id="chrome-btn-open-tab" title="Open current URL in real browser tab (popup-safe)">
+            🌐 Open Tab ↗
+          </button>
+          <div style="display:flex; align-items:center; gap:6px; padding:0 4px; font-size:0.75rem; color:#90caf9; font-weight:700;">
+            <span style="width:20px; height:20px; display:flex;">${WIN11_ICONS.chromium}</span>
+            <span>Chromium</span>
+          </div>
+        </div>
+
+        <!-- Bookmarks Bar -->
+        <div class="chrome-bookmarks-bar" style="background:#172030;">
+          <div class="chrome-bookmark-item" data-url="https://duckduckgo.com">🔍 DuckDuckGo</div>
+          <div class="chrome-bookmark-item" data-url="https://www.chromium.org">🌐 Chromium.org</div>
+          <div class="chrome-bookmark-item" data-url="https://github.com/darkvirgoyt-beep">💻 GitHub</div>
+          <div class="chrome-bookmark-item" data-url="https://wikipedia.org">📚 Wikipedia</div>
+          <div class="chrome-bookmark-item" data-url="https://news.ycombinator.com">📰 Hacker News</div>
+          <div class="chrome-bookmark-item" data-url="https://apps.microsoft.com">🛍️ Store</div>
+          <div class="chrome-bookmark-item" data-url="https://youtube.com">🎥 YouTube</div>
+        </div>
+
+        <!-- Web View Area -->
+        <div style="flex:1; position:relative; background:#0b1019; overflow:hidden;">
+          <iframe id="chrome-frame-inner" src="https://wikipedia.org" style="width:100%; height:100%; border:none;" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
+        </div>
+      </div>
+    `;
+  }
+
+  function initChromeActions(win, isChromium = false) {
     const input = win.querySelector('#chrome-url-input');
     const iframe = win.querySelector('#chrome-frame-inner');
     const goBtn = win.querySelector('#chrome-btn-go');
@@ -1027,11 +1092,92 @@
     const reloadBtn = win.querySelector('#chrome-nav-reload');
     const homeBtn = win.querySelector('#chrome-nav-home');
     const openTabBtn = win.querySelector('#chrome-btn-open-tab');
-    const tabTitle = win.querySelector('#chrome-tab-title');
+    const newTabBtn = win.querySelector('#chrome-btn-newtab');
+    const tabsStrip = win.querySelector('#chrome-tabs-strip');
 
-    function navigate(rawUrl) {
-      if (!rawUrl || !iframe) return;
-      let target = rawUrl.trim();
+    const defaultHome = isChromium ? 'https://duckduckgo.com' : 'https://www.google.com';
+    const appIconSvg = isChromium ? WIN11_ICONS.chromium : WIN11_ICONS.chrome;
+    const defaultTitle = isChromium ? 'Chromium' : 'Google Search';
+
+    let tabs = [
+      { id: 1, title: defaultTitle, url: defaultHome }
+    ];
+    let activeTabId = 1;
+    let nextId = 2;
+
+    function renderTabs() {
+      if (!tabsStrip) return;
+      tabsStrip.innerHTML = '';
+      tabs.forEach(t => {
+        const tabEl = document.createElement('div');
+        tabEl.className = 'chrome-tab' + (t.id === activeTabId ? ' active' : '');
+        if (isChromium && t.id === activeTabId) {
+          tabEl.style.borderTopColor = '#1976D2';
+          tabEl.style.background = '#253046';
+        }
+        tabEl.innerHTML = `
+          <span style="display:flex; align-items:center; width:16px; height:16px;">${appIconSvg}</span>
+          <span class="chrome-tab-title" style="margin-left:4px; max-width:110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(t.title)}</span>
+          <span class="chrome-tab-close" data-close-id="${t.id}" title="Close tab" style="font-size:0.75rem; margin-left:6px; cursor:pointer; opacity:0.6; padding:0 3px; border-radius:3px;">✕</span>
+        `;
+
+        tabEl.addEventListener('click', (e) => {
+          if (e.target.closest('.chrome-tab-close')) {
+            e.stopPropagation();
+            closeTab(t.id);
+            return;
+          }
+          switchTab(t.id);
+        });
+        tabsStrip.appendChild(tabEl);
+      });
+    }
+
+    function switchTab(id) {
+      const found = tabs.find(t => t.id === id);
+      if (!found) return;
+      activeTabId = id;
+      renderTabs();
+      if (input) input.value = found.url;
+      if (iframe) iframe.src = resolveUrl(found.url);
+    }
+
+    function closeTab(id) {
+      if (tabs.length === 1) {
+        tabs[0].url = defaultHome;
+        tabs[0].title = defaultTitle;
+        switchTab(tabs[0].id);
+        return;
+      }
+      const idx = tabs.findIndex(t => t.id === id);
+      tabs = tabs.filter(t => t.id !== id);
+      if (activeTabId === id) {
+        const newActive = tabs[Math.max(0, idx - 1)] || tabs[0];
+        activeTabId = newActive.id;
+      }
+      renderTabs();
+      const cur = tabs.find(t => t.id === activeTabId);
+      if (cur) {
+        if (input) input.value = cur.url;
+        if (iframe) iframe.src = resolveUrl(cur.url);
+      }
+    }
+
+    function addTab(initialUrl = defaultHome, initialTitle = 'New Tab') {
+      const newTab = { id: nextId++, title: initialTitle, url: initialUrl };
+      tabs.push(newTab);
+      switchTab(newTab.id);
+    }
+
+    if (newTabBtn) {
+      newTabBtn.addEventListener('click', () => {
+        addTab(defaultHome, 'New Tab');
+      });
+    }
+
+    function resolveUrl(rawUrl) {
+      if (!rawUrl) return defaultHome;
+      let target = String(rawUrl).trim();
       if (!target.startsWith('http://') && !target.startsWith('https://')) {
         if (target.includes('.') && !target.includes(' ')) {
           target = 'https://' + target;
@@ -1039,16 +1185,25 @@
           target = 'https://duckduckgo.com/?q=' + encodeURIComponent(target);
         }
       }
-      if (input) input.value = target;
-      if (tabTitle) {
+      return target;
+    }
+
+    function navigate(rawUrl) {
+      if (!rawUrl) return;
+      const target = resolveUrl(rawUrl);
+      const activeTab = tabs.find(t => t.id === activeTabId);
+      if (activeTab) {
+        activeTab.url = target;
         try {
           const u = new URL(target);
-          tabTitle.textContent = u.hostname.replace('www.', '');
+          activeTab.title = u.hostname.replace(/^www\./, '');
         } catch(e) {
-          tabTitle.textContent = target;
+          activeTab.title = target;
         }
       }
-      iframe.src = target;
+      if (input) input.value = target;
+      renderTabs();
+      if (iframe) iframe.src = target;
     }
 
     if (goBtn && input) {
@@ -1067,7 +1222,7 @@
     }
 
     if (homeBtn) {
-      homeBtn.addEventListener('click', () => navigate('https://wikipedia.org'));
+      homeBtn.addEventListener('click', () => navigate(defaultHome));
     }
 
     if (backBtn && iframe) {
@@ -1084,8 +1239,8 @@
 
     if (openTabBtn && input) {
       openTabBtn.addEventListener('click', () => {
-        const url = input.value || 'https://www.google.com';
-        window.open(url, '_blank');
+        const resolved = resolveUrl(input.value);
+        safeOpenTab(resolved);
       });
     }
 
@@ -1095,6 +1250,8 @@
         if (u) navigate(u);
       });
     });
+
+    renderTabs();
   }
 
   // ==========================================================================
@@ -1109,6 +1266,7 @@
       { name: 'VirgoX-Files (5.0 TB)', type: 'dir', size: '4.8 TB Free' }
     ],
     'Program Files': [
+      { name: 'Chromium', type: 'dir', size: '290 MB' },
       { name: 'Google Chrome', type: 'dir', size: '320 MB' },
       { name: 'Microsoft Edge', type: 'dir', size: '280 MB' },
       { name: 'Windows Terminal', type: 'dir', size: '45 MB' },
@@ -1119,6 +1277,7 @@
     'Windows': [
       { name: 'System32', type: 'dir', size: '12 GB' },
       { name: 'Fonts', type: 'dir', size: '340 MB' },
+      { name: 'chromium.exe', type: 'exe', size: '3.8 MB', action: 'chromium' },
       { name: 'explorer.exe', type: 'exe', size: '4.2 MB', action: 'files' },
       { name: 'notepad.exe', type: 'exe', size: '1.8 MB', action: 'editor' },
       { name: 'cmd.exe', type: 'exe', size: '320 KB', action: 'terminal' },
@@ -1139,6 +1298,7 @@
     ],
     'Downloads': [
       { name: 'ChromeSetup.exe', type: 'exe', size: '1.4 MB', action: 'chrome' },
+      { name: 'Chromium_Setup_arm64.exe', type: 'exe', size: '78 MB', action: 'chromium' },
       { name: 'VirgoX-Workstation-Setup.exe', type: 'exe', size: '24 MB', action: 'terminal' },
       { name: 'motorola_fogos_rom_v2.zip', type: 'file', size: '3.4 GB', action: 'editor' },
       { name: 'adb_fastboot_linux.tar.gz', type: 'file', size: '18 MB', action: 'terminal' }
@@ -1332,6 +1492,10 @@
         <span style="width:18px; height:18px; display:flex;">${WIN11_ICONS.chrome}</span>
         <span>Open Google Chrome</span>
       </div>
+      <div class="win11-context-item" onclick="openAppWindow('chromium')">
+        <span style="width:18px; height:18px; display:flex;">${WIN11_ICONS.chromium}</span>
+        <span>Open Chromium Browser</span>
+      </div>
       <div class="win11-context-item" onclick="openAppWindow('files')">
         <span style="width:18px; height:18px; display:flex;">${WIN11_ICONS.files}</span>
         <span>Open File Explorer</span>
@@ -1435,9 +1599,10 @@
               <span>⚡</span> START
             </button>
             <div class="taskbar-apps-pinned">
+              <button class="taskbar-app-icon" data-open="chrome" title="Google Chrome">🌐</button>
+              <button class="taskbar-app-icon" data-open="chromium" title="Chromium Web Browser">🌐</button>
               <button class="taskbar-app-icon" data-open="terminal" title="Terminal CLI">💻</button>
               <button class="taskbar-app-icon" data-open="msstore" title="Microsoft Store">🛍️</button>
-              <button class="taskbar-app-icon" data-open="browser" title="Web Browser">🌐</button>
               <button class="taskbar-app-icon" data-open="files" title="This PC / Files">📁</button>
               <button class="taskbar-app-icon" data-open="editor" title="Code Studio">📝</button>
               <button class="taskbar-app-icon" data-open="taskmgr" title="Task Manager">📊</button>
@@ -1462,9 +1627,10 @@
             </div>
           </div>
           <div style="display:flex; flex-direction:column; gap:4px; max-height:240px; overflow-y:auto;">
+            <button class="cyber-btn sm" data-start-app="chrome" style="text-align:left; justify-content:flex-start;">🌐 Google Chrome Browser</button>
+            <button class="cyber-btn sm" data-start-app="chromium" style="text-align:left; justify-content:flex-start;">🌐 Chromium Web Browser</button>
             <button class="cyber-btn sm" data-start-app="terminal" style="text-align:left; justify-content:flex-start;">💻 Terminal CLI (Root Bash)</button>
             <button class="cyber-btn sm" data-start-app="msstore" style="text-align:left; justify-content:flex-start;">🛍️ Microsoft Store (Web Hub)</button>
-            <button class="cyber-btn sm" data-start-app="browser" style="text-align:left; justify-content:flex-start;">🌐 Chrome Web Browser</button>
             <button class="cyber-btn sm" data-start-app="files" style="text-align:left; justify-content:flex-start;">📁 This PC (5.0 TB Storage)</button>
             <button class="cyber-btn sm" data-start-app="editor" style="text-align:left; justify-content:flex-start;">📝 Code Studio Editor</button>
             <button class="cyber-btn sm" data-start-app="taskmgr" style="text-align:left; justify-content:flex-start;">📊 Task Manager (64GB RAM)</button>
@@ -1487,9 +1653,10 @@
     // Populate Desktop Icons
     const iconsContainer = document.getElementById('desktop-icons-container');
     const APPS = [
+      { id: 'chrome', name: 'Google Chrome', icon: '🌐' },
+      { id: 'chromium', name: 'Chromium', icon: '🌐' },
       { id: 'terminal', name: 'Terminal CLI', icon: '💻' },
       { id: 'msstore', name: 'Microsoft Store', icon: '🛍️' },
-      { id: 'browser', name: 'Chrome Web', icon: '🌐' },
       { id: 'files', name: 'This PC (5TB)', icon: '📁' },
       { id: 'editor', name: 'Code Studio', icon: '📝' },
       { id: 'taskmgr', name: 'Task Manager', icon: '📊' },
@@ -1663,6 +1830,20 @@
         width: Math.min(640, window.innerWidth - 20),
         height: Math.min(460, window.innerHeight - 80),
         content: getChromeHtml()
+      },
+      chromium: {
+        title: 'Chromium Web Browser',
+        icon: WIN11_ICONS.chromium,
+        width: Math.min(640, window.innerWidth - 20),
+        height: Math.min(460, window.innerHeight - 80),
+        content: getChromiumHtml()
+      },
+      chromium_browser: {
+        title: 'Chromium Web Browser',
+        icon: WIN11_ICONS.chromium,
+        width: Math.min(640, window.innerWidth - 20),
+        height: Math.min(460, window.innerHeight - 80),
+        content: getChromiumHtml()
       },
       edge: {
         title: 'Microsoft Edge',
@@ -1931,8 +2112,8 @@
       setupWindowDrag(win, titlebar);
     }
 
-    // Post-attach initializers
-    if (appId === 'chrome' || appId === 'google_chrome') initChromeActions(win);
+    if (appId === 'chrome' || appId === 'google_chrome') initChromeActions(win, false);
+    if (appId === 'chromium' || appId === 'chromium_browser') initChromeActions(win, true);
     if (appId === 'files' || appId === 'explorer' || appId === 'thispc') initFilesActions(win);
     if (appId === 'terminal' || appId === 'cmd' || appId === 'powershell') initTerminalInput(win);
     if (appId === 'browser' || appId === 'edge' || appId === 'microsoft_edge') initBrowserActions(win);
@@ -2315,6 +2496,12 @@ server.py   s.json      style.css      scripts/  desktop-shortcuts/\n`;
       } else {
         output.innerHTML += `Python 3.12.3 active. Type exit() to leave or use python3 -c 'code'.\n`;
       }
+    } else if (lower === 'chromium' || lower.startsWith('chromium ')) {
+      output.innerHTML += `Launching Chromium Web Browser...\n`;
+      setTimeout(() => openAppWindow('chromium'), 150);
+    } else if (lower === 'chrome' || lower === 'google-chrome' || lower.startsWith('google-chrome ')) {
+      output.innerHTML += `Launching Google Chrome...\n`;
+      setTimeout(() => openAppWindow('chrome'), 150);
     } else {
       output.innerHTML += `Executed: ${cmd} (Local fallback active — Connect bridge port 8888 for live execution)\n`;
     }
@@ -2432,7 +2619,8 @@ server.py   s.json      style.css      scripts/  desktop-shortcuts/\n`;
   // Microsoft Store Web Hub
   const MS_STORE_APPS = [
     { id: 'vscode', name: 'Visual Studio Code', pub: 'Microsoft Corporation', cat: 'dev', icon: '💻', rating: '4.9', desc: 'Code editing refined. Built-in Git, terminal, intelligent code completion and extensions.', action: 'editor', btnText: 'Open Code Studio' },
-    { id: 'browser', name: 'Chromium Web Browser', pub: 'Google & Open Source', cat: 'apps', icon: '🌐', rating: '4.8', desc: 'Fast, secure web browsing with multi-tab support and developer tools.', action: 'browser', btnText: 'Open Browser' },
+    { id: 'chrome', name: 'Google Chrome', pub: 'Google LLC', cat: 'apps', icon: '🌐', rating: '4.9', desc: 'Fast, secure and personal web browser with multi-tab browsing and Google ecosystem support.', action: 'chrome', btnText: 'Open Chrome' },
+    { id: 'chromium', name: 'Chromium Browser', pub: 'The Chromium Authors & Open Source', cat: 'apps', icon: '🔷', rating: '4.9', desc: 'Open-source browser project that aims to build a safer, faster, and more stable way to experience the web.', action: 'chromium', btnText: 'Open Chromium' },
     { id: 'terminal', name: 'Terminal CLI (Root Bash)', pub: 'GNU Linux & PRoot', cat: 'dev', icon: '⚡', rating: '5.0', desc: 'Full interactive Linux root shell with apt package manager and 64GB virtual RAM pool.', action: 'terminal', btnText: 'Open Terminal' },
     { id: 'photopea', name: 'Adobe Photoshop (Photopea Pro)', pub: 'Ivan Kutskir', cat: 'media', icon: '🎨', rating: '4.9', desc: 'Professional image editor supporting PSD, AI, RAW, layers and 4K export.', action: 'photopea', btnText: 'Open Studio' },
     { id: 'shotcut', name: 'Shotcut 4K Video Editor', pub: 'Meltytech LLC', cat: 'media', icon: '🎬', rating: '4.7', desc: 'Cross-platform multi-track 4K video editor with hardware acceleration.', action: 'shotcut', btnText: 'Open Video Studio' },
@@ -3664,6 +3852,7 @@ if __name__ == '__main__':
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             </button>
             <button class="win11-taskbar-icon" data-open="chrome" title="Google Chrome">${WIN11_ICONS.chrome}</button>
+            <button class="win11-taskbar-icon" data-open="chromium" title="Chromium Web Browser">${WIN11_ICONS.chromium}</button>
             <button class="win11-taskbar-icon" data-open="files" title="File Explorer (This PC C:)">${WIN11_ICONS.files}</button>
             <button class="win11-taskbar-icon" data-open="msstore" title="Microsoft Store">${WIN11_ICONS.msstore}</button>
             <button class="win11-taskbar-icon" data-open="browser" title="Microsoft Edge">${WIN11_ICONS.edge}</button>
@@ -3707,6 +3896,10 @@ if __name__ == '__main__':
               <div class="win11-app-item" data-start-app="chrome">
                 <div class="win11-app-icon">${WIN11_ICONS.chrome}</div>
                 <div class="win11-app-name">Chrome</div>
+              </div>
+              <div class="win11-app-item" data-start-app="chromium">
+                <div class="win11-app-icon">${WIN11_ICONS.chromium}</div>
+                <div class="win11-app-name">Chromium</div>
               </div>
               <div class="win11-app-item" data-start-app="browser">
                 <div class="win11-app-icon">${WIN11_ICONS.edge}</div>
@@ -3822,6 +4015,7 @@ if __name__ == '__main__':
         const WIN_APPS = [
           { id: 'files', name: 'This PC (C:)', icon: WIN11_ICONS.files },
           { id: 'chrome', name: 'Google Chrome', icon: WIN11_ICONS.chrome },
+          { id: 'chromium', name: 'Chromium', icon: WIN11_ICONS.chromium },
           { id: 'browser', name: 'Microsoft Edge', icon: WIN11_ICONS.edge },
           { id: 'msstore', name: 'Microsoft Store', icon: WIN11_ICONS.msstore },
           { id: 'terminal', name: 'Terminal (PS)', icon: WIN11_ICONS.terminal },
@@ -3923,6 +4117,7 @@ if __name__ == '__main__':
         iconsContainer.innerHTML = '';
         const APPS = [
           { id: 'chrome', name: 'Chrome', icon: '🌐' },
+          { id: 'chromium', name: 'Chromium', icon: '🌐' },
           { id: 'terminal', name: 'Terminal CLI', icon: '💻' },
           { id: 'msstore', name: 'Microsoft Store', icon: '🛍️' },
           { id: 'files', name: 'This PC (5TB)', icon: '📁' },
