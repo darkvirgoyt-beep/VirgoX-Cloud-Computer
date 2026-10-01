@@ -55,28 +55,50 @@ def create_session(email, role="user"):
     }
     return token
 
+REMOTE_AUTH_BACKEND = os.environ.get("VIRGOX_AUTH_BACKEND", "https://tblhywjusyyzqzlagbnh.supabase.co/functions/v1/virgox-auth").rstrip("/")
+
+def _remote_validate_session(token):
+    try:
+        payload = json.dumps({"action": "validate", "token": str(token).strip()}).encode("utf-8")
+        req = urllib.request.Request(
+            REMOTE_AUTH_BACKEND,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        if data.get("valid"):
+            return True, {"email": data.get("email"), "role": data.get("role", "user")}
+    except Exception:
+        pass
+    return False, None
+
 def validate_session(token, expected_email=None):
     if not token:
         return False, None
     token_str = str(token).strip()
     token_hash = hashlib.sha256(token_str.lower().encode()).hexdigest()
-    # Check Master Passwords & VIP tokens for owner via secure hash
     MASTER_HASHES = {
-        "558c93a71d924e65977c7152aa6260596825d8c118d5d30f43dcfb1797d9bbf0", # Owner Key 1
-        "0a7a37ae29ae8cb4326cf7684fbded25330bba38b65b501449e9ca8ba67b4de1", # Owner Key 2
-        "2b90cb3a6ffa02f386e4ad8290a62d4f3d33c8db010e02feb92c1655ea799a2a"  # Owner Key 3
+        "558c93a71d924e65977c7152aa6260596825d8c118d5d30f43dcfb1797d9bbf0",
+        "0a7a37ae29ae8cb4326cf7684fbded25330bba38b65b501449e9ca8ba67b4de1",
+        "2b90cb3a6ffa02f386e4ad8290a62d4f3d33c8db010e02feb92c1655ea799a2a"
     }
     if token_hash in MASTER_HASHES or token_str in ("vx_sec_prince20_88b9c1", "vx_sec_darkvirgoyt20_7a9f82d1"):
         return True, {"email": "darkvirgoyt@gmail.com", "role": "owner"}
     sess = _active_sessions.get(token_str)
-    if not sess:
-        return False, None
-    if time.time() > sess.get("expires", 0):
-        del _active_sessions[token_str]
-        return False, None
-    if expected_email and sess.get("email") != expected_email.strip().lower() and sess.get("role") != "owner":
-        return False, None
-    return True, sess
+    if sess:
+        if time.time() <= sess.get("expires", 0):
+            if not expected_email or sess.get("email") == expected_email.strip().lower() or sess.get("role") == "owner":
+                return True, sess
+        else:
+            _active_sessions.pop(token_str, None)
+    valid, remote = _remote_validate_session(token_str)
+    if valid and remote:
+        if expected_email and remote.get("email") != expected_email.strip().lower() and remote.get("role") != "owner":
+            return False, None
+        return True, remote
+    return False, None
 
 
 
