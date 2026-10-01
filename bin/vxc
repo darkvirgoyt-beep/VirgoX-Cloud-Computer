@@ -14,6 +14,7 @@ import webbrowser
 
 CONFIG = pathlib.Path(os.environ.get("XDG_CONFIG_HOME", pathlib.Path.home() / ".config")) / "vxc" / "config.json"
 DEFAULT_SERVER = os.environ.get("VIRGOX_SERVER", "http://127.0.0.1:8888").rstrip("/")
+DEFAULT_AUTH_WEB = "https://darkvirgoyt-beep.github.io/VirgoX-Cloud-Computer"
 VERSION = "0.4.2"
 
 USE_COLOR = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
@@ -85,9 +86,13 @@ def login(args):
         code = start["device_code"]
         bridge_url = start.get("verification_url")
         if auth_web:
-            verification_url = auth_web + ("&" if "?" in auth_web else "?") + urllib.parse.urlencode({"code": code})
+            verification_url = auth_web + ("&" if "?" in auth_web else "?") + urllib.parse.urlencode({"device_code": code, "bridge": bridge_url or server})
         elif bridge_url:
-            verification_url = str(bridge_url)
+            parsed_bridge = urllib.parse.urlparse(str(bridge_url))
+            if parsed_bridge.scheme == "https" and parsed_bridge.hostname not in ("127.0.0.1", "localhost"):
+                verification_url = DEFAULT_AUTH_WEB + "?" + urllib.parse.urlencode({"device_code": code, "bridge": str(bridge_url).rsplit("/cli-authorize", 1)[0]})
+            else:
+                verification_url = str(bridge_url)
         else:
             # Compatibility with older bridge builds that omitted the URL.
             verification_url = server + "/cli-authorize?" + urllib.parse.urlencode({"code": code})
