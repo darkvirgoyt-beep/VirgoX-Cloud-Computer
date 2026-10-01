@@ -14,7 +14,7 @@
 
 set -u
 
-VXC_VERSION="1.5.0"
+VXC_VERSION="1.6.0"
 
 # ---- config ---------------------------------------------------------------
 
@@ -758,7 +758,15 @@ cmd_pc() {
   say "    ${C_BLD}vxc pc status${C_OFF}          what the page reports about itself"
   say "    ${C_BLD}vxc pc windows${C_OFF}         list the open windows"
   say "    ${C_BLD}vxc pc open <app>${C_OFF}      open one"
-  say "    ${C_BLD}vxc pc run <command>${C_OFF}    run a command in its terminal"
+  say "    ${C_BLD}vxc pc run <command>${C_OFF}  run a command in its in-page shell"
+  say ""
+  dim "  That in-page shell is a browser reader: honest about this device, no kernel."
+  say "  For a ${C_BLD}real${C_OFF} shell, point this CLI at a running auth service and"
+  say "  use the terminal's mode buttons in the browser:"
+  say "    ${C_BLD}vxc config set auth http://<host>:<port>${C_OFF}"
+  say ""
+  dim "    Host shell        a PTY on that machine — real ls, cd, apt, python3"
+  dim "    In-browser Linux  a full Linux booting in the tab (v86, ~8 MB download)"
   say ""
 }
 
@@ -922,7 +930,10 @@ cmd_agent() {
       say "    ${C_BLD}open <app>${C_OFF}        open an app  (${C_BLD}vxc apps${C_OFF} lists ids)"
       say "    ${C_BLD}close <app>${C_OFF}       close an open window"
       say "    ${C_BLD}focus <app>${C_OFF}       bring an open window to the front"
-      say "    ${C_BLD}run <command>${C_OFF}     run a command in the PC's terminal window"
+      say "    ${C_BLD}run <command>${C_OFF}     run a command in the PC's in-page shell"
+      say ""
+      say "  ${C_DIM}run talks to the page's own shell: live readings and vxc, no kernel.${C_OFF}"
+      say "  ${C_DIM}Run 'vxc pc' alone for how to get a real shell instead.${C_OFF}"
       say ""
       say "  The PC has to be open and signed in with the same account."
       say ""

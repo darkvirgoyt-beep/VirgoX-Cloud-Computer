@@ -2748,6 +2748,51 @@ html, body, .viewport-container, .screen-wrapper, .screen-touchpad-overlay {
   line-height: 1.45;
 }
 
+/* Which shell the terminal is actually running: a PTY on the host, a Linux
+   booting in this tab, or the honest in-page reader. */
+.vxc-term-modes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  flex-wrap: wrap;
+}
+
+.vxc-term-mode {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.05);
+  color: #c9d4e8;
+  cursor: pointer;
+}
+
+.vxc-term-mode:hover {
+  border-color: var(--neon-cyan, #22d3ee);
+  color: #fff;
+}
+
+.vxc-term-mode.active {
+  background: rgba(34, 211, 238, 0.18);
+  border-color: var(--neon-cyan, #22d3ee);
+  color: #fff;
+}
+
+.vxc-term-status {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: #8ab4f8;
+  opacity: 0.9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 55%;
+}
+
 .cyber-term-input-row {
   display: flex;
   align-items: center;

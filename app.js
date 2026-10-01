@@ -2888,6 +2888,10 @@ id="explorer-quota" title="navigator.storage.estimate() — what the browser all
 
     closeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      // Closing the window that owns a live shell must not leave a process
+      // running on the host; the service's idle sweep is the backstop, but the
+      // page knows right now.
+      if (VXC_SHELL.win && VXC_SHELL.win === win) teardownShell();
       win.remove();
       delete openWindows[appId];
       updateTaskbarChips();
@@ -3021,6 +3025,301 @@ id="explorer-quota" title="navigator.storage.estimate() — what the browser all
     return `${who}@${location.host}:${p}$ `;
   }
 
+  /* ------------------------------------------------------------------ shells */
+  /*
+   * The terminal has three modes, and it never claims to be running one it is
+   * not.
+   *
+   *   host  — a real shell on the machine that runs server/auth-service.js,
+   *           reached over a PTY. Real `ls`, real `cd`, real apt and python3,
+   *           full filesystem access as that user. Needs a signed-in session and
+   *           a reachable service.
+   *   linux — a real Linux booting inside this tab (v86, x86 on WebAssembly).
+   *           No server at all: the emulator, its BIOS and a bootable image are
+   *           all downloaded from this site. Its filesystem is the VM's sandbox
+   *           and cannot see the host.
+   *   page  — the honest in-page shell: live browser readings, a working `vxc`,
+   *           and a plain "not available here" for anything needing a kernel.
+   *
+   * When host and linux both fail, the terminal says which one failed and why
+   * and falls back to page. It never shows the page shell while claiming to be
+   * a Linux box.
+   */
+
+  const VXC_SHELL = {
+    mode: 'page',
+    id: null,
+    term: null,
+    fit: null,
+    vm: null,
+    teardown: [],
+    win: null,
+    status: null,
+  };
+
+  // Leaving the page should not strand a shell. The unload request itself may be
+  // cancelled by the browser, which is why the service also sweeps idle shells.
+  window.addEventListener('beforeunload', () => teardownShell());
+
+  // Bundled with the site rather than pulled from a CDN, so a terminal still
+  // works with no third party reachable and nothing phones home.
+  const VXC_V86_FILES = {
+    js: 'assets/v86/libv86.js',
+    wasm: 'assets/v86/v86.wasm',
+    bios: 'assets/v86/seabios.bin',
+    vgaBios: 'assets/v86/vgabios.bin',
+    image: 'assets/v86/linux.iso',
+  };
+
+  const VXC_XTERM_FILES = {
+    css: 'assets/xterm/xterm.css',
+    js: 'assets/xterm/xterm.js',
+    fit: 'assets/xterm/addon-fit.js',
+  };
+
+  function assetUrl(rel) {
+    return new URL(rel, document.baseURI).href;
+  }
+
+  function loadStyleOnce(href) {
+    if (document.querySelector('link[data-vxc-asset="' + href + '"]')) return;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    link.setAttribute('data-vxc-asset', href);
+    document.head.appendChild(link);
+  }
+
+  function loadScriptOnce(src) {
+    return new Promise((resolve, reject) => {
+      const found = document.querySelector('script[data-vxc-asset="' + src + '"]');
+      if (found) {
+        if (found.getAttribute('data-vxc-ready') === '1') return resolve();
+        found.addEventListener('load', () => resolve());
+        found.addEventListener('error', () => reject(new Error('could not load ' + src)));
+        return;
+      }
+      const el = document.createElement('script');
+      el.src = src;
+      el.async = true;
+      el.setAttribute('data-vxc-asset', src);
+      el.addEventListener('load', () => { el.setAttribute('data-vxc-ready', '1'); resolve(); });
+      el.addEventListener('error', () => reject(new Error('could not load ' + src)));
+      document.head.appendChild(el);
+    });
+  }
+
+  function shellStatus(win, text) {
+    const el = win && win.querySelector('#vxc-term-status');
+    if (el) el.textContent = text;
+  }
+
+  async function mountXterm(container) {
+    loadStyleOnce(assetUrl(VXC_XTERM_FILES.css));
+    await loadScriptOnce(assetUrl(VXC_XTERM_FILES.js));
+    await loadScriptOnce(assetUrl(VXC_XTERM_FILES.fit));
+    if (typeof window.Terminal !== 'function') throw new Error('xterm.js did not load');
+    const FitCtor = (window.FitAddon && window.FitAddon.FitAddon) || window.FitAddon;
+    const term = new window.Terminal({
+      fontFamily: '"DejaVu Sans Mono", "Liberation Mono", Consolas, monospace',
+      fontSize: 13,
+      cursorBlink: true,
+      scrollback: 5000,
+      theme: { background: '#0b1019', foreground: '#d7dce8' },
+    });
+    const fit = typeof FitCtor === 'function' ? new FitCtor() : null;
+    if (fit) term.loadAddon(fit);
+    term.open(container);
+    if (fit) { try { fit.fit(); } catch (e) { /* the pane may not be laid out yet */ } }
+    return { term, fit };
+  }
+
+  function shellApi(method, path, body) {
+    const base = agentBase();
+    if (!base) return Promise.reject(new Error('no auth service is configured for this PC'));
+    const headers = { Authorization: 'Bearer ' + agentToken() };
+    if (body !== undefined) headers['Content-Type'] = 'application/json';
+    return fetch(base + path, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }).then(async (r) => {
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error((j && (j.error_description || j.error)) || ('HTTP ' + r.status));
+      return j;
+    });
+  }
+
+  async function startHostShell(win, container) {
+    const info = await shellApi('POST', '/shell/open', {});
+    VXC_SHELL.id = info.id;
+
+    const { term, fit } = await mountXterm(container);
+    VXC_SHELL.term = term;
+    VXC_SHELL.fit = fit;
+
+    term.writeln('\u001b[1;36mVirgoX host shell\u001b[0m');
+    term.writeln('\u001b[2m' + info.host + '  ·  ' + info.shell + '  ·  ' + info.cwd + '\u001b[0m');
+    term.writeln(info.pty
+      ? 'PTY allocated (script(1)) — apt, python and top all behave.'
+      : 'No PTY available — full-screen programs will misbehave.');
+    term.writeln('\u001b[2mThis is a real shell on that host: you see its filesystem, not this page’s.\u001b[0m');
+    term.writeln('');
+
+    term.focus();
+    term.onData((data) => {
+      shellApi('POST', '/shell/input', { id: info.id, data }).catch((e) => {
+        term.writeln('\r\n\u001b[31m[keystroke not delivered: ' + e.message + ']\u001b[0m');
+      });
+    });
+
+    let cursor = 0;
+    let alive = true;
+    VXC_SHELL.teardown.push(() => { alive = false; });
+
+    (async () => {
+      while (alive && VXC_SHELL.id === info.id) {
+        try {
+          const r = await shellApi('GET', '/shell/read?id=' + encodeURIComponent(info.id) + '&cursor=' + cursor);
+          if (!alive) return;
+          cursor = r.cursor;
+          if (r.data) term.write(r.data);
+          if (r.ended) {
+            term.writeln('\r\n\u001b[2m[shell exited' + (r.exit !== null && r.exit !== undefined ? ': ' + r.exit : '') + ']\u001b[0m');
+            VXC_SHELL.id = null;
+            return;
+          }
+        } catch (e) {
+          if (alive) term.writeln('\r\n\u001b[31m[link to the host shell lost: ' + e.message + ']\u001b[0m');
+          return;
+        }
+      }
+    })();
+
+    shellStatus(win, 'host shell · ' + info.user + '@' + info.host);
+  }
+
+  async function startLinuxVM(win, container) {
+    shellStatus(win, 'downloading the emulator…');
+    await loadScriptOnce(assetUrl(VXC_V86_FILES.js));
+    if (typeof window.V86 !== 'function') throw new Error('the v86 emulator did not load');
+
+    // v86 renders text mode as a <pre-ish> div and graphics as a canvas, in that
+    // order, inside the container it is given. It builds both itself; it only
+    // needs them to exist.
+    container.innerHTML = '';
+    const screen = document.createElement('div');
+    screen.style.cssText = 'width:100%;height:100%;overflow:auto;background:#000;outline:none;';
+    const text = document.createElement('div');
+    text.style.cssText = 'white-space:pre;font:14px/14px "DejaVu Sans Mono",Consolas,monospace;color:#ddd;';
+    const canvas = document.createElement('canvas');
+    canvas.style.display = 'none';
+    screen.appendChild(text);
+    screen.appendChild(canvas);
+    container.appendChild(screen);
+
+    shellStatus(win, 'booting Linux…');
+    const vm = new window.V86({
+      wasm_path: assetUrl(VXC_V86_FILES.wasm),
+      bios: { url: assetUrl(VXC_V86_FILES.bios) },
+      vga_bios: { url: assetUrl(VXC_V86_FILES.vgaBios) },
+      cdrom: { url: assetUrl(VXC_V86_FILES.image) },
+      memory_size: 128 * 1024 * 1024,
+      vga_memory_size: 8 * 1024 * 1024,
+      screen_container: screen,
+      boot_order: 0x123,
+      autostart: true,
+    });
+    VXC_SHELL.vm = vm;
+
+    screen.addEventListener('click', () => screen.focus());
+    screen.focus();
+    shellStatus(win, 'Linux running in this tab · click the screen, then type');
+    try { vm.serial0_send(''); } catch (e) { /* serial is optional */ }
+  }
+
+  function teardownShell() {
+    VXC_SHELL.teardown.forEach((fn) => { try { fn(); } catch (e) { /* best effort */ } });
+    VXC_SHELL.teardown = [];
+    if (VXC_SHELL.id) {
+      const id = VXC_SHELL.id;
+      VXC_SHELL.id = null;
+      shellApi('POST', '/shell/close', { id }).catch(() => { /* already gone */ });
+    }
+    if (VXC_SHELL.vm) {
+      try { VXC_SHELL.vm.destroy(); } catch (e) { /* best effort */ }
+      VXC_SHELL.vm = null;
+    }
+    if (VXC_SHELL.term) {
+      try { VXC_SHELL.term.dispose(); } catch (e) { /* best effort */ }
+      VXC_SHELL.term = null;
+      VXC_SHELL.fit = null;
+    }
+  }
+
+  function paintModeButtons(win, mode) {
+    win.querySelectorAll('.vxc-term-mode').forEach((b) => {
+      b.classList.toggle('active', b.getAttribute('data-vxc-term-mode') === mode);
+    });
+  }
+
+  // Boots the ~8 MB Linux once per page load, not once per window: the download
+  // is real, and repeating it every time a terminal is opened would be rude.
+  let linuxBootedThisPage = false;
+
+  async function setTerminalMode(win, mode) {
+    const body = win.querySelector('#native-term-body');
+    const real = win.querySelector('#vxc-term-real');
+    if (!body || !real) return;
+
+    teardownShell();
+    real.innerHTML = '';
+    real.style.display = 'none';
+    body.style.display = '';
+    VXC_SHELL.mode = mode;
+    VXC_SHELL.win = win;
+    paintModeButtons(win, mode);
+
+    if (mode === 'page') {
+      shellStatus(win, 'in-page shell — no kernel behind it');
+      return;
+    }
+
+    real.style.display = '';
+    try {
+      if (mode === 'host') await startHostShell(win, real);
+      else if (mode === 'linux') { await startLinuxVM(win, real); linuxBootedThisPage = true; }
+    } catch (e) {
+      real.innerHTML = '';
+      real.style.display = 'none';
+      body.style.display = '';
+      VXC_SHELL.mode = 'page';
+      paintModeButtons(win, 'page');
+      const why = mode === 'host'
+        ? 'No host shell: ' + e.message
+        : 'In-browser Linux did not start: ' + e.message;
+      shellStatus(win, 'in-page shell — ' + why);
+      const out = win.querySelector('#term-output-stream');
+      if (out) {
+        out.innerHTML += `\n\u001b[31m${why}\u001b[0m\n`;
+        out.innerHTML += 'Falling back to the in-page shell: it reads this browser honestly and cannot run kernel programs.\n';
+      }
+    }
+  }
+
+  async function autoPickTerminalMode(win) {
+    const base = agentBase();
+    if (base && agentToken()) {
+      try {
+        const r = await fetch(base + '/health');
+        const h = await r.json();
+        if (h && h.shell) { await setTerminalMode(win, 'host'); return; }
+      } catch (e) { /* offline, or the service is not up: fall through */ }
+    }
+    if (!linuxBootedThisPage) { await setTerminalMode(win, 'linux'); return; }
+    await setTerminalMode(win, 'page');
+  }
+
   function getTerminalHtml() {
     const isWin = state.config.osMode === 'windows';
     return `
@@ -3032,6 +3331,13 @@ id="explorer-quota" title="navigator.storage.estimate() — what the browser all
           <div class="win11-term-tab ${activeShellType === 'bash' ? 'active' : ''}" data-shell="bash"><span>🐧</span> Bash (simulated)</div>
         </div>
         ` : ''}
+        <div class="vxc-term-modes" id="vxc-term-modes">
+          <button type="button" class="vxc-term-mode" data-vxc-term-mode="page" title="Live readings from this browser and a working vxc. No kernel behind it.">Page shell</button>
+          <button type="button" class="vxc-term-mode" data-vxc-term-mode="host" title="A real shell over a PTY on the machine running the auth service. Needs you to be signed in.">Host shell</button>
+          <button type="button" class="vxc-term-mode" data-vxc-term-mode="linux" title="A real Linux booting in this tab (v86 on WebAssembly). Downloads about 8 MB, once.">In-browser Linux</button>
+          <span class="vxc-term-status" id="vxc-term-status"></span>
+        </div>
+        <div id="vxc-term-real" style="display:none;flex:1;min-height:0;background:#0b1019;"></div>
         <div class="cyber-term-view" id="native-term-body" style="flex:1;">
           <div style="color:${isWin ? '#60a5fa' : 'var(--neon-cyan)'}; margin-bottom:4px;">
             ${isWin ? '🪟 <strong>Windows 11 shell</strong> — a Fluent theme drawn in this page, not an installed OS' : '⚡ <strong>VirgoX Cloud PC</strong> — a Linux shell theme, also drawn in this page'}
@@ -3055,6 +3361,18 @@ id="explorer-quota" title="navigator.storage.estimate() — what the browser all
     const termBody = win.querySelector('#native-term-body');
     const promptEl = win.querySelector('#native-term-prompt');
     if (!input || !output) return;
+
+    // Real shell modes. Whichever one actually answers is the one you get; when
+    // none of them do, the page shell stays and says which one failed and why.
+    const modeBar = win.querySelector('#vxc-term-modes');
+    if (modeBar) {
+      modeBar.querySelectorAll('.vxc-term-mode').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          setTerminalMode(win, btn.getAttribute('data-vxc-term-mode') || 'page');
+        });
+      });
+      autoPickTerminalMode(win);
+    }
 
     // Shell profile tabs
     win.querySelectorAll('.win11-term-tab').forEach(tab => {

@@ -234,7 +234,7 @@ vxc pc windows            # the windows it has open
 vxc pc open terminal      # open an app   (vxc apps lists the ids)
 vxc pc close terminal     # close a window
 vxc pc focus terminal     # bring a window to the front
-vxc pc run ver            # run a command in the PC's terminal window
+vxc pc run ver            # run a command in the PC's in-page shell
 ```
 
 Nothing here is typed into a remote machine. The browser is the computer, and
@@ -243,9 +243,12 @@ party both sides already talk to. The page has to be open the whole time — clo
 the tab and the commands have nowhere to go, and the terminal says so instead of
 printing something it made up.
 
-`vxc pc run` runs a command in the PC's own in-page terminal window. That is a
-shell in your browser tab, not a shell on your phone: it runs the commands that
-window implements, and it cannot reach your phone's filesystem.
+`vxc pc run` talks to the page's own in-page shell: live readings of the browser
+it is actually running in, plus a working `vxc`. It is not a shell on your phone
+and cannot reach your phone's filesystem.
+
+For a **real** shell, see [Three shells, and which one you are looking
+at](#three-shells-and-which-one-you-are-looking-at) below.
 
 ```bash
 # add the PC to this terminal, then open it
@@ -260,6 +263,37 @@ vxc app terminal
 vxc pc status
 vxc pc run ver
 ```
+
+### Three shells, and which one you are looking at
+
+The terminal window has three modes on a strip above the prompt. It never shows
+one while claiming to be another.
+
+| Mode | What it actually is | Needs |
+|---|---|---|
+| **Page shell** | This browser. Live readings, a working `vxc`, honest "not available here" for anything needing a kernel. | nothing |
+| **Host shell** | A real shell on the machine running `server/auth-service.js`, over a PTY. Real `ls`, `cd`, `apt`, `python3`, and the host's whole filesystem as that user. | a signed-in session and a reachable service |
+| **In-browser Linux** | A full Linux booting inside the tab — x86 emulated on WebAssembly (v86). Real kernel, real shell, real filesystem. | ~8 MB downloaded, once |
+
+The strip picks for you: if a service is configured and you are signed in, you get
+the host shell; otherwise the tab boots Linux for itself.
+
+**Host shell** is remote code execution by design. It is gated on a session token
+a human approved through the device flow, and the service sweeps shells idle for
+15 minutes, but if you run the service on a network you do not control, anyone who
+can sign in gets a shell as the service's user. Turn it off entirely with:
+
+```bash
+VXC_SHELL=off node server/auth-service.js
+```
+
+`/health` reports `shell: true|false` and `shell_pty: true|false` — the second is
+whether a real PTY was available (`script(1)`), which is what decides whether
+`apt` and `python` behave.
+
+**In-browser Linux** is genuinely a Linux, and genuinely confined: its filesystem
+is the machine's sandbox and it cannot see your host. That is the whole trade —
+it needs no server at all, which is why it is the fallback on GitHub Pages.
 
 ### Pointing at your own auth service
 
@@ -377,9 +411,19 @@ VirgoX-Cloud-Computer/
 ├── tools/
 │   └── vxc                     # 💻 The vxc command (POSIX sh, no dependencies)
 ├── server/
-│   └── auth-service.js         # 🔐 Accounts, device flow, session handoff (node)
+│   └── auth-service.js         # 🔐 Accounts, device flow, session handoff, host shell (node)
 ├── assets/
 │   ├── workstation.core.js     # 🖥️ Injects the desktop, then loads app.js
+│   ├── v86/                    # 🐧 In-browser Linux: emulator, BIOS, bootable image
+│   │   ├── libv86.js           #    x86 emulator (WASM)
+│   │   ├── v86.wasm            #    the emulator's compiled core
+│   │   ├── seabios.bin         #    firmware
+│   │   ├── vgabios.bin         #    display firmware
+│   │   └── linux.iso           #    bootable Linux image (~5.4 MB)
+│   ├── xterm/                  # ⌨️ Terminal renderer for the real shells
+│   │   ├── xterm.js
+│   │   ├── xterm.css
+│   │   └── addon-fit.js
 │   ├── win11_flow.jpg          # 🖼️ Wallpapers
 │   ├── win11_bloom_light.jpg
 │   ├── win11_bloom_dark.jpg

@@ -21,6 +21,17 @@
  *   POST /agent/poll     (browser)    -> long-poll: take the next command
  *   POST /agent/report   {id,ok,...}  -> hand the answer back
  *
+ *   POST /shell/open                    -> a real shell on this host, under a PTY
+ *   POST /shell/input   {id,data}       -> keystrokes into that shell
+ *   GET  /shell/read?id=&cursor=        -> new output after the cursor
+ *   POST /shell/close  {id}             -> end it
+ *
+ * The /shell/* endpoints are not a command echo. They are `script(1)` around a
+ * real shell on this machine, so `ls`, `cd`, `apt` and `python3` are the host's
+ * own, with the host's own filesystem. Read the long block at handleShellOpen
+ * before exposing this service to a network you do not control: it is remote
+ * code execution by design, gated only on a session token.
+ *
  * RFC 8628 deliberately has no client_secret: the flow exists for devices that
  * cannot keep one. Authorization therefore happens entirely in this browser
  * page, which is the only thing standing between a code and a token.
@@ -39,7 +50,9 @@
 const http = require('http');
 const crypto = require('crypto');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+const { spawn } = require('child_process');
 
 const PORT = Number(process.env.PORT) || 8787;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -913,6 +926,212 @@ async function handleLogout(req, res) {
   send(res, 200, { signed_out: true });
 }
 
+/* -------------------------------------------------------------------- shell */
+/*
+ * A real shell, on this host, over plain HTTP.
+ *
+ * The workstation is a static page and cannot spawn anything, so when a shell
+ * is wanted the page asks this service and this service runs it — as whatever
+ * user started the service, with that user's whole filesystem. That is the
+ * point: `ls`, `cd`, `apt`, `python3` and everything else are the real thing,
+ * not a theme.
+ *
+ * It is a PTY, not two pipes. A shell on pipes cannot run apt, python, top, vim
+ * or anything else that checks isatty(); it prints colour codes into a dead
+ * stream and refuses to draw. `script` (util-linux) is the standard way to put
+ * a terminal behind a pipe without pulling in node-pty, so that is used when it
+ * exists. Where it does not, the shell still runs but full-screen programs
+ * degrade — the response says which mode you are in.
+ *
+ * Transport is a rolling output buffer plus a monotonic cursor. The page says
+ * "I have consumed N characters"; the service returns everything after N and
+ * the new cursor. That survives reconnects and out-of-order polls without a
+ * websocket, which keeps this service dependency-free.
+ *
+ * This is remote code execution by design, so it is gated: a shell is only ever
+ * opened for a request that carries a session token a human approved through
+ * the device flow. `VXC_SHELL=off` turns the entire surface off.
+ */
+const SHELL_ENABLED = process.env.VXC_SHELL !== 'off';
+const SHELL_MAX_BUFFER = Number(process.env.VXC_SHELL_BUFFER) || 262144;
+const SHELL_IDLE_MS = Number(process.env.VXC_SHELL_IDLE) || 15 * 60 * 1000;
+const SHELL_POLL_MS = Math.min(55000, Number(process.env.VXC_SHELL_POLL) || 25000);
+
+const shells = new Map(); // id -> shell session
+
+function findScript() {
+  for (const p of ['/usr/bin/script', '/bin/script', '/usr/local/bin/script']) {
+    try { if (fs.existsSync(p)) return p; } catch (_) { /* keep looking */ }
+  }
+  return null;
+}
+const SCRIPT_BIN = findScript();
+
+function pickShell() {
+  const wanted = process.env.VXC_SHELL_BIN || process.env.SHELL || '/bin/bash';
+  try { if (fs.existsSync(wanted)) return wanted; } catch (_) { /* fall through */ }
+  return '/bin/sh';
+}
+
+function shellHome() {
+  const override = process.env.VXC_SHELL_CWD;
+  if (override) { try { if (fs.statSync(override).isDirectory()) return override; } catch (_) {} }
+  try { return os.homedir(); } catch (_) { return process.cwd(); }
+}
+
+function spawnShell() {
+  const shell = pickShell();
+  const cwd = shellHome();
+  const env = Object.assign({}, process.env, {
+    TERM: 'xterm-256color',
+    COLORTERM: 'truecolor',
+    LANG: process.env.LANG || 'C.UTF-8',
+  });
+  const child = SCRIPT_BIN
+    // -q quiet, -f flush, -c run this command. The trailing /dev/null is the
+    // typescript file we deliberately never want written.
+    ? spawn(SCRIPT_BIN, ['-qfc', shell, '/dev/null'], { cwd, env })
+    : spawn(shell, ['-i'], { cwd, env });
+  return { child, cwd, shell, pty: !!SCRIPT_BIN };
+}
+
+function wakeShell(s) {
+  const waiters = s.waiters;
+  s.waiters = [];
+  for (const fn of waiters) { try { fn(); } catch (_) { /* a dead poll is not an error */ } }
+}
+
+function newShell(session) {
+  const { child, cwd, shell, pty } = spawnShell();
+  const s = {
+    id: crypto.randomBytes(18).toString('base64url'),
+    child, cwd, shell, pty,
+    out: '',                 // everything produced and not yet trimmed
+    base: 0,                 // index of out[0] in the session's lifetime
+    ended: false,
+    exit: null,
+    touched: Date.now(),
+    owner: session && session.email ? session.email : null,
+    waiters: [],
+  };
+  const push = (text) => {
+    if (!text) return;
+    s.out += text;
+    if (s.out.length > SHELL_MAX_BUFFER) {
+      const drop = s.out.length - SHELL_MAX_BUFFER;
+      s.out = s.out.slice(drop);
+      s.base += drop;
+    }
+    s.touched = Date.now();
+    wakeShell(s);
+  };
+  child.stdout.on('data', d => push(d.toString('utf8')));
+  child.stderr.on('data', d => push(d.toString('utf8')));
+  child.on('error', err => {
+    s.ended = true;
+    push(`\r\n[shell could not start: ${err.message}]\r\n`);
+  });
+  child.on('exit', (code, signal) => {
+    s.ended = true;
+    s.exit = code == null ? String(signal || 'signal') : code;
+    push(`\r\n[process exited: ${s.exit}]\r\n`);
+  });
+  shells.set(s.id, s);
+  return s;
+}
+
+function shellFor(id, session) {
+  const s = shells.get(id);
+  if (!s) return null;
+  if (session && s.owner && s.owner !== session.email) return null;
+  return s;
+}
+
+function sweepShells() {
+  const now = Date.now();
+  for (const [id, s] of shells) {
+    if (now - s.touched > SHELL_IDLE_MS) {
+      try { s.child.kill('SIGHUP'); } catch (_) {}
+      shells.delete(id);
+    }
+  }
+}
+
+function requireShellSession(req, res) {
+  if (!SHELL_ENABLED) {
+    send(res, 403, { error: 'shell_disabled', error_description: 'The shell is disabled on this service (VXC_SHELL=off).' });
+    return null;
+  }
+  const session = sessionFor(req);
+  if (!session) {
+    send(res, 401, { error: 'not_signed_in', error_description: 'Open a shell only after `vxc auth login`.' });
+    return null;
+  }
+  return session;
+}
+
+async function handleShellOpen(req, res) {
+  const session = requireShellSession(req, res);
+  if (!session) return;
+  sweepShells();
+  const s = newShell(session);
+  send(res, 200, { id: s.id, shell: s.shell, cwd: s.cwd, pty: s.pty, host: os.hostname(), user: os.userInfo().username });
+}
+
+async function handleShellInput(req, res) {
+  const session = requireShellSession(req, res);
+  if (!session) return;
+  const body = await readJson(req);
+  const s = shellFor(String(body.id || ''), session);
+  if (!s) return send(res, 404, { error: 'no_shell', error_description: 'That shell is gone.' });
+  if (s.ended) return send(res, 409, { error: 'shell_ended', error_description: 'That shell has exited.' });
+  s.touched = Date.now();
+  const data = typeof body.data === 'string' ? body.data : '';
+  if (data) s.child.stdin.write(data);
+  send(res, 200, { ok: true });
+}
+
+async function handleShellRead(req, res, url) {
+  const session = requireShellSession(req, res);
+  if (!session) return;
+  const s = shellFor(url.searchParams.get('id') || '', session);
+  if (!s) return send(res, 404, { error: 'no_shell', error_description: 'That shell is gone.' });
+  s.touched = Date.now();
+
+  const cursor = Math.max(0, Number(url.searchParams.get('cursor') || 0));
+  const deadline = Date.now() + SHELL_POLL_MS;
+  // Block until there is something new, the shell ends, or we hit the poll
+  // ceiling. The page simply re-issues the request; a long poll keeps keystroke
+  // latency near a real terminal without a persistent socket.
+  while (!s.ended && s.base + s.out.length <= cursor && Date.now() < deadline) {
+    await new Promise(resolve => {
+      const t = setTimeout(resolve, Math.min(1000, Math.max(50, deadline - Date.now())));
+      s.waiters.push(() => { clearTimeout(t); resolve(); });
+    });
+  }
+  const from = Math.max(cursor, s.base);
+  send(res, 200, {
+    cursor: s.base + s.out.length,
+    data: s.out.slice(from - s.base),
+    ended: s.ended,
+    exit: s.exit,
+  });
+}
+
+async function handleShellClose(req, res) {
+  const session = requireShellSession(req, res);
+  if (!session) return;
+  const body = await readJson(req);
+  const s = shellFor(String(body.id || ''), session);
+  if (!s) return send(res, 404, { error: 'no_shell' });
+  try { s.child.kill('SIGHUP'); } catch (_) {}
+  setTimeout(() => {
+    try { s.child.kill('SIGKILL'); } catch (_) {}
+    shells.delete(s.id);
+  }, 500);
+  send(res, 200, { closed: true });
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const path = url.pathname.replace(/\/+$/, '') || '/';
@@ -932,11 +1151,15 @@ const server = http.createServer(async (req, res) => {
   try {
     if (req.method === 'GET' && (path === '/health' || path === '/')) {
       sweep();
+      sweepShells();
       return send(res, 200, {
         status: 'ok',
         service: 'virgox-auth',
         grants_pending: grants.size,
         interval: INTERVAL,
+        shell: SHELL_ENABLED,
+        shell_pty: !!SCRIPT_BIN,
+        shells: shells.size,
       });
     }
 
@@ -956,6 +1179,11 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && path === '/agent/result') return await handleAgentResult(req, url, res);
     if (req.method === 'POST' && path === '/agent/poll') return await handleAgentPoll(req, url, res);
     if (req.method === 'POST' && path === '/agent/report') return await handleAgentReport(req, res);
+
+    if (req.method === 'POST' && path === '/shell/open') return await handleShellOpen(req, res);
+    if (req.method === 'POST' && path === '/shell/input') return await handleShellInput(req, res);
+    if (req.method === 'GET' && path === '/shell/read') return await handleShellRead(req, res, url);
+    if (req.method === 'POST' && path === '/shell/close') return await handleShellClose(req, res);
 
     return send(res, 404, { error: 'not_found', error_description: path });
   } catch (err) {
