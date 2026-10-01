@@ -32,6 +32,20 @@ _udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 USER_CLOUDS_DIR = os.environ.get("VIRGOX_USER_CLOUDS_DIR", os.path.join(VIRGOX_HOME, "virgox_user_clouds"))
 os.makedirs(USER_CLOUDS_DIR, exist_ok=True)
 
+def public_bridge_url():
+    configured = os.environ.get("VIRGOX_PUBLIC_BRIDGE_URL", "").strip().rstrip("/")
+    if configured:
+        return configured
+    tunnel_log = os.path.join(VIRGOX_HOME, ".virgox-native", "cf_bridge.log")
+    try:
+        text = open(tunnel_log, "r", encoding="utf-8", errors="replace").read()
+        match = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", text)
+        if match:
+            return match.group(0)
+    except OSError:
+        pass
+    return ""
+
 def create_session(email, role="user"):
     token = secrets.token_hex(24)
     _active_sessions[token] = {
@@ -930,7 +944,7 @@ print(json.dumps(apps))
             code = secrets.token_hex(4).upper()
             _device_auth[code] = {"expires": time.time() + 600, "status": "pending"}
             host = f"http://{self.headers.get('Host', '127.0.0.1:8888')}"
-            public_host = os.environ.get("VIRGOX_PUBLIC_BRIDGE_URL", "").strip().rstrip("/")
+            public_host = public_bridge_url()
             verification_host = public_host or host
             self._respond_ok({"status":"ok","device_code":code,"verification_url":f"{verification_host}/cli-authorize?code={code}","expires_in":600})
             return
