@@ -16,8 +16,6 @@ CONFIG = pathlib.Path(os.environ.get("XDG_CONFIG_HOME", pathlib.Path.home() / ".
 DEFAULT_SERVER = os.environ.get("VIRGOX_SERVER", "http://127.0.0.1:8888").rstrip("/")
 AUTH_BACKEND = os.environ.get("VIRGOX_AUTH_BACKEND", "").rstrip("/")
 AUTH_WEB = os.environ.get("VIRGOX_AUTH_WEB", "").rstrip("/")
-DEFAULT_AUTH_WEB = "https://virgoxcloud.web.app"
-DEFAULT_AUTH_BACKEND = "https://asia-south1-virgoxcloud.cloudfunctions.net/vxcAuth"
 VERSION = "0.4.0"
 
 USE_COLOR = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
@@ -73,8 +71,8 @@ def logo():
 def login(args):
     cfg = load()
     server = (args.server or cfg.get("server") or DEFAULT_SERVER).rstrip("/")
-    backend = (args.backend or cfg.get("auth_backend") or AUTH_BACKEND or DEFAULT_AUTH_BACKEND).rstrip("/")
-    web = (args.web or cfg.get("auth_web") or AUTH_WEB or DEFAULT_AUTH_WEB).rstrip("/")
+    backend = (args.backend or cfg.get("auth_backend") or AUTH_BACKEND).rstrip("/")
+    web = (args.web or cfg.get("auth_web") or AUTH_WEB).rstrip("/")
 
     logo()
     print(c("  Authentication", BOLD))
