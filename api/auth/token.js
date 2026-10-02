@@ -1,8 +1,15 @@
-import { cors, getDeviceCodes, saveDeviceCodes, genToken, getSessions, saveSessions  } from '_shared.js';
+import { supabase, supabaseAdmin } from './_supabase.js';
+import { securityHeaders, handleOptions } from './_security.js';
+import { rateLimit } from './_rate-limit.js';
+import { getDeviceCodes, saveDeviceCodes, genToken, getSessions, saveSessions } from './_shared.js';
 
-module.exports = async (req, res) => {
-  cors(res);
-  if (req.method === 'OPTIONS') return res.status(204).end();
+export default async function handler(req, res) {
+  securityHeaders(res);
+  if (handleOptions(req, res)) return;
+
+  const rl = rateLimit(req, res, '/api/auth/token');
+  if (!rl.allowed) return res.status(429).json({ error: 'rate_limited', retry_after: rl.retryAfter });
+
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' });
 
   const { device_code, grant_type } = req.body || {};
@@ -13,7 +20,7 @@ module.exports = async (req, res) => {
   const codes = await getDeviceCodes();
   const entry = codes[device_code];
   if (!entry) return res.status(400).json({ error: 'invalid_device_code' });
-  if (entry.expires < Date.now()) {
+  if (new Date(entry.expires).getTime() < Date.now()) {
     delete codes[device_code];
     await saveDeviceCodes(codes);
     return res.status(400).json({ error: 'expired_token' });
@@ -35,4 +42,4 @@ module.exports = async (req, res) => {
     refresh_token,
     scope: entry.scope
   });
-};
+}

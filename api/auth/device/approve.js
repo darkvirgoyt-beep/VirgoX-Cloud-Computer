@@ -1,8 +1,15 @@
-import { cors, getDeviceCodes, saveDeviceCodes, getAccounts, hashPassword, genSalt, genToken, getSessions, saveSessions  } from '../_shared.js';
+import { supabase, supabaseAdmin } from './_supabase.js';
+import { securityHeaders, handleOptions, validateEmail, validatePassword } from './_security.js';
+import { rateLimit } from './_rate-limit.js';
+import { getDeviceCodes, saveDeviceCodes, getAccounts, saveAccounts, hashPassword, genSalt, genToken, getSessions, saveSessions } from './_shared.js';
 
-module.exports = async (req, res) => {
-  cors(res);
-  if (req.method === 'OPTIONS') return res.status(204).end();
+export default async function handler(req, res) {
+  securityHeaders(res);
+  if (handleOptions(req, res)) return;
+
+  const rl = rateLimit(req, res, '/api/auth/device/approve');
+  if (!rl.allowed) return res.status(429).json({ error: 'rate_limited', retry_after: rl.retryAfter });
+
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' });
 
   const { user_code, email, password, action } = req.body || {};
@@ -11,22 +18,24 @@ module.exports = async (req, res) => {
   const codes = await getDeviceCodes();
   const entry = Object.values(codes).find(c => c.user_code === user_code);
   if (!entry) return res.status(404).json({ error: 'invalid_code' });
-  if (entry.expires < Date.now()) return res.status(400).json({ error: 'code_expired' });
+  if (new Date(entry.expires).getTime() < Date.now()) return res.status(400).json({ error: 'code_expired' });
   if (entry.approved) return res.status(400).json({ error: 'already_approved' });
 
   if (action === 'deny') {
-    delete codes[Object.keys(codes).find(k => codes[k].user_code === user_code)];
+    const key = Object.keys(codes).find(k => codes[k].user_code === user_code);
+    delete codes[key];
     await saveDeviceCodes(codes);
     return res.status(200).json({ status: 'denied' });
   }
 
-  // Register or login
+  // Validate email/password
+  if (!validateEmail(email)) return res.status(400).json({ error: 'invalid_email' });
+  const pwCheck = validatePassword(password);
+  if (!pwCheck.valid) return res.status(400).json({ error: pwCheck.reason });
+
   const accounts = await getAccounts();
   let account = accounts[email];
   if (!account) {
-    if (!password || password.length < 10) {
-      return res.status(400).json({ error: 'weak_password' });
-    }
     const salt = genSalt();
     account = { email, salt, hash: hashPassword(password, salt), created_at: new Date().toISOString() };
     accounts[email] = account;
@@ -47,4 +56,4 @@ module.exports = async (req, res) => {
   await saveSessions(sessions);
 
   res.status(200).json({ status: 'approved', session_token, email });
-};
+}
