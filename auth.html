@@ -1,323 +1,274 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Sign in — VirgoX Cloud PC</title>
-<link rel="stylesheet" href="style.css?v=20261001_09" />
-<style>
-  :root { color-scheme: dark; }
-  body {
-    margin: 0; min-height: 100vh; display: grid; place-items: center;
-    background: #0b0e14; color: #e9eaee;
-    font-family: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
-    padding: 20px; box-sizing: border-box;
-  }
-  .card {
-    width: 100%; max-width: 400px; background: #14181f;
-    border: 1px solid rgba(255,255,255,.08); border-radius: 12px;
-    padding: 26px 24px; box-shadow: 0 18px 50px rgba(0,0,0,.5);
-  }
-  h1 { font-size: 1.15rem; margin: 0 0 4px; font-weight: 600; letter-spacing: -.01em; }
-  .sub { color: #98a0ae; font-size: .82rem; margin: 0 0 20px; line-height: 1.5; }
-  label { display: block; font-size: .74rem; color: #98a0ae; margin: 12px 0 4px; }
-  input {
-    width: 100%; box-sizing: border-box; padding: 9px 11px; font-size: .9rem;
-    background: #1b2028; color: #e9eaee; border: 1px solid rgba(255,255,255,.12);
-    border-radius: 6px; font-family: inherit;
-  }
-  input:focus { outline: none; border-color: #4c8dff; box-shadow: 0 0 0 2px rgba(76,141,255,.25); }
-  input:disabled { opacity: .5; }
-  button {
-    width: 100%; margin-top: 18px; padding: 10px; min-height: 42px;
-    background: #0f6cbd; color: #fff; border: 1px solid rgba(255,255,255,.14);
-    border-radius: 6px; font-size: .9rem; font-weight: 600; font-family: inherit;
-    cursor: pointer;
-  }
-  button:hover:not(:disabled) { background: #1a8ad4; }
-  button:disabled { opacity: .5; cursor: not-allowed; }
-  button.ghost { background: transparent; border-color: rgba(255,255,255,.16); font-weight: 500; }
-  button.ghost:hover { background: rgba(255,255,255,.06); }
-  .status { margin-top: 14px; font-size: .82rem; min-height: 1.2em; line-height: 1.5; }
-  .status.err { color: #ff8a80; }
-  .status.ok { color: #7ddc9a; }
-  .status.wait { color: #98a0ae; }
-  .status.show { min-height: 1.2em; }
-  .warn {
-    margin-top: 16px; padding: 9px 11px; border-radius: 6px; font-size: .78rem;
-    background: rgba(255,159,10,.12); border: 1px solid rgba(255,159,10,.35); color: #e0b050;
-  }
-  .who {
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    padding: 10px 12px; margin-bottom: 18px; border-radius: 8px;
-    background: rgba(125,220,154,.09); border: 1px solid rgba(125,220,154,.28);
-    font-size: .82rem;
-  }
-  .who b { font-weight: 600; }
-  .who button { width: auto; margin: 0; padding: 5px 10px; min-height: 0; font-size: .74rem; }
-  hr { border: 0; border-top: 1px solid rgba(255,255,255,.09); margin: 20px 0; }
-  .foot { margin-top: 20px; font-size: .72rem; color: #6f7787; line-height: 1.5; word-break: break-all; }
-  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .pw-hint { font-size: .72rem; color: #6f7787; margin-top: 4px; line-height: 1.45; }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#060810" />
+  <title>Sign in — VirgoX Cloud PC</title>
+  <link rel="stylesheet" href="style.css?v=20261002" />
 </head>
 <body>
-  <main class="card">
-    <!-- step 1: who are you -->
-    <div id="pane-auth">
-      <h1>Sign in to VirgoX Cloud PC</h1>
-      <p class="sub">Approving a terminal needs a real account. First time here? Create one — after that you sign in with the same details every time.</p>
+  <main class="container">
+    <div class="card">
+      <!-- Step 1: Sign in / Register -->
+      <div id="pane-auth">
+        <div class="brand">
+          <div class="brand-badge">⚡</div>
+          <h1 class="brand-title">VIRGOX CLOUD PC</h1>
+          <div class="brand-subtitle">DEVICE AUTHORIZATION</div>
+        </div>
 
-      <label for="email">Email</label>
-      <input id="email" type="email" autocomplete="username" inputmode="email" spellcheck="false" placeholder="you@example.com" />
+        <p style="color: var(--text-secondary); margin-bottom: var(--space-lg); font-size: 0.9rem;">
+          Approving a terminal needs a real account. First time here? Create one — after that you sign in with the same details every time.
+        </p>
 
-      <label for="password">Password</label>
-      <input id="password" type="password" autocomplete="current-password" placeholder="••••••••••" />
-      <div class="pw-hint">At least 10 characters, mixing three of: lower case, upper case, numbers, symbols.</div>
+        <div class="form-group">
+          <label class="form-label" for="email">Email</label>
+          <input type="email" id="email" class="input" autocomplete="username" inputmode="email" spellcheck="false" placeholder="you@example.com" />
+        </div>
 
-      <button id="submit" disabled>Sign in</button>
-      <button class="ghost" id="mode">Create an account instead</button>
+        <div class="form-group">
+          <label class="form-label" for="password">Password</label>
+          <input type="password" id="password" class="input" autocomplete="current-password" placeholder="••••••••••" />
+          <span class="input-hint">At least 10 characters, mixing three of: lower case, upper case, numbers, symbols.</span>
+        </div>
 
-      <div class="status" id="status"></div>
-      <div class="warn" id="svc-warn" hidden>
-        Cannot reach the auth service. Start it with <code>node server/auth-service.js</code>, then reload.
+        <button id="submit" class="btn btn-primary" disabled>Sign in</button>
+        <button id="mode" class="btn btn-ghost" type="button">Create an account instead</button>
+
+        <div id="status" class="alert" role="alert" aria-live="polite"></div>
+        <div id="svc-warn" class="alert alert-warning" hidden>
+          Cannot reach the auth service. Ensure the service is running and the link includes <code>?auth=</code>.
+        </div>
       </div>
-    </div>
 
-    <!-- step 2: the code from the terminal -->
-    <div id="pane-code" hidden>
-      <h1>Enter the code from your terminal</h1>
-      <p class="sub">Your terminal is showing an 8-character code. Type it here to approve this device.</p>
+      <!-- Step 2: Device code from terminal -->
+      <div id="pane-code" hidden>
+        <div class="brand">
+          <div class="brand-badge">⚡</div>
+          <h1 class="brand-title">DEVICE APPROVAL</h1>
+          <div class="brand-subtitle">ENTER CODE FROM TERMINAL</div>
+        </div>
 
-      <div class="who" id="who" hidden>
-        <span>Signed in as <b id="who-email"></b></span>
-        <button class="ghost" id="switch">Switch</button>
+        <p style="color: var(--text-secondary); margin-bottom: var(--space-lg); font-size: 0.9rem;">
+          Your terminal is showing an 8-character code. Type it here to approve this device.
+        </p>
+
+        <div id="who" class="alert alert-info" hidden style="display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); padding: var(--space-md); text-align: left;">
+          <span>Signed in as <b id="who-email"></b></span>
+          <button class="btn btn-ghost" id="switch" type="button" style="width: auto; padding: 8px 14px; font-size: 0.8rem;">Switch Account</button>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="code">Device Code</label>
+          <input type="text" id="code" class="input" inputmode="latin" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" placeholder="XXXXXXXX" style="letter-spacing: 0.3em; text-transform: uppercase; font-family: var(--font-mono);" />
+        </div>
+
+        <button id="approve" class="btn btn-success" disabled>Authorise this device</button>
+
+        <div id="status2" class="alert" role="alert" aria-live="polite"></div>
       </div>
 
-      <label for="code">Device code</label>
-      <input id="code" inputmode="latin" autocomplete="one-time-code"
-             autocapitalize="characters" spellcheck="false" placeholder="XXXXXXXX" />
-
-      <button id="approve" disabled>Authorise this device</button>
-
-      <div class="status" id="status2"></div>
+      <p class="footer-links" id="origin"></p>
     </div>
-
-    <p class="foot" id="origin"></p>
   </main>
 
-<script>
-(function () {
-  'use strict';
+  <script type="module">
+    import { auth } from './assets/auth-client.js';
 
-  // This page is a static file with no server of its own, so it cannot know where
-  // the auth service lives. The service puts its origin in `auth=` on the
-  // verification URI it hands back, and the CLI prints that URI. Nothing is
-  // hardcoded: there is no default host to fall back to, because a wrong guess
-  // here would post a password somewhere unexpected.
-  var BASE = (function () {
-    var given = new URLSearchParams(location.search).get('auth');
-    if (!given) return '';
-    try {
-      var u = new URL(given);
-      if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
-      return u.origin;
-    } catch (e) { return ''; }
-  })();
-
-  var TOKEN_KEY = 'virgox_session_token';
-  var EMAIL_KEY = 'virgox_session_email';
-
-  var $ = function (id) { return document.getElementById(id); };
-  var paneAuth = $('pane-auth'), paneCode = $('pane-code');
-  var emailEl = $('email'), passwordEl = $('password'), submit = $('submit');
-  var modeBtn = $('mode'), status1 = $('status'), warn = $('svc-warn');
-  var codeEl = $('code'), approveBtn = $('approve'), status2 = $('status2');
-  var whoBox = $('who'), whoEmail = $('who-email'), switchBtn = $('switch');
-  var origin = $('origin');
-
-  var registerMode = false;
-
-  function say(el, kind, text) {
-    el.className = 'status show ' + kind;
-    el.textContent = text;
-  }
-
-  origin.textContent = BASE
-    ? 'VirgoX Cloud PC · authorising against ' + BASE
-    : 'VirgoX Cloud PC · no service address in this link';
-
-  if (!BASE) {
-    warn.hidden = false;
-    say(status1, 'err', 'This link is missing its service address. Run vxc auth login again and open the link it prints.');
-    submit.disabled = true;
-    return;
-  }
-
-  function normaliseCode(v) {
-    var raw = (v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (raw.length > 9) raw = raw.slice(0, 9);
-    if (raw.length > 4) raw = raw.slice(0, 4) + '-' + raw.slice(4);
-    return raw;
-  }
-
-  function token() { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch (e) { return ''; } }
-
-  function showCodePane(email) {
-    paneAuth.hidden = true;
-    paneCode.hidden = false;
-    whoBox.hidden = false;
-    whoEmail.textContent = email;
-    // The CLI puts the code in the link, so landing here means it is already known.
-    var prefill = new URLSearchParams(location.search).get('code');
-    if (prefill) {
-      codeEl.value = normaliseCode(prefill);
-      approveBtn.disabled = false;
-      say(status2, 'wait', 'Code loaded from the link. Tap Authorise to finish.');
-    }
-  }
-
-  function showAuthPane() {
-    paneCode.hidden = true;
-    paneAuth.hidden = false;
-    passwordEl.value = '';
-    emailEl.focus();
-  }
-
-  function api(path, body, method) {
-    var headers = (method === 'GET' ? {} : { 'Content-Type': 'application/json' });
-    // Every call carries the session if we have one. /account/me in particular
-    // needs it: without the header it 401s, so a returning user looks signed out
-    // and has to sign in again every single visit.
-    var tok = token();
-    if (tok) headers.Authorization = 'Bearer ' + tok;
-    return fetch(BASE + path, {
-      method: method || 'POST',
-      headers: headers,
-      cache: 'no-store',
-      body: method === 'GET' ? undefined : JSON.stringify(body),
-    }).then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (d) {
-        return { ok: r.ok, status: r.status, data: d };
-      });
-    });
-  }
-
-  /* ---- health, so a dead service is named before anyone types a password --- */
-  fetch(BASE + '/health', { cache: 'no-store' })
-    .then(function (r) { if (!r.ok) throw new Error('bad'); warn.hidden = true; })
-    .catch(function () { warn.hidden = false; });
-
-  /* ---- already signed in? skip straight to the code ---- */
-  var existing = token();
-  if (existing) {
-    api('/account/me', null, 'GET').then(function (r) {
-      if (r.ok && r.data.email) {
-        try { localStorage.setItem(EMAIL_KEY, r.data.email); } catch (e) {}
-        showCodePane(r.data.email);
-        say(status2, 'ok', 'Signed in as ' + r.data.email + '. Enter the code from your terminal.');
-      } else {
-        try { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(EMAIL_KEY); } catch (e) {}
-        showAuthPane();
-      }
-    }).catch(function () { showAuthPane(); });
-  } else {
-    showAuthPane();
-  }
-
-  /* ---- step 1: sign in or create ---- */
-  function ready() {
-    var ok = emailEl.value.indexOf('@') > 0 && passwordEl.value.length >= 10;
-    var state = ok && !!BASE;
-    submit.disabled = !state;
-    // Must return the state: the click handler does `if (!ready()) return;`.
-    // Without this it returned undefined, which is falsy, so the negated check
-    // was always true and the button silently did nothing.
-    return state;
-  }
-  emailEl.addEventListener('input', ready);
-  passwordEl.addEventListener('input', ready);
-
-  modeBtn.addEventListener('click', function () {
-    registerMode = !registerMode;
-    submit.textContent = registerMode ? 'Create account' : 'Sign in';
-    modeBtn.textContent = registerMode ? 'I already have an account' : 'Create an account instead';
-    status1.textContent = '';
-    status1.className = 'status';
-    ready();
-  });
-
-  submit.addEventListener('click', function () {
-    if (!ready()) return;
-    submit.disabled = true;
-    var verb = registerMode ? 'Creating your account' : 'Signing in';
-    say(status1, 'wait', verb + '…');
-
-    api(registerMode ? '/account/register' : '/account/login', {
-      email: emailEl.value.trim(),
-      password: passwordEl.value,
-    }).then(function (r) {
-      if (!r.ok) {
-        say(status1, 'err', r.data.error_description || ('Sign-in failed (' + r.status + ')'));
-        submit.disabled = false;
-        return;
-      }
+    // This page is a static file with no server of its own.
+    // The auth service puts its origin in `auth=` on the verification URI.
+    const BASE = (function() {
+      const given = new URLSearchParams(location.search).get('auth');
+      if (!given) return '';
       try {
+        const u = new URL(given);
+        return (u.protocol === 'http:' || u.protocol === 'https:') ? u.origin : '';
+      } catch { return ''; }
+    })();
+
+    const TOKEN_KEY = 'virgox_session_token';
+    const EMAIL_KEY = 'virgox_session_email';
+
+    const $ = (id) => document.getElementById(id);
+
+    const paneAuth = $('pane-auth');
+    const paneCode = $('pane-code');
+    const emailEl = $('email');
+    const passwordEl = $('password');
+    const submit = $('submit');
+    const modeBtn = $('mode');
+    const status1 = $('status');
+    const warn = $('svc-warn');
+    const codeEl = $('code');
+    const approveBtn = $('approve');
+    const status2 = $('status2');
+    const whoBox = $('who');
+    const whoEmail = $('who-email');
+    const switchBtn = $('switch');
+    const origin = $('origin');
+
+    let registerMode = false;
+
+    function say(el, kind, text) {
+      el.textContent = text;
+      el.className = `alert alert-${kind} show`;
+    }
+
+    function normalizeCode(v) {
+      let raw = (v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (raw.length > 9) raw = raw.slice(0, 9);
+      if (raw.length > 4) raw = raw.slice(0, 4) + '-' + raw.slice(4);
+      return raw;
+    }
+
+    function getToken() {
+      try { return localStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; }
+    }
+
+    function showCodePane(email) {
+      paneAuth.hidden = true;
+      paneCode.hidden = false;
+      whoBox.hidden = false;
+      whoEmail.textContent = email;
+
+      const prefill = new URLSearchParams(location.search).get('code');
+      if (prefill) {
+        codeEl.value = normalizeCode(prefill);
+        approveBtn.disabled = false;
+        say(status2, 'info', 'Code loaded from the link. Tap Authorise to finish.');
+      }
+    }
+
+    function showAuthPane() {
+      paneCode.hidden = true;
+      paneAuth.hidden = false;
+      passwordEl.value = '';
+      emailEl.focus();
+    }
+
+    async function api(path, body, method = 'POST') {
+      const headers = method === 'GET' ? {} : { 'Content-Type': 'application/json' };
+      const tok = getToken();
+      if (tok) headers.Authorization = 'Bearer ' + tok;
+      const res = await fetch(BASE + path, { method, headers, cache: 'no-store', body: method === 'GET' ? undefined : JSON.stringify(body) });
+      const data = await res.json().catch(() => ({}));
+      return { ok: res.ok, status: res.status, data };
+    }
+
+    function ready() {
+      const ok = emailEl.value.includes('@') && passwordEl.value.length >= 10;
+      submit.disabled = !(ok && BASE);
+      return ok && BASE;
+    }
+
+    origin.textContent = BASE
+      ? 'VirgoX Cloud PC · authorising against ' + BASE
+      : 'VirgoX Cloud PC · no service address in this link';
+
+    if (!BASE) {
+      warn.hidden = false;
+      say(status1, 'error', 'This link is missing its service address. Run vxc auth login again and open the link it prints.');
+      submit.disabled = true;
+    }
+
+    // Health check
+    fetch(BASE + '/health', { cache: 'no-store' })
+      .then(r => { if (r.ok) warn.hidden = true; })
+      .catch(() => { warn.hidden = false; });
+
+    // Already signed in?
+    const existing = getToken();
+    if (existing) {
+      api('/account/me', null, 'GET').then(r => {
+        if (r.ok && r.data?.email) {
+          localStorage.setItem(EMAIL_KEY, r.data.email);
+          showCodePane(r.data.email);
+          say(status2, 'success', 'Signed in as ' + r.data.email + '. Enter the code from your terminal.');
+        } else { showAuthPane(); }
+      }).catch(showAuthPane);
+    } else { showAuthPane(); }
+
+    // Input listeners
+    emailEl.addEventListener('input', ready);
+    passwordEl.addEventListener('input', ready);
+
+    modeBtn.addEventListener('click', () => {
+      registerMode = !registerMode;
+      submit.textContent = registerMode ? 'Create account' : 'Sign in';
+      modeBtn.textContent = registerMode ? 'I already have an account' : 'Create an account instead';
+      status1.textContent = '';
+      status1.className = 'alert';
+      ready();
+    });
+
+    submit.addEventListener('click', async () => {
+      if (!ready()) return;
+      submit.disabled = true;
+      say(status1, 'info', registerMode ? 'Creating your account…' : 'Signing in…');
+
+      try {
+        const r = await api(registerMode ? '/account/register' : '/account/login', {
+          email: emailEl.value.trim(),
+          password: passwordEl.value
+        });
+        if (!r.ok) {
+          say(status1, 'error', r.data.error_description || ('Sign-in failed (' + r.status + ')'));
+          submit.disabled = false;
+          return;
+        }
         localStorage.setItem(TOKEN_KEY, r.data.token);
         localStorage.setItem(EMAIL_KEY, r.data.email);
-      } catch (e) {}
-      showCodePane(r.data.email);
-    }).catch(function (err) {
-      say(status1, 'err', err.message || 'Network error');
-      submit.disabled = false;
+        showCodePane(r.data.email);
+      } catch (err) {
+        say(status1, 'error', err.message || 'Network error');
+        submit.disabled = false;
+      }
     });
-  });
 
-  switchBtn.addEventListener('click', function () {
-    api('/account/logout', {}).catch(function () {});
-    try { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(EMAIL_KEY); } catch (e) {}
-    registerMode = false;
-    modeBtn.textContent = 'Create an account instead';
-    submit.textContent = 'Sign in';
-    showAuthPane();
-  });
+    switchBtn.addEventListener('click', async () => {
+      await api('/account/logout', {}).catch(() => {});
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(EMAIL_KEY);
+      registerMode = false;
+      modeBtn.textContent = 'Create an account instead';
+      submit.textContent = 'Sign in';
+      showAuthPane();
+    });
 
-  /* ---- step 2: approve the device ---- */
-  codeEl.addEventListener('input', function () {
-    codeEl.value = normaliseCode(codeEl.value);
-    approveBtn.disabled = codeEl.value.replace('-', '').length < 8;
-  });
+    codeEl.addEventListener('input', () => {
+      codeEl.value = normalizeCode(codeEl.value);
+      approveBtn.disabled = codeEl.value.replace('-', '').length < 8;
+    });
 
-  approveBtn.addEventListener('click', function () {
-    var code = codeEl.value.replace('-', '').trim();
-    if (code.length < 8) { say(status2, 'err', 'Enter the full 8-character code.'); return; }
+    approveBtn.addEventListener('click', async () => {
+      const code = codeEl.value.replace('-', '').trim();
+      if (code.length < 8) { say(status2, 'error', 'Enter the full 8-character code.'); return; }
 
-    var tok = token();
-    if (!tok) { say(status2, 'err', 'Your session expired. Sign in again.'); showAuthPane(); return; }
+      const tok = getToken();
+      if (!tok) { say(status2, 'error', 'Your session expired. Sign in again.'); showAuthPane(); return; }
 
-    approveBtn.disabled = true;
-    say(status2, 'wait', 'Authorising…');
+      approveBtn.disabled = true;
+      say(status2, 'info', 'Authorising…');
 
-    fetch(BASE + '/device/approve', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
-      body: JSON.stringify({ user_code: code }),
-    })
-      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, data: d }; }); })
-      .then(function (r) {
-        if (!r.ok) throw new Error(r.data.error_description || r.data.error || 'Authorisation failed');
-        say(status2, 'ok', 'Approved. Go back to the terminal — it picks this up within a few seconds.');
+      try {
+        const res = await fetch(BASE + '/device/approve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
+          body: JSON.stringify({ user_code: code })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error_description || data.error || 'Authorisation failed');
+        say(status2, 'success', 'Approved. Go back to the terminal — it picks this up within a few seconds.');
         codeEl.value = '';
-        setTimeout(function () { approveBtn.disabled = true; }, 1200);
-      })
-      .catch(function (err) {
-        say(status2, 'err', err.message);
+        setTimeout(() => { approveBtn.disabled = true; }, 1200);
+      } catch (err) {
+        say(status2, 'error', err.message);
         approveBtn.disabled = false;
-      });
-  });
+      }
+    });
 
-  emailEl.focus();
-})();
-</script>
+    emailEl.focus();
+  </script>
 </body>
 </html>
