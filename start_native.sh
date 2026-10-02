@@ -20,9 +20,16 @@ start_if_missing() {
 echo "=== [1/5] Native X11 desktop ==="
 start_if_missing "$STATE/xvfb.pid" Xvfb :1 -screen 0 1920x1080x24 -ac +extension GLX
 sleep 1
+
+# Ensure Windows 11 icons and theme are configured
+mkdir -p /usr/share/icons/virgox
+cp -rn "$DIR/assets/icons/"* /usr/share/icons/virgox/ 2>/dev/null || true
+[ -f /usr/share/backgrounds/windows11/bloom-dark.jpg ] && DISPLAY=:1 feh --bg-fill /usr/share/backgrounds/windows11/bloom-dark.jpg 2>/dev/null || true
+
 if ! pgrep -f "startxfce4" >/dev/null 2>&1; then
   setsid env DISPLAY=:1 XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" dbus-launch --exit-with-session startxfce4 >"$STATE/xfce.log" 2>&1 &
 fi
+
 
 echo "=== [2/5] Browser desktop gateway on port 3000 ==="
 if ! pgrep -f "x11vnc.*-rfbport 5900" >/dev/null 2>&1; then

@@ -519,65 +519,12 @@
     window.addEventListener('load', () => setTimeout(initGoogle, 400));
 
     // ==========================================
-    // CLI device authorization
-    // ==========================================
-    async function handleCliDeviceCode() {
-      const params = new URLSearchParams(window.location.search);
-      const deviceCode = params.get('device_code') || params.get('code');
-      if (!deviceCode) return false;
-
-      const cliBridge = 'http://127.0.0.1:8888';
-      const isHexCode = /^[0-9a-f]{8}$/i.test(deviceCode);
-      if (!isHexCode) return false;
-
-      showAlert('🔐 VirgoX CLI authorization detected. Sign in below to authorize this terminal.', true);
-
-      const form = document.querySelector('form');
-      if (!form) return true;
-
-      const originalSubmit = form.onsubmit;
-      form.onsubmit = async function (event) {
-        event.preventDefault();
-        const emailInput = form.querySelector('input[type="email"]');
-        const passwordInput = form.querySelector('input[type="password"]');
-        const email = emailInput ? emailInput.value.trim() : '';
-        const password = passwordInput ? passwordInput.value : '';
-        if (!email || !password) {
-          showAlert('Enter your VirgoX email and password.', false);
-          return false;
-        }
-
-        showAlert('⏳ Authorizing this terminal...', true);
-        try {
-          const response = await fetch(cliBridge + '/api/auth/device/authorize', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code: deviceCode, email, password })
-          });
-          const data = await response.json();
-          if (!response.ok || data.status !== 'authorized') {
-            throw new Error(data.error || 'Authorization failed');
-          }
-          showAlert('✓ Terminal authorized. You can return to the CLI.', true);
-          window.history.replaceState({}, document.title, window.location.pathname);
-        } catch (error) {
-          showAlert('✗ Could not reach the local VirgoX bridge. Keep VirgoX running and try again.', false);
-        }
-        return false;
-      };
-      return true;
-    }
-
-    // Handle CLI codes before GitHub OAuth callback handling.
-    handleCliDeviceCode();
-
-    // ==========================================
     // GitHub Official OAuth 2.0 Integration
     // ==========================================
     const GITHUB_CLIENT_ID = 'Ov23li2jipwEXKXqH55s';
 
     function loginWithGitHub() {
-      const redirectUri = 'https://virgoxcloud.vercel.app/';
+      const redirectUri = window.location.origin + '/';
       const authUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=read:user,user:email&redirect_uri=${encodeURIComponent(redirectUri)}`;
       window.location.href = authUrl;
     }

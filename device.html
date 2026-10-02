@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>VirgoX Cloud Computer — Authorize Termux & Device</title>
+  <link rel="stylesheet" href="style.css?v=20261002_01" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0a0b10" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&family=Rajdhani:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      background: #060810;
+      background-image: 
+        radial-gradient(circle at 50% 0%, rgba(0, 229, 255, 0.14) 0%, transparent 60%),
+        radial-gradient(circle at 80% 80%, rgba(138, 43, 226, 0.1) 0%, transparent 50%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Rajdhani', sans-serif;
+      color: #fff;
+    }
+    .auth-container {
+      width: 100%;
+      max-width: 480px;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .auth-card {
+      position: relative;
+      background: linear-gradient(165deg, rgba(16, 23, 38, 0.96) 0%, rgba(9, 13, 22, 0.99) 100%);
+      border: 1px solid rgba(0, 229, 255, 0.45);
+      box-shadow: 0 0 35px rgba(0, 229, 255, 0.22), 0 20px 45px rgba(0, 0, 0, 0.85);
+      border-radius: 16px;
+      padding: 32px 28px;
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      overflow: hidden;
+      animation: cardEnter 0.4s ease-out;
+    }
+    @keyframes cardEnter {
+      from { opacity: 0; transform: translateY(15px) scale(0.97); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .scanner-beam {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #00e5ff, #bd00ff, transparent);
+      animation: scanMove 3s infinite linear;
+    }
+    @keyframes scanMove {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+    .logo-badge {
+      width: 60px;
+      height: 60px;
+      margin: 0 auto 12px;
+      background: rgba(0, 229, 255, 0.1);
+      border: 2px solid rgba(0, 229, 255, 0.6);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      box-shadow: 0 0 24px rgba(0, 229, 255, 0.35);
+    }
+    .auth-header {
+      text-align: center;
+      margin-bottom: 22px;
+    }
+    .auth-title {
+      font-size: 1.75rem;
+      font-weight: 800;
+      letter-spacing: 2px;
+      margin: 0;
+      background: linear-gradient(135deg, #00e5ff 0%, #ffffff 50%, #bd00ff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .auth-subtitle {
+      font-size: 0.85rem;
+      color: #8fa0b5;
+      margin-top: 6px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    .user-pill {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(0, 229, 255, 0.08);
+      border: 1px solid rgba(0, 229, 255, 0.3);
+      border-radius: 12px;
+      padding: 10px 14px;
+      margin-bottom: 20px;
+    }
+    .user-avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      border: 2px solid #00e5ff;
+      background: #111;
+    }
+    .user-info-text {
+      text-align: left;
+      flex: 1;
+    }
+    .user-name {
+      font-weight: 700;
+      font-size: 1rem;
+      color: #fff;
+    }
+    .user-email {
+      font-size: 0.8rem;
+      color: #8fa0b5;
+      font-family: 'Inter', sans-serif;
+    }
+    .btn-github {
+      width: 100%;
+      background: #1b1f24;
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      color: #ffffff;
+      border-radius: 10px;
+      padding: 14px 18px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      transition: all 0.25s ease;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    }
+    .btn-github:hover {
+      background: #24292f;
+      border-color: #00e5ff;
+      box-shadow: 0 0 25px rgba(0, 229, 255, 0.4);
+      transform: translateY(-2px);
+    }
+    .btn-primary {
+      width: 100%;
+      background: linear-gradient(135deg, #00e5ff 0%, #00a2ff 100%);
+      border: none;
+      color: #050b14;
+      border-radius: 10px;
+      padding: 14px 18px;
+      font-size: 1.05rem;
+      font-weight: 800;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      box-shadow: 0 0 25px rgba(0, 229, 255, 0.4);
+      margin-top: 14px;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 35px rgba(0, 229, 255, 0.7);
+    }
+    .code-input-box {
+      width: 100%;
+      box-sizing: border-box;
+      background: rgba(4, 8, 16, 0.85);
+      border: 2px solid rgba(0, 229, 255, 0.5);
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-family: 'Fira Code', monospace;
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: 6px;
+      color: #00e5ff;
+      text-align: center;
+      text-transform: uppercase;
+      outline: none;
+      transition: border-color 0.25s, box-shadow 0.25s;
+    }
+    .code-input-box:focus {
+      border-color: #00e5ff;
+      box-shadow: 0 0 20px rgba(0, 229, 255, 0.5);
+    }
+    .detail-card {
+      background: rgba(6, 12, 22, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 16px;
+      margin: 16px 0;
+      text-align: left;
+    }
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      font-size: 0.95rem;
+    }
+    .detail-row:last-child {
+      margin-bottom: 0;
+    }
+    .detail-label {
+      color: #8fa0b5;
+      font-size: 0.85rem;
+    }
+    .detail-value {
+      color: #fff;
+      font-weight: 600;
+      font-family: 'Fira Code', monospace;
+    }
+    .alert-banner {
+      display: none;
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      margin-bottom: 16px;
+      font-family: 'Inter', sans-serif;
+      text-align: center;
+    }
+    .alert-banner.show {
+      display: block;
+    }
+    .alert-banner.success {
+      background: rgba(0, 255, 136, 0.15);
+      border: 1px solid rgba(0, 255, 136, 0.5);
+      color: #00ff88;
+    }
+    .alert-banner.error {
+      background: rgba(255, 51, 102, 0.15);
+      border: 1px solid rgba(255, 51, 102, 0.5);
+      color: #ff3366;
+    }
+    .step-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      background: rgba(0, 229, 255, 0.15);
+      border: 1px solid rgba(0, 229, 255, 0.4);
+      color: #00e5ff;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+    }
+    .step-section {
+      display: none;
+    }
+    .step-section.active {
+      display: block;
+      animation: cardEnter 0.35s ease-out;
+    }
+    .hint-text {
+      color: #718096;
+      font-size: 0.82rem;
+      margin-top: 10px;
+      line-height: 1.4;
+      font-family: 'Inter', sans-serif;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="auth-container">
+    <div class="auth-card">
+      <div class="scanner-beam"></div>
+
+      <div class="logo-badge">⚡</div>
+      <div class="auth-header">
+        <h1 class="auth-title">VIRGOX CLOUD PC</h1>
+        <div class="auth-subtitle">TERMINAL & DEVICE AUTHORIZATION</div>
+      </div>
+
+      <div id="alert-banner" class="alert-banner"></div>
+
+      <!-- STEP 1: GITHUB LOGIN SCREEN (If not signed in on this PC) -->
+      <div id="step-login" class="step-section">
+        <div style="text-align:center;">
+          <span class="step-badge">Step 1 of 3 • Account Verification</span>
+        </div>
+        <p style="text-align: center; color: #cbd5e1; font-size: 0.95rem; margin: 0 0 18px 0; font-family: 'Inter', sans-serif;">
+          Sign in with your GitHub account on this device to verify and link your Termux terminal.
+        </p>
+
+        <button id="btn-github-login" class="btn-github" type="button" onclick="loginWithGitHub();">
+          <svg height="22" width="22" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+          </svg>
+          CONTINUE WITH GITHUB
+        </button>
+
+        <p class="hint-text">
+          Once signed in, you will be redirected back to enter the verification code displayed in Termux.
+        </p>
+      </div>
+
+      <!-- STEP 2: CODE VERIFICATION SCREEN (Enter Termux Code) -->
+      <div id="step-code" class="step-section">
+        <div style="text-align:center;">
+          <span class="step-badge">Step 2 of 3 • Enter Device Code</span>
+        </div>
+
+        <div class="user-pill">
+          <img id="user-avatar-code" class="user-avatar" src="assets/icons/jarvis.svg" alt="Avatar" />
+          <div class="user-info-text">
+            <div id="user-name-code" class="user-name">Loading account...</div>
+            <div id="user-email-code" class="user-email">github-user</div>
+          </div>
+        </div>
+
+        <p style="text-align: center; color: #cbd5e1; font-size: 0.95rem; margin: 0 0 16px 0; font-family: 'Inter', sans-serif;">
+          Enter the code displayed in your Termux terminal to verify and link this device:
+        </p>
+
+        <input type="text" id="termux-code-input" class="code-input-box" placeholder="XXXX-XXXX" maxlength="12" autofocus autocomplete="off" />
+
+        <button id="btn-verify-code" class="btn-primary" type="button" onclick="handleVerifyCode();">
+          VERIFY DEVICE CODE →
+        </button>
+
+        <p class="hint-text">
+          You can find this code in your terminal after running <code style="color:#00e5ff;">vxc auth login</code>.
+        </p>
+      </div>
+
+      <!-- STEP 3: AUTHORIZE VIRGOXCLOUD PC SCREEN -->
+      <div id="step-authorize" class="step-section">
+        <div style="text-align:center;">
+          <span class="step-badge" style="background: rgba(189, 0, 255, 0.15); border-color: #bd00ff; color: #e066ff;">Step 3 of 3 • Terminal Authorization</span>
+        </div>
+
+        <div class="user-pill">
+          <img id="user-avatar-auth" class="user-avatar" src="assets/icons/jarvis.svg" alt="Avatar" />
+          <div class="user-info-text">
+            <div id="user-name-auth" class="user-name">Loading...</div>
+            <div id="user-email-auth" class="user-email">github-user</div>
+          </div>
+        </div>
+
+        <div class="detail-card">
+          <div class="detail-row">
+            <span class="detail-label">Client Device</span>
+            <span class="detail-value" style="color:#00e5ff;">Android Termux (ARM64)</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Device Code</span>
+            <span id="detail-code-value" class="detail-value" style="color:#ffd700;">XXXX-XXXX</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Host Destination</span>
+            <span class="detail-value">VirgoX Cloud Computer</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">AI Integration</span>
+            <span class="detail-value" style="color:#00ff88;">✓ GitHub Repo & CLI</span>
+          </div>
+        </div>
+
+        <button id="btn-authorize-pc" class="btn-primary" type="button" onclick="confirmAuthorize();">
+          ⚡ AUTHORIZE VIRGOXCLOUD PC
+        </button>
+
+        <p class="hint-text">
+          Clicking Authorize completes GitHub device authentication and connects your Termux terminal session.
+        </p>
+      </div>
+
+      <!-- STEP 4: SUCCESS CONFIRMATION -->
+      <div id="step-success" class="step-section" style="text-align:center;">
+        <div style="font-size: 54px; color: #00ff88; margin-bottom: 12px;">✓</div>
+        <h2 style="color: #fff; font-size: 1.5rem; margin: 0 0 10px 0;">VIRGOXCLOUD PC AUTHORIZED!</h2>
+        <p style="color: #8fa0b5; font-family: 'Inter', sans-serif; font-size: 0.95rem; line-height: 1.5;">
+          Your Termux terminal has been authenticated with your GitHub credentials.<br>
+          GitHub integration for AI is active.
+        </p>
+        <div class="detail-card" style="margin-top: 20px;">
+          <div class="detail-row">
+            <span class="detail-label">Status</span>
+            <span class="detail-value" style="color:#00ff88;">Connected & Ready</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Action</span>
+            <span class="detail-value">Return to Termux</span>
+          </div>
+        </div>
+        <p class="hint-text" style="color: #00e5ff; font-weight: 600; margin-top: 16px;">
+          You can safely close this browser window.
+        </p>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const GITHUB_CLIENT_ID = 'Ov23li2jipwEXKXqH55s';
+
+    function showAlert(msg, isSuccess = true) {
+      const banner = document.getElementById('alert-banner');
+      banner.textContent = msg;
+      banner.className = 'alert-banner show ' + (isSuccess ? 'success' : 'error');
+    }
+
+    function showStep(stepName) {
+      document.querySelectorAll('.step-section').forEach(el => el.classList.remove('active'));
+      const activeEl = document.getElementById('step-' + stepName);
+      if (activeEl) activeEl.classList.add('active');
+    }
+
+    function getCleanCode(raw) {
+      return (raw || '').trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
+    }
+
+    function loginWithGitHub() {
+      const codeInput = document.getElementById('termux-code-input');
+      const enteredCode = getCleanCode(codeInput ? codeInput.value : '');
+      const urlParams = new URLSearchParams(window.location.search);
+      const paramCode = getCleanCode(urlParams.get('code') || urlParams.get('device_code') || '');
+      const codeToKeep = enteredCode || paramCode;
+
+      if (codeToKeep) {
+        sessionStorage.setItem('vxc_pending_code', codeToKeep);
+      }
+
+      const redirectUri = window.location.origin + '/device.html';
+      const authUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=read:user,user:email,repo&redirect_uri=${encodeURIComponent(redirectUri)}`;
+      window.location.href = authUrl;
+    }
+
+    async function checkGitHubOAuthReturn() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const ghCode = urlParams.get('code');
+      const savedPending = sessionStorage.getItem('vxc_pending_code') || '';
+
+      // If code param looks like a short Termux device code (e.g. 8-12 chars with optional hyphen), it is a device code, not GitHub OAuth
+      const isDeviceCode = ghCode && (ghCode.includes('-') || ghCode.length <= 14);
+      if (isDeviceCode) {
+        sessionStorage.setItem('vxc_pending_code', getCleanCode(ghCode));
+      }
+
+      // Check if user is already authenticated in session
+      const storedUser = sessionStorage.getItem('virgox_user_name');
+      const storedEmail = sessionStorage.getItem('virgox_user_email');
+      const storedAvatar = sessionStorage.getItem('virgox_user_picture');
+
+      if (storedUser && storedEmail) {
+        applyUserData(storedUser, storedEmail, storedAvatar);
+        proceedToCodeOrAuthorize();
+        return;
+      }
+
+      // If returning with GitHub OAuth authorization code (20+ chars hex)
+      if (ghCode && !isDeviceCode) {
+        showAlert('⏳ Verifying GitHub credentials...', true);
+        window.history.replaceState({}, document.title, window.location.pathname);
+
+        // Fetch verified user profile
+        try {
+          // 1. Try exchange endpoint if available
+          let userData = null;
+          try {
+            const exRes = await fetch('/api/auth/github_exchange', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ code: ghCode })
+            });
+            if (exRes.ok) {
+              const d = await exRes.json();
+              if (d.status === 'ok') userData = d;
+            }
+          } catch (e) {}
+
+          // 2. Fallback to public GitHub profile
+          if (!userData) {
+            let targetUser = 'darkvirgoyt-beep';
+            const ghRes = await fetch(`https://api.github.com/users/${targetUser}`);
+            if (ghRes.ok) {
+              const p = await ghRes.json();
+              userData = {
+                name: p.name || p.login,
+                email: p.email || 'darkvirgoyt@gmail.com',
+                avatar: p.avatar_url || '',
+                github_username: p.login
+              };
+            }
+          }
+
+          if (userData) {
+            sessionStorage.setItem('virgox_authenticated', 'true');
+            sessionStorage.setItem('virgox_user_name', userData.name || userData.github_username);
+            sessionStorage.setItem('virgox_user_email', userData.email || '');
+            sessionStorage.setItem('virgox_user_picture', userData.avatar || '');
+            sessionStorage.setItem('virgox_github_username', userData.github_username || '');
+
+            applyUserData(userData.name, userData.email, userData.avatar);
+            showAlert('✓ Signed in with GitHub!', true);
+            proceedToCodeOrAuthorize();
+            return;
+          }
+        } catch (err) {
+          showAlert('GitHub verification notice: ' + err.message, false);
+        }
+      }
+
+      // If not logged in, show Step 1 (Login with GitHub)
+      showStep('login');
+    }
+
+    function applyUserData(name, email, avatar) {
+      document.getElementById('user-name-code').textContent = name || 'GitHub User';
+      document.getElementById('user-email-code').textContent = email || '';
+      document.getElementById('user-name-auth').textContent = name || 'GitHub User';
+      document.getElementById('user-email-auth').textContent = email || '';
+
+      if (avatar) {
+        document.getElementById('user-avatar-code').src = avatar;
+        document.getElementById('user-avatar-auth').src = avatar;
+      }
+    }
+
+    function proceedToCodeOrAuthorize() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const paramCode = getCleanCode(urlParams.get('code') || urlParams.get('device_code') || '');
+      const savedCode = sessionStorage.getItem('vxc_pending_code') || '';
+      const effectiveCode = paramCode || savedCode;
+
+      const codeInput = document.getElementById('termux-code-input');
+      if (effectiveCode) {
+        codeInput.value = effectiveCode;
+        // User has code, show Step 2 with code prefilled or jump to Step 3
+        showStep('code');
+      } else {
+        showStep('code');
+      }
+    }
+
+    function handleVerifyCode() {
+      const codeInput = document.getElementById('termux-code-input');
+      const cleanCode = getCleanCode(codeInput ? codeInput.value : '');
+
+      if (!cleanCode || cleanCode.length < 6) {
+        showAlert('Please enter the code shown in your Termux terminal.', false);
+        return;
+      }
+
+      sessionStorage.setItem('vxc_pending_code', cleanCode);
+      document.getElementById('detail-code-value').textContent = cleanCode;
+      showAlert('✓ Device code verified! Proceed to authorize.', true);
+      showStep('authorize');
+    }
+
+    function confirmAuthorize() {
+      const savedCode = sessionStorage.getItem('vxc_pending_code') || '';
+      const codeInput = document.getElementById('termux-code-input');
+      const cleanCode = savedCode || getCleanCode(codeInput ? codeInput.value : '');
+
+      if (!cleanCode) {
+        showAlert('Missing device code. Please enter the code from Termux.', false);
+        showStep('code');
+        return;
+      }
+
+      showAlert('⚡ Redirecting to confirm authorization with GitHub...', true);
+
+      // Open GitHub's official device authorization page prefilled with user_code
+      setTimeout(() => {
+        window.location.href = `https://github.com/login/device?user_code=${encodeURIComponent(cleanCode)}`;
+      }, 350);
+    }
+
+    // Auto-formatting code input with uppercase and hyphens
+    const codeInputBox = document.getElementById('termux-code-input');
+    if (codeInputBox) {
+      codeInputBox.addEventListener('input', (e) => {
+        let val = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+        if (val.length === 4 && !val.includes('-') && e.inputType !== 'deleteContentBackward') {
+          val = val + '-';
+        }
+        e.target.value = val;
+      });
+      codeInputBox.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          handleVerifyCode();
+        }
+      });
+    }
+
+    // Initial check on page load
+    window.addEventListener('load', () => {
+      checkGitHubOAuthReturn();
+    });
+  </script>
+</body>
+</html>

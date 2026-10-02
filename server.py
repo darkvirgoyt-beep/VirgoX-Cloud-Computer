@@ -93,6 +93,18 @@ def validate_session(token, expected_email=None):
                 return True, sess
         else:
             _active_sessions.pop(token_str, None)
+    # Check local CLI session
+    try:
+        cli_cfg_path = os.path.expanduser("~/.config/vxc/config.json")
+        if os.path.exists(cli_cfg_path):
+            with open(cli_cfg_path, "r", encoding="utf-8") as f:
+                cli_cfg = json.load(f)
+            if cli_cfg.get("token") == token_str or cli_cfg.get("github_token") == token_str:
+                cli_email = (cli_cfg.get("email") or "user@github.com").strip().lower()
+                cli_role = cli_cfg.get("role", "user")
+                return True, {"email": cli_email, "role": cli_role, "github_username": cli_cfg.get("github_username")}
+    except Exception:
+        pass
     valid, remote = _remote_validate_session(token_str)
     if valid and remote:
         if expected_email and remote.get("email") != expected_email.strip().lower() and remote.get("role") != "owner":
@@ -1542,6 +1554,45 @@ print(json.dumps(apps))
                         })
             except Exception as e:
                 self._respond_error(f"GitHub exchange exception: {str(e)}")
+            return
+
+        elif path == "/api/auth/sync_github":
+            token = (payload.get("token") or "").strip()
+            email = (payload.get("email") or "user@github.com").strip().lower()
+            gh_user = (payload.get("github_username") or "").strip()
+            gh_token = (payload.get("github_token") or "").strip()
+            role = payload.get("role", "user")
+
+            if token:
+                _active_sessions[token] = {
+                    "email": email,
+                    "github_username": gh_user,
+                    "github_token": gh_token,
+                    "role": role,
+                    "expires": time.time() + (30 * 86400)
+                }
+
+            # Configure git identity for user & AI integration
+            if gh_user:
+                try:
+                    subprocess.run(["git", "config", "--global", "user.name", gh_user], capture_output=True)
+                    subprocess.run(["git", "config", "--global", "user.email", email], capture_output=True)
+                    subprocess.run(["git", "config", "--global", "github.user", gh_user], capture_output=True)
+                except Exception:
+                    pass
+
+            cloud = get_user_cloud(email)
+            if cloud:
+                cloud.setdefault("github", {})
+                cloud["github"].update({
+                    "username": gh_user,
+                    "connected": True,
+                    "synced_at": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
+                })
+                save_user_cloud(email, cloud)
+            log_user_activity(email, "GITHUB_CLI_SYNC", f"Connected GitHub CLI session for @{gh_user} (AI enabled)")
+
+            self._respond_ok({"status": "ok", "synced": True, "github_username": gh_user})
             return
 
         elif path == "/api/auth/master_verify":
