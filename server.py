@@ -21,14 +21,30 @@ import re
 PORT = 8888
 CONTAINER_NAME = "virgox-desktop"
 UDP_INPUT_TARGET = ("172.17.0.2", 9999)
-AUTH_FILE = "/home/darkvirgoyt/virgox_auth.json"
-OTP_LOG_FILE = "/home/darkvirgoyt/otp_codes.log"
+VIRGOX_HOME = os.environ.get("VIRGOX_HOME", os.path.expanduser("~"))
+AUTH_FILE = os.environ.get("VIRGOX_AUTH_FILE", os.path.join(VIRGOX_HOME, "virgox_auth.json"))
+OTP_LOG_FILE = os.environ.get("VIRGOX_OTP_LOG_FILE", os.path.join(VIRGOX_HOME, "otp_codes.log"))
 _active_otps = {}  # {email: {"otp": code, "expires": timestamp, "attempts": count}}
 _setup_otps = {}   # {email: {"otp": code, "expires": timestamp, "attempts": count}}
 _active_sessions = {} # {token: {"email": email, "role": role, "expires": timestamp}}
+_device_auth = {} # {device_code: {"expires": timestamp, "status": "pending|authorized", "token": ..., "email": ...}}
 _udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-USER_CLOUDS_DIR = "/home/darkvirgoyt/virgox_user_clouds"
+USER_CLOUDS_DIR = os.environ.get("VIRGOX_USER_CLOUDS_DIR", os.path.join(VIRGOX_HOME, "virgox_user_clouds"))
 os.makedirs(USER_CLOUDS_DIR, exist_ok=True)
+
+def public_bridge_url():
+    configured = os.environ.get("VIRGOX_PUBLIC_BRIDGE_URL", "").strip().rstrip("/")
+    if configured.startswith(("http://", "https://")) and "YOUR-BRIDGE" not in configured:
+        return configured
+    tunnel_log = os.path.join(VIRGOX_HOME, ".virgox-native", "cf_bridge.log")
+    try:
+        text = open(tunnel_log, "r", encoding="utf-8", errors="replace").read()
+        match = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", text)
+        if match:
+            return match.group(0)
+    except OSError:
+        pass
+    return ""
 
 def create_session(email, role="user"):
     token = secrets.token_hex(24)
@@ -39,28 +55,62 @@ def create_session(email, role="user"):
     }
     return token
 
+REMOTE_AUTH_BACKEND = os.environ.get("VIRGOX_AUTH_BACKEND", "https://tblhywjusyyzqzlagbnh.supabase.co/functions/v1/virgox-auth").rstrip("/")
+
+def _remote_validate_session(token):
+    try:
+        payload = json.dumps({"action": "validate", "token": str(token).strip()}).encode("utf-8")
+        req = urllib.request.Request(
+            REMOTE_AUTH_BACKEND,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        if data.get("valid"):
+            return True, {"email": data.get("email"), "role": data.get("role", "user")}
+    except Exception:
+        pass
+    return False, None
+
 def validate_session(token, expected_email=None):
     if not token:
         return False, None
     token_str = str(token).strip()
     token_hash = hashlib.sha256(token_str.lower().encode()).hexdigest()
-    # Check Master Passwords & VIP tokens for owner via secure hash
     MASTER_HASHES = {
-        "558c93a71d924e65977c7152aa6260596825d8c118d5d30f43dcfb1797d9bbf0", # Owner Key 1
-        "0a7a37ae29ae8cb4326cf7684fbded25330bba38b65b501449e9ca8ba67b4de1", # Owner Key 2
-        "2b90cb3a6ffa02f386e4ad8290a62d4f3d33c8db010e02feb92c1655ea799a2a"  # Owner Key 3
+        "558c93a71d924e65977c7152aa6260596825d8c118d5d30f43dcfb1797d9bbf0",
+        "0a7a37ae29ae8cb4326cf7684fbded25330bba38b65b501449e9ca8ba67b4de1",
+        "2b90cb3a6ffa02f386e4ad8290a62d4f3d33c8db010e02feb92c1655ea799a2a"
     }
     if token_hash in MASTER_HASHES or token_str in ("vx_sec_prince20_88b9c1", "vx_sec_darkvirgoyt20_7a9f82d1"):
         return True, {"email": "darkvirgoyt@gmail.com", "role": "owner"}
     sess = _active_sessions.get(token_str)
-    if not sess:
-        return False, None
-    if time.time() > sess.get("expires", 0):
-        del _active_sessions[token_str]
-        return False, None
-    if expected_email and sess.get("email") != expected_email.strip().lower() and sess.get("role") != "owner":
-        return False, None
-    return True, sess
+    if sess:
+        if time.time() <= sess.get("expires", 0):
+            if not expected_email or sess.get("email") == expected_email.strip().lower() or sess.get("role") == "owner":
+                return True, sess
+        else:
+            _active_sessions.pop(token_str, None)
+    # Check local CLI session
+    try:
+        cli_cfg_path = os.path.expanduser("~/.config/vxc/config.json")
+        if os.path.exists(cli_cfg_path):
+            with open(cli_cfg_path, "r", encoding="utf-8") as f:
+                cli_cfg = json.load(f)
+            if cli_cfg.get("token") == token_str or cli_cfg.get("github_token") == token_str:
+                cli_email = (cli_cfg.get("email") or "user@github.com").strip().lower()
+                cli_role = cli_cfg.get("role", "user")
+                return True, {"email": cli_email, "role": cli_role, "github_username": cli_cfg.get("github_username")}
+    except Exception:
+        pass
+    valid, remote = _remote_validate_session(token_str)
+    if valid and remote:
+        if expected_email and remote.get("email") != expected_email.strip().lower() and remote.get("role") != "owner":
+            return False, None
+        return True, remote
+    return False, None
 
 
 
@@ -323,9 +373,29 @@ def send_native_input(payload):
     except Exception:
         return False
 
+NATIVE_RUNTIME = os.environ.get("VIRGOX_RUNTIME", "").strip().lower() in ("native", "android", "arm64")
+NATIVE_HOME = os.path.expanduser(os.environ.get("VIRGOX_HOME", "~"))
+NATIVE_DESKTOP = os.path.join(NATIVE_HOME, "VirgoX-Files")
+os.makedirs(NATIVE_DESKTOP, exist_ok=True)
+
 def run_container_cmd(cmd, user="abc"):
-    full_cmd = f"docker exec -u {user} -e DISPLAY=:1 {CONTAINER_NAME} {cmd}"
+    """Run a desktop command through Docker or the Android/ARM64 native runtime."""
     try:
+        if NATIVE_RUNTIME:
+            # Translate Webtop paths to the native VirgoX workspace.
+            native_cmd = str(cmd).replace("/config/Desktop/VirgoX-Files", NATIVE_DESKTOP)
+            native_cmd = native_cmd.replace("/config", NATIVE_HOME)
+            env = os.environ.copy()
+            env.setdefault("DISPLAY", ":1")
+            env.setdefault("XDG_RUNTIME_DIR", f"/tmp/virgox-runtime-{os.getuid()}")
+            os.makedirs(env["XDG_RUNTIME_DIR"], exist_ok=True)
+            res = subprocess.run(
+                ["bash", "-lc", native_cmd],
+                capture_output=True, text=True, timeout=15, env=env
+            )
+            return res.returncode, res.stdout, res.stderr
+
+        full_cmd = f"docker exec -u {user} -e DISPLAY=:1 {CONTAINER_NAME} {cmd}"
         res = subprocess.run(full_cmd, shell=True, capture_output=True, text=True, timeout=5)
         return res.returncode, res.stdout, res.stderr
     except Exception as e:
@@ -534,6 +604,74 @@ class BridgeHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
+
+        if path == "/cli-authorize":
+            qs = parse_qs(parsed.query)
+            code = (qs.get("code", [""])[0] or "").strip().upper()
+            safe_code = re.sub(r"[^A-Z0-9-]", "", code)
+            html = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VirgoX CLI Authorization</title><style>body{font-family:system-ui;background:#0b1020;color:#fff;display:grid;place-items:center;min-height:100vh;margin:0}.card{width:min(420px,90vw);padding:28px;border:1px solid #26304d;border-radius:18px;background:#11182b;box-shadow:0 20px 60px #0008}input{width:100%;box-sizing:border-box;margin:8px 0;padding:12px;border-radius:10px;border:1px solid #35405e;background:#0b1020;color:#fff}button{width:100%;padding:12px;border:0;border-radius:10px;background:#6d5dfc;color:#fff;font-weight:700;margin-top:10px}small{color:#9aa5c2}.code{font:700 20px monospace;letter-spacing:2px}</style></head><body><div class="card"><h2>⚡ VirgoX CLI Authorization</h2><p>Authorize this terminal session.</p><p>Code: <span class="code">__CODE__</span></p><small>Sign in with your existing VirgoX account. The terminal will receive a session after authorization.</small><form id="f"><input id="email" type="email" placeholder="Email" required><input id="password" type="password" placeholder="Password" required><button>Authorize terminal</button></form><p id="m"></p><script>const code="__CODE__";document.getElementById("f").onsubmit=async e=>{e.preventDefault();const m=document.getElementById("m");m.textContent="Authorizing…";try{const r=await fetch("/api/auth/device/authorize",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code,email:document.getElementById("email").value,password:document.getElementById("password").value})});const d=await r.json();m.textContent=d.message||d.error||(d.status==="ok"?"Authorized. You can return to the terminal.":"Authorization failed.");if(d.status==="ok")document.getElementById("f").remove()}catch(err){m.textContent="Could not reach VirgoX.";}};</script></div></body></html>""".replace("__CODE__", safe_code);
+            self.send_response(200)
+            self._send_cors()
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(html.encode("utf-8"))
+            return
+
+        if path == "/api/auth/device/complete":
+            code = (payload.get("code") or "").strip().upper()
+            exchange = (payload.get("exchange_ticket") or "").strip()
+            backend = os.environ.get("VIRGOX_AUTH_BACKEND", "").strip().rstrip("/")
+            client_secret = (payload.get("client_secret") or "").strip()
+            if not backend or not code or not exchange or not client_secret:
+                self._respond_error("Remote authorization backend is not configured or exchange data is incomplete", code=400)
+                return
+            try:
+                req_data = json.dumps({
+                    "action": "exchange",
+                    "code": code,
+                    "client_secret": client_secret,
+                    "exchange_ticket": exchange
+                }).encode("utf-8")
+                req = urllib.request.Request(
+                    backend,
+                    data=req_data,
+                    headers={"Content-Type": "application/json"}
+                )
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    result = json.loads(resp.read().decode("utf-8"))
+                if not result.get("authenticated") or not result.get("email"):
+                    self._respond_error("Remote authorization exchange failed", code=401)
+                    return
+                email = result["email"].strip().lower()
+                role = "owner" if email in ("darkvirgoyt@gmail.com", "darkvirgoyt") else "user"
+                token = create_session(email, role=role)
+                log_user_activity(email, "FIREBASE_CLI_LOGIN", "Authorized VirgoX CLI through Firebase browser authentication")
+                self._respond_ok({
+                    "status": "ok",
+                    "authenticated": True,
+                    "token": token,
+                    "email": email,
+                    "role": role
+                })
+            except Exception as exc:
+                self._respond_error(f"Remote authorization exchange error: {exc}", code=502)
+            return
+
+        if path == "/api/auth/device/poll":
+            qs = parse_qs(parsed.query)
+            code = (qs.get("code", [""])[0] or "").strip().upper()
+            entry = _device_auth.get(code)
+            if not entry or time.time() > entry.get("expires", 0):
+                _device_auth.pop(code, None)
+                self._respond_error("Invalid or expired device code", 404)
+                return
+            if entry.get("status") == "authorized":
+                self._respond_ok({"status":"ok","authenticated":True,"token":entry["token"],"email":entry["email"],"role":entry.get("role","user")})
+                _device_auth.pop(code, None)
+            else:
+                self._respond_ok({"status":"pending","authenticated":False})
+            return
+
 
         if path == "/api/status":
             code, out, _ = run_container_cmd("wmctrl -l")
@@ -835,6 +973,39 @@ print(json.dumps(apps))
         parsed = urlparse(self.path)
         path = parsed.path
         length = int(self.headers.get("Content-Length", 0))
+
+        if path == "/api/auth/device/start":
+            code = secrets.token_hex(4).upper()
+            _device_auth[code] = {"expires": time.time() + 600, "status": "pending"}
+            host = f"http://{self.headers.get('Host', '127.0.0.1:8888')}"
+            public_host = public_bridge_url()
+            verification_host = public_host or host
+            self._respond_ok({"status":"ok","device_code":code,"verification_url":f"{verification_host}/cli-authorize?code={code}","expires_in":600})
+            return
+
+        if path == "/api/auth/device/authorize":
+            code = str(payload.get("code","")).strip().upper()
+            email = str(payload.get("email","")).strip().lower()
+            password = str(payload.get("password","")).strip()
+            entry = _device_auth.get(code)
+            if not entry or time.time() > entry.get("expires",0):
+                _device_auth.pop(code,None)
+                self._respond_error("Invalid or expired device code", 404)
+                return
+            auth_data = get_auth_data()
+            users_dict = auth_data.get("users", {})
+            user_hash = users_dict.get(email, {}).get("password_hash") if email in users_dict else None
+            if not user_hash and email == str(auth_data.get("email","")).lower():
+                user_hash = auth_data.get("password_hash")
+            if not user_hash or not verify_password(user_hash, password):
+                self._respond_error("Incorrect email or password", 401)
+                return
+            role = "owner" if email in ("darkvirgoyt@gmail.com","darkvirgoyt") else "user"
+            token = create_session(email, role=role)
+            entry.update({"status":"authorized","token":token,"email":email,"role":role})
+            log_user_activity(email, "CLI_DEVICE_LOGIN", "Authorized VirgoX CLI terminal session")
+            self._respond_ok({"status":"ok","authenticated":True,"email":email,"message":f"Terminal authorized for {mask_email(email)}. Return to your CLI."})
+            return
 
         if path == "/api/upload":
             qs = parse_qs(parsed.query)
@@ -1383,6 +1554,45 @@ print(json.dumps(apps))
                         })
             except Exception as e:
                 self._respond_error(f"GitHub exchange exception: {str(e)}")
+            return
+
+        elif path == "/api/auth/sync_github":
+            token = (payload.get("token") or "").strip()
+            email = (payload.get("email") or "user@github.com").strip().lower()
+            gh_user = (payload.get("github_username") or "").strip()
+            gh_token = (payload.get("github_token") or "").strip()
+            role = payload.get("role", "user")
+
+            if token:
+                _active_sessions[token] = {
+                    "email": email,
+                    "github_username": gh_user,
+                    "github_token": gh_token,
+                    "role": role,
+                    "expires": time.time() + (30 * 86400)
+                }
+
+            # Configure git identity for user & AI integration
+            if gh_user:
+                try:
+                    subprocess.run(["git", "config", "--global", "user.name", gh_user], capture_output=True)
+                    subprocess.run(["git", "config", "--global", "user.email", email], capture_output=True)
+                    subprocess.run(["git", "config", "--global", "github.user", gh_user], capture_output=True)
+                except Exception:
+                    pass
+
+            cloud = get_user_cloud(email)
+            if cloud:
+                cloud.setdefault("github", {})
+                cloud["github"].update({
+                    "username": gh_user,
+                    "connected": True,
+                    "synced_at": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
+                })
+                save_user_cloud(email, cloud)
+            log_user_activity(email, "GITHUB_CLI_SYNC", f"Connected GitHub CLI session for @{gh_user} (AI enabled)")
+
+            self._respond_ok({"status": "ok", "synced": True, "github_username": gh_user})
             return
 
         elif path == "/api/auth/master_verify":

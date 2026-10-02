@@ -340,6 +340,9 @@
     const inputUserEmail = document.getElementById('input-user-email');
     const btnSubmit = document.getElementById('btn-login-submit');
     const btnUserSubmit = document.getElementById('btn-user-submit');
+    const cliAuthParams = new URLSearchParams(window.location.search);
+    const cliDeviceCode = (cliAuthParams.get('device_code') || '').trim().toUpperCase();
+    const cliBridge = (cliAuthParams.get('bridge') || '').trim().replace(/\/$/, '');
 
     function showAlert(msg, isSuccess = false) {
       alertBox.textContent = msg;
@@ -402,6 +405,26 @@
         showAlert('Please enter the Master Security Key.');
         inputPass.focus();
         return;
+      }
+
+      if (cliDeviceCode && cliBridge) {
+        const email = (inputUserEmail.value || '').trim().toLowerCase() || 'darkvirgoyt@gmail.com';
+        btnSubmit.disabled = true;
+        try {
+          const response = await fetch(`${cliBridge}/api/auth/device/authorize`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: cliDeviceCode, email, password: p })
+          });
+          const data = await response.json();
+          if (!response.ok || data.status !== 'ok') throw new Error(data.error || data.message || 'Authorization failed');
+          showAlert('✓ PC authorized. Return to the VirgoX CLI; the AI session is now enabled.', true);
+          return;
+        } catch (error) {
+          showAlert(`❌ ${error.message || 'Could not authorize the PC.'}`);
+          btnSubmit.disabled = false;
+          return;
+        }
       }
 
       const inputHash = await sha256(p.toLowerCase());
@@ -499,10 +522,9 @@
     // GitHub Official OAuth 2.0 Integration
     // ==========================================
     const GITHUB_CLIENT_ID = 'Ov23li2jipwEXKXqH55s';
-    const GITHUB_CLIENT_SECRET = 'ec861b988a94d083665f90f8c63cf5af03dc3297';
 
     function loginWithGitHub() {
-      const redirectUri = window.location.origin + window.location.pathname;
+      const redirectUri = window.location.origin + '/';
       const authUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=read:user,user:email&redirect_uri=${encodeURIComponent(redirectUri)}`;
       window.location.href = authUrl;
     }
@@ -517,7 +539,7 @@
       window.history.replaceState({}, document.title, window.location.pathname);
 
       // Determine owner username from current domain or fallback
-      const currentHost = window.location.hostname;
+      const currentHost = 'virgoxcloud.vercel.app';
       let targetUser = 'darkvirgoyt-beep';
       if (currentHost.endsWith('.github.io')) {
         targetUser = currentHost.split('.github.io')[0].toLowerCase();
