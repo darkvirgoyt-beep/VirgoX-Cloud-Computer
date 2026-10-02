@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Unreal Engine 6
+Comment=Next-Gen Real-Time 3D Creation and Gaming Engine
+Exec=/usr/local/bin/unreal-engine-6
+Icon=/usr/share/icons/virgox/unrealengine.svg
+Terminal=false
+StartupNotify=true
+Categories=Development;Graphics;3DGraphics;

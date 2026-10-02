@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="flame" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f857a6"/>
+      <stop offset="100%" stop-color="#ff5858"/>
+    </linearGradient>
+  </defs>
+  <!-- Chip body -->
+  <rect x="24" y="24" width="80" height="80" rx="14" fill="#0f111a" stroke="url(#flame)" stroke-width="3.5"/>
+  <!-- Chip Pins -->
+  <line x1="12" y1="44" x2="24" y2="44" stroke="#ff5858" stroke-width="4" stroke-linecap="round"/>
+  <line x1="12" y1="64" x2="24" y2="64" stroke="#ff5858" stroke-width="4" stroke-linecap="round"/>
+  <line x1="12" y1="84" x2="24" y2="84" stroke="#ff5858" stroke-width="4" stroke-linecap="round"/>
+  <line x1="104" y1="44" x2="116" y2="44" stroke="#f857a6" stroke-width="4" stroke-linecap="round"/>
+  <line x1="104" y1="64" x2="116" y2="64" stroke="#f857a6" stroke-width="4" stroke-linecap="round"/>
+  <line x1="104" y1="84" x2="116" y2="84" stroke="#f857a6" stroke-width="4" stroke-linecap="round"/>
+  <!-- Lightning Bolt -->
+  <path d="M68 36 L44 68 L62 68 L58 92 L84 56 L66 56 Z" fill="url(#flame)"/>
+</svg>

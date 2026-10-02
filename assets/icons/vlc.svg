@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="vlcBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff9900"/>
+      <stop offset="100%" stop-color="#ff3300"/>
+    </linearGradient>
+    <linearGradient id="vlcOrange" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ff6b00"/>
+      <stop offset="100%" stop-color="#ff9233"/>
+    </linearGradient>
+  </defs>
+  <!-- Background Badge -->
+  <rect x="14" y="14" width="100" height="100" rx="22" fill="#141622" stroke="url(#vlcBorder)" stroke-width="2.5"/>
+  <!-- VLC Cone -->
+  <!-- Base ring -->
+  <ellipse cx="64" cy="96" rx="34" ry="10" fill="#cc4400"/>
+  <ellipse cx="64" cy="94" rx="30" ry="7" fill="url(#vlcOrange)"/>
+  <!-- Cone body -->
+  <path d="M50 88 L54 74 L74 74 L78 88 Z" fill="#ffffff"/>
+  <path d="M55 70 L58 56 L70 56 L73 70 Z" fill="url(#vlcOrange)"/>
+  <path d="M59 52 L61 40 L67 40 L69 52 Z" fill="#ffffff"/>
+  <path d="M61 36 C61 33 67 33 67 36 L68 38 L60 38 Z" fill="url(#vlcOrange)"/>
+  <!-- Center Glow -->
+  <ellipse cx="64" cy="80" rx="14" ry="3" fill="#ffffff" opacity="0.3"/>
+</svg>

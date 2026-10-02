@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Google Drive
+Comment=Cloud Storage & File Sync via Google Drive
+Exec=google-chrome-stable --app=https://drive.google.com
+Icon=/usr/share/icons/virgox/drive.svg
+Terminal=false
+StartupNotify=true
+Categories=Network;FileTransfer;

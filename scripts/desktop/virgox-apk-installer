@@ -1,0 +1,91 @@
+#!/bin/bash
+# ==============================================================================
+# ⚡ VirgoX APK Package Installer & Inspector
+# Developer: Prince · VirgoYT (@darkvirgoyt-beep)
+# Inspects, installs, and manages Android .apk files directly on the desktop
+# ==============================================================================
+export DISPLAY="${DISPLAY:-:1}"
+
+if [ -z "$1" ]; then
+    APK=$(zenity --file-selection --title="VirgoX: Select Android APK to Install or Inspect" --file-filter="Android Packages (*.apk) | *.apk" 2>/dev/null)
+    if [ -z "$APK" ]; then
+        exit 0
+    fi
+else
+    APK="$1"
+fi
+
+if [ ! -f "$APK" ]; then
+    zenity --error --title="VirgoX APK Manager" --text="APK file not found:\n$APK" 2>/dev/null
+    exit 1
+fi
+
+APK_NAME=$(basename "$APK")
+APK_SIZE=$(du -h "$APK" | cut -f1)
+
+# Extract APK metadata using aapt if available
+LABEL=""
+PKG_NAME="Unknown"
+VER_NAME="Unknown"
+
+if command -v aapt >/dev/null 2>&1; then
+    LABEL=$(aapt dump badging "$APK" 2>/dev/null | grep "application-label:" | head -n 1 | cut -d"'" -f2)
+    PKG_NAME=$(aapt dump badging "$APK" 2>/dev/null | grep "package: name=" | head -n 1 | sed -E "s/.*name='([^']+)'.*/\1/")
+    VER_NAME=$(aapt dump badging "$APK" 2>/dev/null | grep "versionName=" | head -n 1 | sed -E "s/.*versionName='([^']+)'.*/\1/")
+fi
+
+[ -z "$LABEL" ] && LABEL="$APK_NAME"
+
+# Check ADB devices
+ADB_DEVICES=$(adb devices 2>/dev/null | grep -v "List of devices" | grep "device$" | awk '{print $1}')
+DEV_COUNT=$(echo "$ADB_DEVICES" | grep -v '^$' | wc -l)
+
+CHOICE=$(zenity --list --title="⚡ VirgoX APK Manager: $LABEL" \
+  --text="📦 Package: <b>$PKG_NAME</b>\n🏷️ Version: <b>$VER_NAME</b>\n💾 Size: <b>$APK_SIZE</b>\n📱 ADB Devices Connected: <b>$DEV_COUNT</b>\n\nChoose an action:" \
+  --column="Action" --column="Description" \
+  "INSTALL" "Sideload / Install to Android Device via ADB" \
+  "DETAILS" "View Full Manifest & Permissions (aapt dump)" \
+  "EXTRACT" "Extract APK Archive (unzip to folder)" \
+  --width=520 --height=340 2>/dev/null)
+
+case "$CHOICE" in
+  INSTALL)
+    if [ "$DEV_COUNT" -eq 0 ]; then
+      zenity --warning --title="No Android Device Detected" \
+        --text="No ADB device found!\n\nPlease connect your phone via USB with USB Debugging enabled, or connect over Wi-Fi using:\n\n  <b>adb connect &lt;phone-ip&gt;:5555</b>\n\nRun 'adb devices' in terminal to check connection." 2>/dev/null
+    else
+      (
+        echo "10"; echo "# Connecting to ADB device..."
+        sleep 1
+        echo "40"; echo "# Sideloading $LABEL ($APK_NAME)..."
+        OUTPUT=$(adb install -r "$APK" 2>&1)
+        RES=$?
+        echo "100"; echo "# Finished!"
+        if [ $RES -eq 0 ]; then
+          zenity --info --title="Installation Successful" --text="✅ Successfully installed:\n<b>$LABEL</b> on device!\n\n$OUTPUT" 2>/dev/null
+        else
+          zenity --error --title="Installation Failed" --text="❌ Failed to install:\n\n$OUTPUT" 2>/dev/null
+        fi
+      ) | zenity --progress --title="Installing APK" --percentage=0 --auto-close 2>/dev/null
+    fi
+    ;;
+  DETAILS)
+    TMP_DUMP="/tmp/apk_details_${APK_NAME}.txt"
+    echo "=== VIRGOX APK INSPECTION: $APK_NAME ===" > "$TMP_DUMP"
+    echo "App Label: $LABEL" >> "$TMP_DUMP"
+    echo "Package: $PKG_NAME" >> "$TMP_DUMP"
+    echo "Version: $VER_NAME" >> "$TMP_DUMP"
+    echo "" >> "$TMP_DUMP"
+    echo "--- PERMISSIONS & CONFIGURATION ---" >> "$TMP_DUMP"
+    aapt dump badging "$APK" >> "$TMP_DUMP" 2>&1
+    zenity --text-info --title="APK Manifest: $APK_NAME" --filename="$TMP_DUMP" --width=700 --height=500 2>/dev/null
+    rm -f "$TMP_DUMP"
+    ;;
+  EXTRACT)
+    DEST_DIR="/config/Desktop/$(basename "$APK" .apk)_extracted"
+    mkdir -p "$DEST_DIR"
+    unzip -q "$APK" -d "$DEST_DIR"
+    zenity --info --title="APK Extracted" --text="Extracted to:\n<b>$DEST_DIR</b>" 2>/dev/null
+    thunar "$DEST_DIR" &
+    ;;
+esac

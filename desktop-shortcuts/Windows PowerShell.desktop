@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Windows PowerShell
+Comment=Windows PowerShell Environment (Administrator)
+Exec=/usr/local/bin/powershell
+Icon=/usr/share/icons/virgox/powershell.svg
+Terminal=false
+StartupNotify=true
+Categories=System;TerminalEmulator;

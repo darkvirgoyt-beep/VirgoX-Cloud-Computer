@@ -1,0 +1,4 @@
+#!/bin/bash
+export DISPLAY="${DISPLAY:-:1}"
+notify-send "⚡ Google Play Store" "Opening VirgoX Google Play Store & Direct PC APK Downloader..." -i /usr/share/icons/virgox/playstore.svg 2>/dev/null || true
+exec google-chrome --app="http://localhost:8888/playstore.html" --no-sandbox --disable-dev-shm-usage --window-size=1240,820 "$@"

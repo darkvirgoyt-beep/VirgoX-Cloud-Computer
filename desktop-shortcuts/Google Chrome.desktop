@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Google Chrome
+Comment=Browse the Web
+Exec=chromium --new-window
+Icon=/usr/share/pixmaps/chromium.png
+Terminal=false
+StartupNotify=true
+Categories=Network;WebBrowser;

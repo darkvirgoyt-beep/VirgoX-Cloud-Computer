@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=VirgoX ROM Builder
+Comment=Build and Monitor Moto G45 FogOS ROM
+Exec=xfce4-terminal --title="VirgoX ROM Builder" -e "/config/Desktop/VirgoX-Files/monitor_build.sh"
+Icon=/usr/share/icons/virgox/rombuilder.svg
+Terminal=false
+StartupNotify=true
+Categories=Development;

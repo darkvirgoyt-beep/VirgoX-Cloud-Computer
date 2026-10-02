@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="ueBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f5d4"/>
+      <stop offset="50%" stop-color="#7b2cbf"/>
+      <stop offset="100%" stop-color="#f72585"/>
+    </linearGradient>
+    <linearGradient id="ueCircle" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#191c2b"/>
+      <stop offset="100%" stop-color="#0a0c14"/>
+    </linearGradient>
+    <linearGradient id="ueU" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#b0b8d6"/>
+    </linearGradient>
+    <linearGradient id="ue6Badge" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ff007f"/>
+      <stop offset="100%" stop-color="#7928ca"/>
+    </linearGradient>
+  </defs>
+  <!-- Background Badge -->
+  <rect x="14" y="14" width="100" height="100" rx="22" fill="#0c0e17" stroke="url(#ueBorder)" stroke-width="2.5"/>
+  <!-- UE Outer Ring -->
+  <circle cx="64" cy="62" r="34" fill="url(#ueCircle)" stroke="#3f4569" stroke-width="2.5"/>
+  <!-- Stylized U Logo -->
+  <path d="M50 42 C50 38 56 38 56 42 L56 60 C56 66 60 70 64 70 C68 70 72 66 72 60 L72 42 C72 38 78 38 78 42 L78 61 C78 72 71 80 64 80 C57 80 50 72 50 61 Z" fill="url(#ueU)"/>
+  <path d="M42 56 L47 56" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+  <path d="M81 56 L86 56" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+  <!-- Futuristic UE6 Badge -->
+  <rect x="74" y="78" width="32" height="20" rx="6" fill="url(#ue6Badge)" stroke="#ffffff" stroke-width="1.5"/>
+  <text x="90" y="93" fill="#ffffff" font-family="'Rajdhani', sans-serif" font-size="14" font-weight="900" text-anchor="middle" letter-spacing="1">UE6</text>
+</svg>

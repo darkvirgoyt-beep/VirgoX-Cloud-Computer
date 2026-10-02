@@ -1,0 +1,22 @@
+#!/bin/bash
+# ⚡ VirgoX Unreal Engine 6 & 3D Game Studio
+export DISPLAY="${DISPLAY:-:1}"
+export MESA_GLTHREAD=true
+export vblank_mode=0
+export LP_NUM_THREADS=$(nproc)
+export LIBGL_ALWAYS_SOFTWARE=1
+export GALLIUM_DRIVER=llvmpipe
+
+notify-send "🚀 Unreal Engine 6 Studio" "Launching Native 3D Game Engine Editor..." -i /usr/share/icons/virgox/unrealengine.svg 2>/dev/null || true
+
+UE_DIR="/config/Desktop/VirgoX-Files/UnrealEngine6"
+mkdir -p "$UE_DIR/Projects" "$UE_DIR/Templates" "$UE_DIR/Builds" "$UE_DIR/VirgoX_3D_Game_Studio"
+
+if [ -f "$UE_DIR/Engine/Binaries/Linux/UnrealEditor" ]; then
+    exec "$UE_DIR/Engine/Binaries/Linux/UnrealEditor" "$@"
+elif [ -f "/usr/local/bin/godot4" ]; then
+    cd "$UE_DIR/VirgoX_3D_Game_Studio"
+    exec /usr/local/bin/godot4 --rendering-driver opengl3 -e project.godot "$@"
+else
+    exec google-chrome --app="https://www.unrealengine.com" --no-sandbox --window-size=1280,800 "$@"
+fi

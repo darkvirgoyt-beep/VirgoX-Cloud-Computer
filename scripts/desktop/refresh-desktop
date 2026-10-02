@@ -1,0 +1,8 @@
+#!/bin/bash
+export DISPLAY="${DISPLAY:-:1}"
+if pgrep -u abc xfdesktop >/dev/null 2>&1; then
+    export DBUS_SESSION_BUS_ADDRESS=$(tr "\0" "\n" < /proc/$(pgrep -u abc xfdesktop | head -1)/environ | grep DBUS_SESSION_BUS_ADDRESS | cut -d= -f2-)
+    xfdesktop --reload 2>/dev/null || true
+fi
+xdotool key F5 2>/dev/null || true
+xrefresh -display :1 2>/dev/null || true

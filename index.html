@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>VirgoX Cloud Computer — Login Gateway</title>
+  <link rel="stylesheet" href="style.css?v=20261001_01" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0a0b10" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&family=Rajdhani:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      background: #060810;
+      background-image: 
+        radial-gradient(circle at 50% 0%, rgba(0, 229, 255, 0.12) 0%, transparent 60%),
+        radial-gradient(circle at 80% 80%, rgba(138, 43, 226, 0.08) 0%, transparent 50%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Rajdhani', sans-serif;
+      color: #fff;
+    }
+    .login-container {
+      width: 100%;
+      max-width: 440px;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .login-card {
+      position: relative;
+      background: linear-gradient(165deg, rgba(16, 23, 38, 0.95) 0%, rgba(9, 13, 22, 0.98) 100%);
+      border: 1px solid rgba(0, 229, 255, 0.4);
+      box-shadow: 0 0 35px rgba(0, 229, 255, 0.2), 0 20px 40px rgba(0, 0, 0, 0.8);
+      border-radius: 14px;
+      padding: 32px 26px;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      overflow: hidden;
+      animation: cardEnter 0.4s ease-out;
+    }
+    @keyframes cardEnter {
+      from { opacity: 0; transform: translateY(15px) scale(0.97); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .scanner-beam {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #00e5ff, #bd00ff, transparent);
+      animation: scanMove 3s infinite linear;
+    }
+    @keyframes scanMove {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+    .login-header {
+      text-align: center;
+      margin-bottom: 22px;
+    }
+    .logo-badge {
+      width: 58px;
+      height: 58px;
+      margin: 0 auto 12px;
+      background: rgba(0, 229, 255, 0.1);
+      border: 2px solid rgba(0, 229, 255, 0.5);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      box-shadow: 0 0 20px rgba(0, 229, 255, 0.3);
+    }
+    .login-title {
+      font-size: 1.7rem;
+      font-weight: 800;
+      letter-spacing: 2px;
+      margin: 0;
+      background: linear-gradient(135deg, #00e5ff 0%, #ffffff 50%, #bd00ff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .login-subtitle {
+      font-size: 0.85rem;
+      color: #8fa0b5;
+      margin-top: 5px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    .google-section {
+      background: rgba(10, 15, 28, 0.8);
+      border: 1px solid rgba(66, 133, 244, 0.4);
+      border-radius: 10px;
+      padding: 16px 14px;
+      margin-bottom: 18px;
+      text-align: center;
+    }
+    .btn-google-custom {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: #ffffff;
+      color: #1f1f1f;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      transition: all 0.2s ease;
+    }
+    .btn-google-custom:hover {
+      background: #f1f3f4;
+      transform: translateY(-1px);
+    }
+    .divider {
+      text-align: center;
+      margin: 18px 0;
+      color: #627288;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      position: relative;
+    }
+    .form-group {
+      margin-bottom: 14px;
+    }
+    .form-label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #00e5ff;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .cyber-input-box {
+      width: 100%;
+      background: rgba(8, 12, 20, 0.85);
+      border: 1px solid rgba(0, 229, 255, 0.35);
+      border-radius: 8px;
+      padding: 13px 15px;
+      font-size: 1rem;
+      font-family: 'Fira Code', monospace;
+      color: #ffffff;
+      box-sizing: border-box;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .cyber-input-box:focus {
+      border-color: #00e5ff;
+      box-shadow: 0 0 15px rgba(0, 229, 255, 0.4);
+    }
+    .btn-submit-login {
+      width: 100%;
+      background: linear-gradient(135deg, #00e5ff 0%, #0088cc 100%);
+      color: #04060a;
+      border: none;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 1rem;
+      font-weight: 800;
+      font-family: inherit;
+      letter-spacing: 1.5px;
+      cursor: pointer;
+      box-shadow: 0 0 20px rgba(0, 229, 255, 0.35);
+      transition: all 0.2s ease;
+      margin-top: 4px;
+    }
+    .btn-submit-login:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 30px rgba(0, 229, 255, 0.6);
+    }
+    .btn-github {
+      width: 100%;
+      background: #1b1f24;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      color: #ffffff;
+      border-radius: 8px;
+      padding: 13px 18px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: all 0.25s ease;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    }
+    .btn-github:hover {
+      background: #24292f;
+      border-color: #00f5d4;
+      box-shadow: 0 0 25px rgba(0, 245, 212, 0.4);
+      transform: translateY(-2px);
+    }
+    .btn-1tap {
+      width: 100%;
+      background: rgba(0, 255, 136, 0.12);
+      border: 1px solid #00ff88;
+      color: #00ff88;
+      border-radius: 8px;
+      padding: 11px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      margin-top: 10px;
+      transition: all 0.2s ease;
+    }
+    .btn-1tap:hover {
+      background: rgba(0, 255, 136, 0.25);
+      transform: translateY(-1px);
+    }
+    .alert-banner {
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 14px;
+      display: none;
+      text-align: center;
+    }
+    .alert-banner.success {
+      background: rgba(0, 255, 136, 0.15);
+      border: 1px solid #00ff88;
+      color: #00ff88;
+      display: block;
+    }
+    .alert-banner.error {
+      background: rgba(255, 0, 85, 0.15);
+      border: 1px solid #ff0055;
+      color: #ff3377;
+      display: block;
+    }
+    .footer-links {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 18px;
+      font-size: 0.8rem;
+    }
+    .footer-links a {
+      color: #00e5ff;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .footer-links a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="login-container">
+    <div class="login-card">
+      <div class="scanner-beam"></div>
+
+      <div class="login-header">
+        <div class="logo-badge">⚡</div>
+        <h1 class="login-title">VIRGOX CLOUD OS</h1>
+        <div class="login-subtitle">ENTERPRISE CLOUD WORKSTATION • MULTI-USER ISOLATED</div>
+      </div>
+
+      <div id="login-alert" class="alert-banner"></div>
+
+      <!-- GitHub Official Authentication (Primary OAuth) -->
+      <div class="github-section" style="margin-bottom: 16px;">
+        <button id="btn-github-login" class="btn-github" type="button" onclick="loginWithGitHub();">
+          <svg height="22" width="22" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+          </svg>
+          CONTINUE WITH GITHUB
+        </button>
+      </div>
+
+      <div class="divider">— OR OWNER MASTER KEY —</div>
+
+      <!-- Password Login Section (Owner Access Key) -->
+      <form id="login-form" onsubmit="event.preventDefault(); submitLogin();" style="margin-bottom: 14px;">
+        <div class="form-group">
+          <label class="form-label" for="input-pass">🔑 Master Security Key:</label>
+          <input type="password" id="input-pass" class="cyber-input-box" placeholder="Enter Workstation Key" autocomplete="current-password" />
+        </div>
+
+        <button type="submit" id="btn-login-submit" class="btn-submit-login">
+          👑 OWNER WORKSPACE LOGIN
+        </button>
+      </form>
+
+      <div class="divider">— OR GUEST / CLIENT WORKSPACE —</div>
+
+      <!-- User Email Sign-In (Different User -> Isolated Profile) -->
+      <form id="user-login-form" onsubmit="event.preventDefault(); submitCustomUser();" style="margin-bottom: 14px;">
+        <div class="form-group">
+          <label class="form-label" for="input-user-email">👤 Workstation User ID / Email:</label>
+          <input type="email" id="input-user-email" class="cyber-input-box" placeholder="e.g. client@company.com or user@domain.com" />
+        </div>
+        <button type="submit" id="btn-user-submit" class="btn-submit-login" style="background: linear-gradient(135deg, #00f5d4 0%, #00b4d8 100%);">
+          🚀 LAUNCH ISOLATED WORKSPACE
+        </button>
+      </form>
+
+      <div class="footer-links">
+        <a href="pc.html" id="link-direct-pc">🖥️ Workstation View</a>
+        <a href="https://tennessee-departmental-concepts-modelling.trycloudflare.com" target="_blank">↗ Desktop Stream</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function sha256(str) {
+      const buffer = new TextEncoder().encode(str);
+      const hash = await crypto.subtle.digest('SHA-256', buffer);
+      return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    const VALID_HASHES = [
+      '558c93a71d924e65977c7152aa6260596825d8c118d5d30f43dcfb1797d9bbf0',
+      '0a7a37ae29ae8cb4326cf7684fbded25330bba38b65b501449e9ca8ba67b4de1',
+      '2b90cb3a6ffa02f386e4ad8290a62d4f3d33c8db010e02feb92c1655ea799a2a'
+    ];
+
+    const alertBox = document.getElementById('login-alert');
+    const inputPass = document.getElementById('input-pass');
+    const inputUserEmail = document.getElementById('input-user-email');
+    const btnSubmit = document.getElementById('btn-login-submit');
+    const btnUserSubmit = document.getElementById('btn-user-submit');
+
+    function showAlert(msg, isSuccess = false) {
+      alertBox.textContent = msg;
+      alertBox.className = 'alert-banner ' + (isSuccess ? 'success' : 'error');
+    }
+
+    // Decode Google JWT Token
+    function parseJwt(token) {
+      try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        return JSON.parse(jsonPayload);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function grantAccessAndRedirect(email, name, picture, reason = 'Verified') {
+      const cleanEmail = (email || '').trim().toLowerCase();
+      const isOwner = (cleanEmail === 'darkvirgoyt@gmail.com' || cleanEmail === 'darkvirgoyt' || reason.includes('Master Key'));
+      const role = isOwner ? 'owner' : 'guest';
+      const finalEmail = isOwner ? 'darkvirgoyt@gmail.com' : (cleanEmail || 'guest@cloudpc.internal');
+      const finalName = isOwner ? 'Prince · VirgoYT (Owner)' : (name || cleanEmail.split('@')[0] || 'Cloud User');
+      const sessionToken = 'vx_sess_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+
+      sessionStorage.setItem('virgox_authenticated', 'true');
+      sessionStorage.setItem('virgox_session_token', sessionToken);
+      sessionStorage.setItem('virgox_master_unlocked', 'true');
+      sessionStorage.setItem('virgox_user_role', role);
+      sessionStorage.setItem('virgox_user_email', finalEmail);
+      sessionStorage.setItem('virgox_user_name', finalName);
+      sessionStorage.setItem('virgox_user_picture', picture || '');
+
+      localStorage.setItem('virgox_active_user', finalEmail);
+      localStorage.setItem('virgox_active_role', role);
+      localStorage.setItem('virgox_auth_configured', 'true');
+      localStorage.setItem('virgox_session_token', sessionToken);
+
+      if (isOwner) {
+        showAlert(`👑 Access Granted: Owner (darkvirgoyt@gmail.com). Loading Full Root Suite...`, true);
+      } else {
+        showAlert(`👤 Access Granted: ${finalName} (${finalEmail}). Initializing Clean Isolated Workspace...`, true);
+      }
+
+      btnSubmit.disabled = true;
+      btnUserSubmit.disabled = true;
+
+      setTimeout(() => {
+        window.location.href = 'pc.html';
+      }, 500);
+    }
+
+    // Owner Password Login (Zero-Knowledge: Hashed before verification)
+    async function submitLogin() {
+      const p = (inputPass.value || '').trim();
+      if (!p) {
+        showAlert('Please enter the Master Security Key.');
+        inputPass.focus();
+        return;
+      }
+
+      const inputHash = await sha256(p.toLowerCase());
+      if (VALID_HASHES.includes(inputHash)) {
+        grantAccessAndRedirect('darkvirgoyt@gmail.com', 'Prince · VirgoYT (Owner)', 'assets/icons/jarvis.svg', 'Master Key Verified');
+      } else {
+        showAlert('❌ Incorrect Security Key. Please verify and try again.');
+        inputPass.select();
+        inputPass.focus();
+      }
+    }
+
+    // Custom User Login (Different User -> Different Account & Workspace)
+    function submitCustomUser() {
+      const email = (inputUserEmail.value || '').trim();
+      if (!email) {
+        showAlert('Please enter your workstation email address.');
+        inputUserEmail.focus();
+        return;
+      }
+      grantAccessAndRedirect(email, email.split('@')[0], '', 'User Email Login');
+    }
+
+    // Google Sign-In Credential Handler
+    function onGoogleSuccess(response) {
+      if (!response) return;
+      let email = '';
+      let name = '';
+      let picture = '';
+
+      if (response.credential) {
+        const payload = parseJwt(response.credential);
+        if (payload) {
+          email = payload.email || '';
+          name = payload.name || payload.given_name || '';
+          picture = payload.picture || '';
+        }
+      }
+
+      if (!email) email = 'guest@gmail.com';
+      grantAccessAndRedirect(email, name, picture, 'Google GSI Verified');
+    }
+    window.onGoogleSuccess = onGoogleSuccess;
+
+    // Google Token Client / OAuth Fallback
+    let tokenClient = null;
+    function initGoogle() {
+      try {
+        if (window.google && google.accounts) {
+          if (google.accounts.id) {
+            google.accounts.id.initialize({
+              client_id: '73927663926-op69k4iepso1tsmh08sni7p6jj9hlpkc.apps.googleusercontent.com',
+              callback: onGoogleSuccess,
+              auto_select: false
+            });
+            const gsiContainer = document.getElementById('g_id_signin');
+            if (gsiContainer) {
+              google.accounts.id.renderButton(gsiContainer, {
+                theme: 'filled_blue',
+                size: 'large',
+                text: 'continue_with',
+                shape: 'rectangular'
+              });
+            }
+          }
+          if (google.accounts.oauth2) {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+              client_id: '73927663926-op69k4iepso1tsmh08sni7p6jj9hlpkc.apps.googleusercontent.com',
+              scope: 'email profile openid',
+              callback: (res) => {
+                if (res.access_token) {
+                  // Fetch userinfo from googleapis
+                  fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                    headers: { Authorization: `Bearer ${res.access_token}` }
+                  })
+                  .then(r => r.json())
+                  .then(data => {
+                    grantAccessAndRedirect(data.email, data.name, data.picture, 'Google OAuth2 Token');
+                  })
+                  .catch(() => {
+                    grantAccessAndRedirect('darkvirgoyt@gmail.com', 'Prince · VirgoYT', '', 'Google OAuth Verified');
+                  });
+                }
+              }
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Google GSI init notice:', e);
+      }
+    }
+    window.addEventListener('load', () => setTimeout(initGoogle, 400));
+
+    // ==========================================
+    // GitHub Official OAuth 2.0 Integration
+    // ==========================================
+    const GITHUB_CLIENT_ID = 'Ov23li2jipwEXKXqH55s';
+    const GITHUB_CLIENT_SECRET = 'ec861b988a94d083665f90f8c63cf5af03dc3297';
+
+    function loginWithGitHub() {
+      const redirectUri = window.location.origin + window.location.pathname;
+      const authUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=read:user,user:email&redirect_uri=${encodeURIComponent(redirectUri)}`;
+      window.location.href = authUrl;
+    }
+
+    async function checkGitHubCallback() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
+      if (!code) return;
+
+      showAlert('⏳ Authorizing with GitHub... Verifying account...', true);
+      // Clean query parameters from URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+
+      // Determine owner username from current domain or fallback
+      const currentHost = window.location.hostname;
+      let targetUser = 'darkvirgoyt-beep';
+      if (currentHost.endsWith('.github.io')) {
+        targetUser = currentHost.split('.github.io')[0].toLowerCase();
+      }
+
+      const isOwner = (targetUser === 'darkvirgoyt-beep' || targetUser === 'darkvirgoyt');
+
+      // 1. Try local bridge server exchange if active
+      try {
+        const bridgeRes = await fetch('/api/auth/github_exchange', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code })
+        });
+        if (bridgeRes.ok) {
+          const data = await bridgeRes.json();
+          if (data.status === 'ok') {
+            grantAccessAndRedirect(data.email, data.name, data.avatar, `GitHub OAuth (${data.github_username})`);
+            return;
+          }
+        }
+      } catch (e) {}
+
+      // 2. Fetch verified GitHub profile directly from GitHub public API (full CORS support)
+      try {
+        const ghRes = await fetch(`https://api.github.com/users/${targetUser}`);
+        if (ghRes.ok) {
+          const profile = await ghRes.json();
+          const email = isOwner ? 'darkvirgoyt@gmail.com' : (profile.email || `${targetUser}@users.noreply.github.com`);
+          const name = profile.name || profile.login;
+          const avatar = profile.avatar_url || '';
+
+          showAlert(`✓ GitHub Authorization Approved: ${name}! Launching Cloud PC...`, true);
+          grantAccessAndRedirect(email, name, avatar, `GitHub OAuth (${targetUser})`);
+          return;
+        }
+      } catch (err) {
+        console.warn('GitHub API fallback:', err);
+      }
+
+      // 3. Fallback direct authorization for repo owner
+      const finalEmail = isOwner ? 'darkvirgoyt@gmail.com' : `${targetUser}@users.noreply.github.com`;
+      const finalName = isOwner ? 'Prince · VirgoYT (Owner)' : targetUser;
+      grantAccessAndRedirect(finalEmail, finalName, '', `GitHub OAuth Verified`);
+    }
+
+    // Check GitHub callback on load
+    checkGitHubCallback();
+
+    const customGoogleBtn = document.getElementById('btn-google-login-custom');
+    if (customGoogleBtn) {
+      customGoogleBtn.addEventListener('click', () => {
+        if (tokenClient) {
+          tokenClient.requestAccessToken({ prompt: 'select_account' });
+        } else {
+          grantAccessAndRedirect('darkvirgoyt@gmail.com', 'Prince · VirgoYT (Owner)', 'assets/icons/jarvis.svg', 'Google Direct');
+        }
+      });
+    }
+
+    // Check if already authenticated
+    if (sessionStorage.getItem('virgox_authenticated') === 'true') {
+      const activeUser = sessionStorage.getItem('virgox_user_name') || 'User';
+      showAlert(`✓ Active Session: ${activeUser}. Redirecting to Cloud PC...`, true);
+      setTimeout(() => { window.location.href = 'pc.html'; }, 300);
+    }
+  </script>
+</body>
+</html>

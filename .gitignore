@@ -1,0 +1,6 @@
+*.log
+__pycache__/
+.tempmediaStorage/
+current_screen.png
+google_auth.json
+.vercel

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Microsoft Store
+Comment=Windows Apps and Software
+Exec=chromium --new-window --app=https://apps.microsoft.com
+Icon=/usr/share/icons/virgox/msstore.svg
+Terminal=false
+StartupNotify=true
+Categories=Network;WebBrowser;

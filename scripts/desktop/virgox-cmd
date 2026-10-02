@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+"""
+⚡ VirgoX Windows Command Prompt (CMD) Interactive Shell
+Developer: Prince · VirgoYT (@darkvirgoyt-beep)
+"""
+
+import os
+import sys
+import subprocess
+import readline
+import shutil
+import time
+
+BANNER = """Microsoft Windows [Version 10.0.19045.3803]
+(c) Microsoft Corporation. All rights reserved.
+"""
+
+def get_cmd_path(path):
+    rel = os.path.relpath(path, "/config")
+    if rel == ".":
+        return "C:\\Users\\VirgoX"
+    win_rel = rel.replace("/", "\\")
+    return f"C:\\Users\\VirgoX\\{win_rel}"
+
+def main():
+    try:
+        os.chdir(os.path.expanduser("/config/Desktop"))
+    except Exception:
+        pass
+
+    print(BANNER)
+
+    while True:
+        try:
+            cwd = os.getcwd()
+            prompt = f"{get_cmd_path(cwd)}> "
+            try:
+                line = input(prompt).strip()
+            except (KeyboardInterrupt, EOFError):
+                print("\n")
+                break
+
+            if not line:
+                continue
+
+            low = line.lower()
+            if low in ("exit", "quit"):
+                break
+
+            if low in ("cls", "clear"):
+                os.system("clear")
+                continue
+
+            if low == "ver":
+                print("\nMicrosoft Windows [Version 10.0.19045.3803]\n")
+                continue
+
+            if low == "help":
+                print("""
+For more information on a specific command, type HELP command-name
+ASSOC          Displays or modifies file extension associations.
+CD             Displays the name of or changes the current directory.
+CLS            Clears the screen.
+CMD            Starts a new instance of the Windows command interpreter.
+DIR            Displays a list of files and subdirectories in a directory.
+ECHO           Displays messages, or turns command echoing on or off.
+EXIT           Quits the CMD.EXE program (command interpreter).
+HELP           Provides Help information for Windows commands.
+IPCONFIG       Displays all current TCP/IP network configuration values.
+START          Starts a separate window to run a specified program or command.
+SYSTEMINFO     Displays machine specific properties and configuration.
+VER            Displays the Windows version.
+                """)
+                continue
+
+            if low.startswith("cd "):
+                target = line[3:].strip().replace("\\", "/")
+                if target == "/":
+                    target = "/config"
+                try:
+                    os.chdir(os.path.expanduser(target))
+                except Exception as e:
+                    print("The system cannot find the path specified.")
+                continue
+
+            if low in ("dir", "dir /w", "dir /p"):
+                try:
+                    entries = os.listdir(".")
+                    print(f"\n Directory of {get_cmd_path(os.getcwd())}\n")
+                    dir_count = 0
+                    file_count = 0
+                    total_bytes = 0
+                    for e in sorted(entries):
+                        p = os.path.join(".", e)
+                        is_dir = os.path.isdir(p)
+                        size = os.path.getsize(p) if not is_dir else 0
+                        mtime = time.strftime("%m/%d/%Y  %I:%M %p", time.localtime(os.path.getmtime(p)))
+                        if is_dir:
+                            print(f"{mtime}    <DIR>          {e}")
+                            dir_count += 1
+                        else:
+                            print(f"{mtime}    {size:>14,d} {e}")
+                            file_count += 1
+                            total_bytes += size
+                    print(f"               {file_count} File(s)    {total_bytes:,d} bytes")
+                    print(f"               {dir_count} Dir(s)   48,290,123,776 bytes free\n")
+                except Exception as e:
+                    subprocess.run("ls -la", shell=True)
+                continue
+
+            if low in ("ipconfig", "ipconfig /all"):
+                print("""
+Windows IP Configuration
+
+Ethernet adapter Ethernet0:
+
+   Connection-specific DNS Suffix  . : virgox.local
+   Link-local IPv6 Address . . . . . : fe80::a00:27ff:fe4e:66a1%12
+   IPv4 Address. . . . . . . . . . . : 172.17.0.2
+   Subnet Mask . . . . . . . . . . . : 255.255.0.0
+   Default Gateway . . . . . . . . . : 172.17.0.1
+                """)
+                continue
+
+            if low == "systeminfo":
+                print("""
+Host Name:                 VIRGOX-PC
+OS Name:                   Microsoft Windows 10 Pro (VirgoX Elite Edition)
+OS Version:                10.0.19045 N/A Build 19045
+OS Manufacturer:           VirgoX Cloud Architecture
+Registered Owner:          Prince (VirgoYT)
+System Model:              Snapdragon 695 / Moto G45 Virtual Workstation
+Total Physical Memory:     8,192 MB
+Available Physical Memory: 6,420 MB
+Virtual Memory: Max Size:  16,384 MB
+                """)
+                continue
+
+            # Execute bash command
+            subprocess.run(line, shell=True)
+
+        except Exception as e:
+            print(f"'{line}' is not recognized as an internal or external command.")
+
+if __name__ == "__main__":
+    main()

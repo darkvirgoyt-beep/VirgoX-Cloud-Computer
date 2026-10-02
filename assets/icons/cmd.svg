@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Terminal Window -->
+  <rect x="10" y="16" width="108" height="96" rx="8" fill="#0c0c0c" stroke="#555555" stroke-width="3"/>
+  <!-- Title bar -->
+  <rect x="10" y="16" width="108" height="22" rx="8" fill="#1f1f1f"/>
+  <rect x="10" y="30" width="108" height="8" fill="#1f1f1f"/>
+  <circle cx="24" cy="27" r="4" fill="#ff5f56"/>
+  <circle cx="36" cy="27" r="4" fill="#ffbd2e"/>
+  <circle cx="48" cy="27" r="4" fill="#27c93f"/>
+  <text x="64" y="31" fill="#888888" font-family="monospace" font-size="10" font-weight="bold">cmd.exe</text>
+  <!-- CMD prompt symbol -->
+  <path d="M26 56 L42 68 L26 80" stroke="#00ff66" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="48" y="78" width="22" height="5" fill="#00ff66"/>
+</svg>

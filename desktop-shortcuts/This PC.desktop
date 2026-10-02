@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=This PC
+Comment=Open File Manager and Virtual Drives
+Exec=thunar /config/Desktop/VirgoX-Files
+Icon=/usr/share/icons/virgox/thispc.svg
+Path=/config/Desktop/VirgoX-Files
+Terminal=false
+StartupNotify=true
+Categories=System;FileManager;

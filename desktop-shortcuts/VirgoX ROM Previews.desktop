@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=VirgoX ROM Previews
+Comment=Interactive Previews for Bootanimation, UI, Apps & Neon Icons
+Exec=/usr/local/bin/chromium --new-window "file:///config/Desktop/VirgoX-Files/VirgoX-Elite-GamingOS-Rom-Motorola-G45-FogOs/docs/index.html"
+Icon=/usr/share/icons/virgox/rombuilder.svg
+Terminal=false
+StartupNotify=true
+Categories=Development;Graphics;

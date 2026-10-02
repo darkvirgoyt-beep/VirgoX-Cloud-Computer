@@ -1,0 +1,4 @@
+#!/bin/bash
+export DISPLAY="${DISPLAY:-:1}"
+notify-send "🎨 Adobe Creative Suite" "Launching Photopea Pro (Full Photoshop / Illustrator Engine)..." 2>/dev/null || true
+exec google-chrome --app="https://www.photopea.com" --no-sandbox --window-size=1280,800 "$@"

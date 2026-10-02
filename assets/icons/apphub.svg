@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="hubBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff007f"/>
+      <stop offset="50%" stop-color="#7928ca"/>
+      <stop offset="100%" stop-color="#00f2fe"/>
+    </linearGradient>
+    <linearGradient id="hubBag" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e2235"/>
+      <stop offset="100%" stop-color="#0f111c"/>
+    </linearGradient>
+  </defs>
+  <!-- Background Badge -->
+  <rect x="14" y="14" width="100" height="100" rx="22" fill="#0d101a" stroke="url(#hubBorder)" stroke-width="2.5"/>
+  <!-- Shopping Bag / App Hub -->
+  <path d="M48 44 C48 34 54 28 64 28 C74 28 80 34 80 44" fill="none" stroke="#7928ca" stroke-width="4" stroke-linecap="round"/>
+  <rect x="34" y="44" width="60" height="54" rx="10" fill="url(#hubBag)" stroke="#ff007f" stroke-width="2"/>
+  <!-- 4 App Tiles Inside -->
+  <rect x="42" y="52" width="16" height="16" rx="4" fill="#00f2fe"/>
+  <rect x="70" y="52" width="16" height="16" rx="4" fill="#ff007f"/>
+  <rect x="42" y="74" width="16" height="16" rx="4" fill="#ffbe0b"/>
+  <rect x="70" y="74" width="16" height="16" rx="4" fill="#7928ca"/>
+</svg>

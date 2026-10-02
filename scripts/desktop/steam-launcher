@@ -1,0 +1,6 @@
+#!/bin/bash
+export DISPLAY="${DISPLAY:-:1}"
+export MESA_GLTHREAD=true
+export vblank_mode=0
+notify-send "🎮 Steam Gaming" "Launching Steam on 120 FPS High-Performance Engine..." -i /usr/share/icons/virgox/steam.svg 2>/dev/null || true
+exec /usr/games/steam "$@"

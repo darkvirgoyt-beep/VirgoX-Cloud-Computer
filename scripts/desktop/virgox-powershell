@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+"""
+⚡ VirgoX Windows PowerShell Interactive Shell (Admin)
+Developer: Prince · VirgoYT (@darkvirgoyt-beep)
+Full-featured Windows PowerShell environment with cmdlets and system interop
+"""
+
+import os
+import sys
+import subprocess
+import readline
+import shutil
+import time
+
+BANNER = """\
+Windows PowerShell
+Copyright (C) Microsoft Corporation. All rights reserved.
+
+Install the latest PowerShell for new features and improvements! https://aka.ms/PSWindows
+"""
+
+def get_win_path(path):
+    rel = os.path.relpath(path, "/config")
+    if rel == ".":
+        return "C:\\Users\\VirgoX"
+    win_rel = rel.replace("/", "\\")
+    return f"C:\\Users\\VirgoX\\{win_rel}"
+
+def cmd_systeminfo():
+    print("""
+Host Name:                 VIRGOX-PC
+OS Name:                   Microsoft Windows 10 Pro (VirgoX Elite Gaming OS)
+OS Version:                10.0.19045 N/A Build 19045
+OS Manufacturer:           VirgoX Technologies & Microsoft Corp.
+OS Configuration:          Standalone Workstation
+OS Build Type:             Multiprocessor Free
+Registered Owner:          Prince (VirgoYT)
+Registered Organization:   VirgoX Cloud Computer
+System Manufacturer:       Motorola / VirgoX Virtualization
+System Model:              Moto G45 5G / Snapdragon Virtual Desktop
+System Type:               x64-based PC
+Processor(s):              1 Processor(s) Installed.
+BIOS Version:              VirgoX UEFI v2.0
+Windows Directory:         C:\\Windows
+System Directory:          C:\\Windows\\system32
+Total Physical Memory:     16,384 MB
+Available Physical Memory: 12,150 MB
+Virtual Memory: Max Size:  20,480 MB
+Network Card(s):           1 NIC(s) Installed.
+                           [01]: Qualcomm FastConnect 6900 Wi-Fi 6E
+""")
+
+def cmd_ipconfig():
+    print("""
+Windows IP Configuration
+
+Ethernet adapter VirgoX vNIC:
+
+   Connection-specific DNS Suffix  . : virgox.lan
+   Link-local IPv6 Address . . . . . : fe80::e19b:4c8f:1a2b:3c4d%12
+   IPv4 Address. . . . . . . . . . . : 10.0.0.2
+   Subnet Mask . . . . . . . . . . . : 255.255.255.0
+   Default Gateway . . . . . . . . . : 10.0.0.1
+""")
+
+def cmd_get_process():
+    try:
+        out = subprocess.check_output(["ps", "-eo", "pid,user,%cpu,%mem,comm"], text=True)
+        lines = out.strip().split("\n")
+        print("\nHandles  NPM(K)    PM(K)      WS(K)     CPU(s)     Id  ProcessName")
+        print("-------  ------    -----      -----     ------     --  -----------")
+        for line in lines[1:25]:
+            parts = line.split(None, 4)
+            if len(parts) == 5:
+                pid, user, cpu, mem, comm = parts
+                print(f"    150      12     {float(mem)*1024:>6.0f}     {float(mem)*2048:>6.0f}     {float(cpu):>6.2f} {pid:>6}  {comm}")
+        print()
+    except Exception as e:
+        print("Error fetching processes:", e)
+
+def cmd_dir():
+    items = os.listdir(".")
+    curr_win = get_win_path(os.getcwd())
+    print(f"\n    Directory: {curr_win}\n")
+    print("Mode                 LastWriteTime         Length Name")
+    print("----                 -------------         ------ ----")
+    for item in sorted(items):
+        try:
+            stat = os.stat(item)
+            mtime = time.strftime("%m/%d/%Y  %I:%M %p", time.localtime(stat.st_mtime))
+            if os.path.isdir(item):
+                mode = "d-----"
+                length = ""
+            else:
+                mode = "-a----"
+                length = str(stat.st_size)
+            print(f"{mode:<20} {mtime:<20} {length:>8} {item}")
+        except Exception:
+            continue
+    print()
+
+def main():
+    print(BANNER)
+    try:
+        os.chdir("/config/Desktop")
+    except Exception:
+        pass
+
+    while True:
+        curr_dir = os.getcwd()
+        win_path = get_win_path(curr_dir)
+        try:
+            prompt = f"PS {win_path}> "
+            line = input(prompt).strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nExiting Windows PowerShell.")
+            break
+
+        if not line:
+            continue
+
+        parts = line.split()
+        cmd = parts[0].lower()
+        args = parts[1:]
+
+        if cmd in ("exit", "quit"):
+            break
+        elif cmd in ("cls", "clear", "clear-host"):
+            os.system("clear")
+        elif cmd == "whoami":
+            print("virgox\\administrator")
+        elif cmd in ("dir", "ls", "get-childitem", "gci"):
+            cmd_dir()
+        elif cmd in ("pwd", "get-location", "gl"):
+            print(win_path)
+        elif cmd in ("cd", "set-location", "sl"):
+            if not args or args[0] in ("~", "\\", "c:\\"):
+                os.chdir("/config")
+            else:
+                target = args[0].replace("\\", "/")
+                try:
+                    os.chdir(target)
+                except Exception as err:
+                    print(f"Set-Location : Cannot find path '{args[0]}' because it does not exist.")
+        elif cmd in ("cat", "type", "get-content", "gc"):
+            if args:
+                try:
+                    with open(args[0], "r", errors="ignore") as f:
+                        print(f.read())
+                except Exception as err:
+                    print(f"Get-Content : Cannot find path '{args[0]}': {err}")
+            else:
+                print("Get-Content : Missing path")
+        elif cmd in ("echo", "write-host"):
+            print(" ".join(args))
+        elif cmd in ("ps", "get-process", "gps"):
+            cmd_get_process()
+        elif cmd in ("systeminfo", "sysinfo"):
+            cmd_systeminfo()
+        elif cmd in ("ipconfig", "get-netipaddress"):
+            cmd_ipconfig()
+        elif cmd == "start":
+            if args:
+                subprocess.Popen(["wine-admin", args[0]])
+            else:
+                print("start: specify file or executable")
+        elif cmd.endswith(".exe"):
+            subprocess.Popen(["wine-admin", line])
+        elif cmd.endswith(".apk"):
+            subprocess.Popen(["virgox-apk-installer", line])
+        else:
+            # Fallback to system shell
+            try:
+                subprocess.run(line, shell=True)
+            except Exception as e:
+                print(f"{cmd} : The term '{cmd}' is not recognized: {e}")
+
+if __name__ == "__main__":
+    main()

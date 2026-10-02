@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>VirgoX CLI Authorization</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="card">
+      <div class="brand-row">
+        <div class="brand-mark" aria-hidden="true"><span>ϟ</span></div>
+        <div class="brand">VIRGOX</div>
+        <div class="badge">Secure</div>
+      </div>
+      <h1>Authorize your terminal</h1>
+      <p class="muted">Sign in once to securely connect this VirgoX CLI session to your account.</p>
+      <div class="code-wrap">
+        <div class="code-label"><span>One-time code</span><span>Expires automatically</span></div>
+        <div class="code" id="code" aria-label="One-time authorization code">--------</div>
+      </div>
+      <form id="login">
+        <label>Email<input id="email" type="email" autocomplete="email" required></label>
+        <label>Password<input id="password" type="password" autocomplete="current-password" required></label>
+        <button type="submit">Sign in &amp; authorize</button>
+      </form>
+      <div class="divider"><span>or</span></div>
+      <button id="github" type="button" class="secondary">Continue with GitHub</button>
+      <p id="message" class="message"></p>
+      <div class="footer"><span class="footer-dot"></span><span class="small">Your code is single-use and expires automatically.</span></div>
+    </section>
+  </main>
+  <script src="/__/firebase/12.0.0/firebase-app-compat.js"></script>
+  <script src="/__/firebase/12.0.0/firebase-auth-compat.js"></script>
+  <script src="/config.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

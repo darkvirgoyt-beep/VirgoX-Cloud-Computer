@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=VLC Media Player
+Comment=High-Performance Multimedia & Stream Player
+Exec=vlc %U
+Icon=/usr/share/icons/virgox/vlc.svg
+Terminal=false
+StartupNotify=true
+Categories=AudioVideo;Player;Recorder;

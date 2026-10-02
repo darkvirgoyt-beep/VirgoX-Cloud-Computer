@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Microsoft Edge
+Comment=Access the Web with Microsoft Edge
+Exec=microsoft-edge --no-sandbox --disable-dev-shm-usage %U
+Icon=/usr/share/icons/virgox/msedge.svg
+Terminal=false
+StartupNotify=true
+Categories=Network;WebBrowser;

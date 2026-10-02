@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Epic Games Launcher
+Comment=Play Games and Access Unreal Engine Marketplace
+Exec=/usr/local/bin/epic-games
+Icon=/usr/share/icons/virgox/epicgames.svg
+Terminal=false
+StartupNotify=true
+Categories=Game;Graphics;

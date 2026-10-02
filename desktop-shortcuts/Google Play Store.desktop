@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Google Play Store
+Comment=Android Apps & Games Store
+Exec=chromium --new-window --app=https://play.google.com/store
+Icon=/usr/share/icons/virgox/playstore.svg
+Terminal=false
+StartupNotify=true
+Categories=Network;WebBrowser;

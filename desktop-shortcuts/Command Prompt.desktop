@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Command Prompt
+Comment=Windows Command Prompt (Administrator)
+Exec=/usr/local/bin/cmd
+Icon=/usr/share/icons/virgox/cmd.svg
+Terminal=false
+StartupNotify=true
+Categories=System;TerminalEmulator;

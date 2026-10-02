@@ -1,0 +1,16 @@
+#!/bin/bash
+# ==============================================================================
+# ⚡ VirgoX Windows PowerShell Launcher
+# Developer: Prince · VirgoYT (@darkvirgoyt-beep)
+# ==============================================================================
+export DISPLAY="${DISPLAY:-:1}"
+
+if [ -n "$1" ]; then
+    /usr/local/bin/virgox-powershell "$@"
+else
+    xfce4-terminal --title="Windows PowerShell (Administrator)" \
+      --color-bg="#012456" \
+      --color-text="#ffffff" \
+      --geometry=105x28 \
+      -e "/usr/local/bin/virgox-powershell"
+fi

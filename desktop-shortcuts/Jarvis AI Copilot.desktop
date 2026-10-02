@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Jarvis AI (Voice & Vision)
+Comment=Two-Way Voice and Live Camera Vision AI Copilot
+Exec=google-chrome --app="https://evaluating-twin-county-meditation.trycloudflare.com/#jarvis" --no-sandbox --disable-dev-shm-usage
+Icon=/usr/share/icons/virgox/jarvis.svg
+Terminal=false
+StartupNotify=true
+Categories=Utility;ArtificialIntelligence;

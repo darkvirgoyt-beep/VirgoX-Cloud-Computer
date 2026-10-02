@@ -1,0 +1,30 @@
+#!/bin/bash
+# ==============================================================================
+# ⚡ VirgoX Wine Administrator Executable Launcher
+# Developer: Prince · VirgoYT (@darkvirgoyt-beep)
+# Runs Windows .exe files with full simulated Administrator rights
+# ==============================================================================
+export DISPLAY="${DISPLAY:-:1}"
+export WINEPREFIX="${WINEPREFIX:-/config/.wine}"
+export WINEDEBUG="-all"
+
+if [ -z "$1" ]; then
+    FILE=$(zenity --file-selection --title="VirgoX Administrator: Select Windows .exe to execute" --file-filter="Windows Executables (*.exe) | *.exe" 2>/dev/null)
+    if [ -z "$FILE" ]; then
+        exit 0
+    fi
+else
+    FILE="$1"
+fi
+
+if [ ! -f "$FILE" ]; then
+    zenity --error --title="File Not Found" --text="The executable file does not exist:\n$FILE" 2>/dev/null
+    exit 1
+fi
+
+BASENAME=$(basename "$FILE")
+
+zenity --notification --text="🛡️ VirgoX Administrator: Running $BASENAME..." 2>/dev/null &
+
+cd "$(dirname "$FILE")" || true
+wine "$FILE" "$@"

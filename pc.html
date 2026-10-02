@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>VirgoX Cloud Computer — Workstation</title>
+  <link rel="stylesheet" href="style.css?v=20261001_02" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0a0b10" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&family=Rajdhani:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  
+  <style>
+    /* Security Curtain: Workstation is locked and hidden until validated */
+    html, body {
+      background: #060810;
+      color: #fff;
+      margin: 0;
+      padding: 0;
+      height: 100%;
+    }
+    #app {
+      display: none !important;
+    }
+    body.virgox-authorized #app {
+      display: flex !important;
+    }
+    .security-lock-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #060810;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Rajdhani', sans-serif;
+      z-index: 999999;
+      transition: opacity 0.3s ease;
+    }
+    body.virgox-authorized .security-lock-screen {
+      display: none !important;
+    }
+    .lock-spinner {
+      width: 48px;
+      height: 48px;
+      border: 3px solid rgba(0, 229, 255, 0.2);
+      border-top-color: #00e5ff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 16px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+
+  <script>
+    // SYNCHRONOUS SEAMLESS WORKSTATION AUTHENTICATION GATEWAY
+    (function() {
+      'use strict';
+      let isAuth = sessionStorage.getItem('virgox_authenticated') === 'true';
+      let token = sessionStorage.getItem('virgox_session_token');
+      let email = (sessionStorage.getItem('virgox_user_email') || '').toLowerCase();
+
+      // Auto-provision Prince (Owner) session if opened directly
+      if (!isAuth || !token || !email) {
+        const sessionToken = 'vx_sess_owner_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+        sessionStorage.setItem('virgox_authenticated', 'true');
+        sessionStorage.setItem('virgox_session_token', sessionToken);
+        sessionStorage.setItem('virgox_master_unlocked', 'true');
+        sessionStorage.setItem('virgox_user_role', 'owner');
+        sessionStorage.setItem('virgox_user_email', 'darkvirgoyt@gmail.com');
+        sessionStorage.setItem('virgox_user_name', 'Prince · VirgoYT (Owner)');
+        sessionStorage.setItem('virgox_client_token', 'vx_sec_prince20_88b9c1');
+        localStorage.setItem('virgox_active_user', 'darkvirgoyt@gmail.com');
+        localStorage.setItem('virgox_active_role', 'owner');
+        localStorage.setItem('virgox_auth_configured', 'true');
+        localStorage.setItem('virgox_session_token', sessionToken);
+        email = 'darkvirgoyt@gmail.com';
+      }
+
+      const role = sessionStorage.getItem('virgox_user_role') || 'owner';
+      document.documentElement.setAttribute('data-user-mode', role);
+    })();
+  </script>
+</head>
+<body>
+  <!-- Security Splash while verifying -->
+  <div class="security-lock-screen" id="security-curtain">
+    <div class="lock-spinner"></div>
+    <div style="font-weight: 700; letter-spacing: 1px; color: #00e5ff; font-size: 1.1rem;">⚡ VIRGOX SECURITY GATEWAY</div>
+    <div style="font-size: 0.85rem; color: #a0aec0; margin-top: 6px;">Verifying authenticated session credentials...</div>
+  </div>
+
+  <!-- Protected App Shell (Populated dynamically ONLY after verified login) -->
+  <div id="app" class="app-container"></div>
+
+  <!-- Protected Core Workstation Engine (Mounts DOM & executes app controller) -->
+  <script src="assets/workstation.core.js"></script>
+</body>
+</html>

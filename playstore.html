@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google Play Store & APK Hub — VirgoX Cloud PC</title>
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #0b0f19;
+      color: #e2e8f0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow-x: hidden;
+    }
+    .ps-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(0, 242, 254, 0.2);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .ps-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #00f2fe;
+      letter-spacing: 0.5px;
+    }
+    .ps-brand img {
+      width: 28px;
+      height: 28px;
+    }
+    .ps-search-bar {
+      flex: 1;
+      display: flex;
+      gap: 8px;
+      min-width: 280px;
+    }
+    .ps-search-input {
+      flex: 1;
+      background: rgba(4, 6, 12, 0.8);
+      border: 1px solid rgba(0, 242, 254, 0.3);
+      border-radius: 8px;
+      padding: 10px 16px;
+      color: #fff;
+      font-size: 0.95rem;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+    .ps-search-input:focus {
+      border-color: #00f2fe;
+      box-shadow: 0 0 12px rgba(0, 242, 254, 0.25);
+    }
+    .ps-gapps-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0, 245, 212, 0.1);
+      border: 1px solid rgba(0, 245, 212, 0.3);
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 0.8rem;
+      color: #00f5d4;
+      font-weight: 600;
+    }
+    .ps-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    .ps-section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 28px 0 16px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 8px;
+    }
+    .ps-section-header h3 {
+      margin: 0;
+      font-size: 1.25rem;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ps-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+    }
+    .ps-card {
+      background: rgba(22, 30, 49, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+    }
+    .ps-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(0, 242, 254, 0.4);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+    .ps-card-top {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .ps-app-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 12px;
+      object-fit: cover;
+      background: #1e293b;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+    .ps-app-meta h4 {
+      margin: 0 0 4px 0;
+      font-size: 1rem;
+      color: #fff;
+      line-height: 1.2;
+    }
+    .ps-app-meta .dev {
+      margin: 0;
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }
+    .ps-app-meta .rating {
+      font-size: 0.8rem;
+      color: #ffb703;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 2px;
+    }
+    .ps-badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: rgba(0, 242, 254, 0.1);
+      color: #00f2fe;
+      border: 1px solid rgba(0, 242, 254, 0.2);
+    }
+    .ps-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: auto;
+    }
+    .ps-actions button {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 0.8rem;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+    .btn-download {
+      background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+      color: #000;
+    }
+    .btn-download:hover {
+      box-shadow: 0 0 12px rgba(0, 242, 254, 0.5);
+    }
+    .btn-install {
+      background: rgba(0, 245, 212, 0.15);
+      border: 1px solid #00f5d4 !important;
+      color: #00f5d4;
+    }
+    .btn-install:hover {
+      background: #00f5d4;
+      color: #000;
+    }
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid #00f2fe;
+      box-shadow: 0 0 20px rgba(0, 242, 254, 0.3);
+      padding: 14px 20px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      color: #fff;
+      z-index: 9999;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <header class="ps-nav">
+    <div class="ps-brand">
+      <img src="/assets/icons/playstore.svg" alt="Play Store" onerror="this.src='/assets/icons/apphub.svg'">
+      <span>Google Play Store</span>
+      <span class="ps-badge">Direct PC Downloader</span>
+    </div>
+
+    <div class="ps-search-bar">
+      <input type="text" id="search-input" class="ps-search-input" placeholder="Search apps, games, or paste Google Play link / package ID..." />
+      <button class="cyber-btn sm neon-cyan" onclick="performSearch()">🔍 SEARCH</button>
+    </div>
+
+    <div class="ps-gapps-pill" id="gapps-status">
+      <span>⚡ GApps Subsystem: ACTIVE</span>
+      <button class="cyber-btn sm neon-green" onclick="syncGApps()" style="padding:4px 8px; font-size:0.75rem;">SYNC GAPPS</button>
+      <button class="cyber-btn sm neon-purple" onclick="openGmsManager()" style="padding:4px 8px; font-size:0.75rem;">⚡ GMS SUITE</button>
+    </div>
+  </header>
+
+  <main class="ps-container">
+    <div style="background: rgba(0, 242, 254, 0.06); border: 1px solid rgba(0, 242, 254, 0.2); border-radius: 10px; padding: 14px 18px; margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+      <div>
+        <strong style="color: #00f2fe;">📥 Download Apps Directly Into This PC</strong>
+        <p style="margin: 4px 0 0 0; font-size: 0.85rem; color: #94a3b8;">Every app below downloads and installs directly onto your Cloud PC at <code>/config/Desktop/VirgoX-Files/Downloads/</code>.</p>
+      </div>
+      <button class="cyber-btn sm neon-amber" onclick="openApkFolder()">📂 OPEN DOWNLOADS</button>
+    </div>
+
+    <div id="search-results-section" style="display: none;">
+      <div class="ps-section-header">
+        <h3 id="search-title">🔍 Search Results</h3>
+        <button class="cyber-btn sm" onclick="clearSearch()">✕ Clear</button>
+      </div>
+      <div class="ps-grid" id="search-grid"></div>
+    </div>
+
+    <section>
+      <div class="ps-section-header">
+        <h3>🔥 Featured Android Apps & Games (1-Click Install to PC)</h3>
+      </div>
+      <div class="ps-grid" id="popular-grid"></div>
+    </section>
+
+    <section style="margin-top: 36px;">
+      <div class="ps-section-header">
+        <h3>📂 Downloaded on This PC</h3>
+        <button class="cyber-btn sm neon-cyan" onclick="loadInstalledApks()">🔄 Refresh</button>
+      </div>
+      <div id="installed-list" style="display: flex; flex-direction: column; gap: 10px;">
+        <p style="color: #64748b; font-size: 0.9rem;">Loading downloaded packages...</p>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    const POPULAR_APPS = [
+      {
+        title: "Subway Surfers",
+        package: "com.kiloo.subwaysurf",
+        icon: "https://play-lh.googleusercontent.com/T7az9M7td7A24vOr7Jp3C9NG16kyWA1NnlUySyl_mbDV9BtlrFbxps5TD5DzT7kCBxpNeTbIIju2_aFN4xtFoYM",
+        developer: "SYBO Games",
+        rating: 4.5,
+        installs: "1B+",
+        genre: "Arcade"
+      },
+      {
+        title: "WhatsApp Messenger",
+        package: "com.whatsapp",
+        icon: "https://play-lh.googleusercontent.com/Gqxk4T0uZsDwFp07DE-508hkyvcNmgFuRwPiwTEfF7D7OzGv1FdHDzEyMxNsSBZLOJlGpe3ULvVM2RgrRAlBqA",
+        developer: "WhatsApp LLC",
+        rating: 4.6,
+        installs: "5B+",
+        genre: "Communication"
+      },
+      {
+        title: "Instagram",
+        package: "com.instagram.android",
+        icon: "https://play-lh.googleusercontent.com/c2DhAAnF2ziuzHG5v-NGdwup_AnabeWsCuzA_qE9d54qMmT5fZpDit-2plnxu79m5w",
+        developer: "Instagram",
+        rating: 4.4,
+        installs: "5B+",
+        genre: "Social"
+      },
+      {
+        title: "Telegram",
+        package: "org.telegram.messenger",
+        icon: "https://play-lh.googleusercontent.com/ZU9AnVdpJimxiquewJziJW1MBdJCTOntCdo9nvBykWZutcgeUbOJXTqYsrghnNQKqEc",
+        developer: "Telegram FZ-LLC",
+        rating: 4.5,
+        installs: "1B+",
+        genre: "Communication"
+      },
+      {
+        title: "Roblox",
+        package: "com.roblox.client",
+        icon: "https://play-lh.googleusercontent.com/WNWZaxi-gnCiQIaoTGh1OzAcIjQKiNZmsPpJioOcWnLUaI2x3tq4hM502n9q5Tq6Wg",
+        developer: "Roblox Corporation",
+        rating: 4.4,
+        installs: "500M+",
+        genre: "Adventure"
+      },
+      {
+        title: "Minecraft Trial",
+        package: "com.mojang.minecraftpe",
+        icon: "https://play-lh.googleusercontent.com/VSwHQn9iqNOti80uhLHRUn5vUQNamuQACxQdyqPIVqXqBmxiQqqvDxNqMmOgU8mZAA",
+        developer: "Mojang",
+        rating: 4.5,
+        installs: "100M+",
+        genre: "Arcade"
+      },
+      {
+        title: "CapCut - Video Editor",
+        package: "com.lemon.lvoverseas",
+        icon: "https://play-lh.googleusercontent.com/8Qe87e1J1y5yL8eW0_1U6b-K6U8Z3qfE0d4a7F0G9r8h6b-d8y1a9r8",
+        developer: "Bytedance Pte. Ltd.",
+        rating: 4.5,
+        installs: "1B+",
+        genre: "Video Editor"
+      },
+      {
+        title: "TikTok",
+        package: "com.zhiliaoapp.musically",
+        icon: "https://play-lh.googleusercontent.com/OS-MggHQPlegqlhttKo2ZehY2u9qYpn-OHWKitihUVzp2zCW05Ok_nmeLmqqMukO4g",
+        developer: "TikTok Pte. Ltd.",
+        rating: 4.4,
+        installs: "1B+",
+        genre: "Social"
+      },
+      {
+        title: "Spotify",
+        package: "com.spotify.music",
+        icon: "https://play-lh.googleusercontent.com/UrY7BAZ-XfXGpfkeWg0xCCeo-7bluiDtmjR6OYAigBGrmqqYoptOebDHrma0-8F6Gg",
+        developer: "Spotify AB",
+        rating: 4.4,
+        installs: "1B+",
+        genre: "Music & Audio"
+      },
+      {
+        title: "VLC for Android",
+        package: "org.videolan.vlc",
+        icon: "https://play-lh.googleusercontent.com/nYh_xYV9e79Y_v59Vz48t1hN00h6g3u9bY-0Vp9x-8e7v9e-8",
+        developer: "Videolabs",
+        rating: 4.3,
+        installs: "100M+",
+        genre: "Media Player"
+      }
+    ];
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.innerHTML = msg;
+      t.style.display = 'block';
+      setTimeout(() => { t.style.display = 'none'; }, 4500);
+    }
+
+    function renderAppCard(app) {
+      return `
+        <div class="ps-card">
+          <div class="ps-card-top">
+            <img class="ps-app-icon" src="${app.icon || '/assets/icons/apphub.svg'}" onerror="this.src='/assets/icons/apphub.svg'" alt="${app.title}">
+            <div class="ps-app-meta">
+              <h4>${app.title}</h4>
+              <p class="dev">${app.developer || 'Google Play'}</p>
+              <div class="rating">⭐ ${app.score || app.rating || 4.5} • ${app.installs || '100K+'}</div>
+            </div>
+          </div>
+          <div style="font-size:0.75rem; color:#64748b;">Package: <code>${app.package}</code></div>
+          <div class="ps-actions">
+            <button class="btn-download" id="btn-dl-${app.package}" onclick="downloadApp('${app.package}', '${app.title.replace(/'/g, "\'")}')">
+              📥 DOWNLOAD TO PC
+            </button>
+            <button class="btn-install" onclick="installApp('${app.package}')">
+              ⚡ INSTALL
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function initPopular() {
+      const grid = document.getElementById('popular-grid');
+      grid.innerHTML = POPULAR_APPS.map(renderAppCard).join('');
+    }
+
+    async function performSearch() {
+      const input = document.getElementById('search-input');
+      let q = input.value.trim();
+      if (!q) return;
+
+      if (q.includes('play.google.com') && q.includes('id=')) {
+        const match = q.match(/id=([a-zA-Z0-9._]+)/);
+        if (match) q = match[1];
+      }
+
+      showToast(`🔍 Searching Google Play Store for "<strong>${q}</strong>"...`);
+      try {
+        const res = await fetch(`/api/playstore/search?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        if (data.status === 'ok' && data.apps && data.apps.length > 0) {
+          const section = document.getElementById('search-results-section');
+          const grid = document.getElementById('search-grid');
+          document.getElementById('search-title').textContent = `🔍 Results for "${q}" (${data.apps.length})`;
+          grid.innerHTML = data.apps.map(renderAppCard).join('');
+          section.style.display = 'block';
+          section.scrollIntoView({ behavior: 'smooth' });
+        } else {
+          showToast(`Direct package query for "${q}"...`);
+          downloadApp(q, q);
+        }
+      } catch (err) {
+        showToast(`Search error: ${err.message}`);
+      }
+    }
+
+    document.getElementById('search-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') performSearch();
+    });
+
+    function clearSearch() {
+      document.getElementById('search-results-section').style.display = 'none';
+      document.getElementById('search-input').value = '';
+    }
+
+    async function downloadApp(pkg, name) {
+      const btn = document.getElementById(`btn-dl-${pkg}`);
+      if (btn) {
+        btn.textContent = '⏳ DOWNLOADING...';
+        btn.disabled = true;
+      }
+      showToast(`⏳ Downloading <strong>${name || pkg}</strong> directly to Cloud PC...`);
+
+      try {
+        const email = localStorage.getItem('virgox_registered_email') || '';
+        const res = await fetch('/api/playstore/download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ package: pkg, name: name, email: email })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast(`✅ Downloaded <strong>${data.name}</strong> (${data.size_mb} MB) directly into PC!`);
+          if (btn) {
+            btn.textContent = '✓ DOWNLOADED';
+            btn.style.background = '#00f5d4';
+          }
+          loadInstalledApks();
+        } else {
+          showToast(`❌ Error: ${data.message || 'Download failed'}`);
+          if (btn) {
+            btn.textContent = '📥 RETRY';
+            btn.disabled = false;
+          }
+        }
+      } catch (err) {
+        showToast(`Download error: ${err.message}`);
+        if (btn) {
+          btn.textContent = '📥 RETRY';
+          btn.disabled = false;
+        }
+      }
+    }
+
+    async function installApp(pkg) {
+      showToast(`⚡ Launching VirgoX APK Installer for <strong>${pkg}</strong>...`);
+      try {
+        const email = localStorage.getItem('virgox_registered_email') || '';
+        const res = await fetch('/api/playstore/install', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ package: pkg, email: email })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast(`🚀 VirgoX APK Subsystem launched for <strong>${pkg}</strong>!`);
+        }
+      } catch (err) {
+        showToast(`Install error: ${err.message}`);
+      }
+    }
+
+    async function syncGApps() {
+      showToast('⚡ Syncing GApps & Google Play Services Framework...');
+      try {
+        const email = localStorage.getItem('virgox_registered_email') || '';
+        const res = await fetch('/api/playstore/gapps', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast('✅ GApps Subsystem synchronized & ready!');
+          loadInstalledApks();
+        }
+      } catch (err) {
+        showToast(`GApps error: ${err.message}`);
+      }
+    }
+
+    async function loadInstalledApks() {
+      const container = document.getElementById('installed-list');
+      try {
+        const res = await fetch('/api/playstore/installed');
+        const data = await res.json();
+        if (data.status === 'ok' && data.apks && data.apks.length > 0) {
+          container.innerHTML = data.apks.map(apk => `
+            <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:10px 16px;">
+              <div>
+                <strong style="color:#00f2fe;">📦 ${apk.filename}</strong>
+                <div style="font-size:0.75rem; color:#64748b;">Size: ${apk.size_mb} MB • Modified: ${apk.modified}</div>
+              </div>
+              <button class="cyber-btn sm neon-green" onclick="installApp('${apk.package}')">▶ RUN / INSTALL</button>
+            </div>
+          `).join('');
+        } else {
+          container.innerHTML = '<p style="color:#64748b; font-size:0.9rem;">No APKs downloaded yet. Click "Download to PC" on any app above!</p>';
+        }
+      } catch (e) {
+        container.innerHTML = '<p style="color:#ef4444; font-size:0.9rem;">Could not load downloaded files.</p>';
+      }
+    }
+
+    function openApkFolder() {
+      fetch('/api/launch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ app: 'files' })
+      });
+      showToast('📂 Opened Downloads folder on Cloud PC desktop.');
+    }
+
+    function openGmsManager() {
+      fetch('/api/launch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ app: 'gms' })
+      });
+      showToast('⚡ Opened Google GMS & GApps Manager on Cloud PC desktop.');
+    }
+
+    initPopular();
+    loadInstalledApks();
+  </script>
+</body>
+</html>

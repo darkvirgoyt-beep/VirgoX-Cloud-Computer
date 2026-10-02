@@ -1,0 +1,4 @@
+#!/bin/bash
+export DISPLAY="${DISPLAY:-:1}"
+notify-send "🎨 Canva Studio" "Launching Canva Design Studio..." 2>/dev/null || true
+exec google-chrome --app="https://www.canva.com" --no-sandbox --window-size=1280,800 "$@"

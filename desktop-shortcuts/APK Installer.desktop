@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=APK Package Installer
+Comment=Install, Sideload & Inspect Android APKs
+Exec=/usr/local/bin/virgox-apk-installer
+Icon=/usr/share/icons/virgox/android.svg
+Terminal=false
+StartupNotify=true
+Categories=Development;System;

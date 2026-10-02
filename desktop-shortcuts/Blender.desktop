@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Blender
+Comment=3D Creation, Modeling, Animation and Rendering Suite
+Exec=blender %f
+Icon=/usr/share/icons/virgox/blender.svg
+Terminal=false
+StartupNotify=true
+Categories=Graphics;3DGraphics;
+MimeType=application/x-blender;

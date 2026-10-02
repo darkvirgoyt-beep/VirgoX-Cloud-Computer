@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=GitHub
+Comment=GitHub Projects & Repositories
+Exec=chromium --new-window --app=https://github.com/darkvirgoyt-beep
+Icon=/usr/share/icons/virgox/github.svg
+Terminal=false
+StartupNotify=true
+Categories=Development;

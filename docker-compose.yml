@@ -1,0 +1,52 @@
+version: "3.8"
+
+services:
+  # ==============================================================================
+  # 🐧 VIRGOX LINUX DESKTOP (Webtop Ubuntu XFCE + Wine + Chrome + ROM Tools)
+  # ==============================================================================
+  desktop-linux:
+    image: lscr.io/linuxserver/webtop:ubuntu-xfce
+    container_name: virgox-desktop
+    privileged: true
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - TITLE=VirgoX Cloud PC (Linux)
+      - MAX_RES=1920x1080
+    volumes:
+      - /home/darkvirgoyt:/config/Desktop/VirgoX-Files
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+    shm_size: "2gb"
+    restart: unless-stopped
+    profiles: ["linux", "all"]
+
+  # ==============================================================================
+  # 🪟 VIRGOX WINDOWS 11 CLOUD PC (Genuine Windows 11 inside Docker / KVM)
+  # Automatic ISO download, fast boot, noVNC & Web RDP viewer on port 8006
+  # ==============================================================================
+  desktop-windows:
+    image: dockurr/windows:latest
+    container_name: virgox-windows11
+    privileged: true
+    environment:
+      - VERSION=win11
+      - RAM_SIZE=6G
+      - CPU_CORES=4
+      - DISK_SIZE=64G
+      - DHCP=Y
+    devices:
+      - /dev/kvm:/dev/kvm
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "8006:8006" # Web VNC / Browser stream (connect via web iframe)
+      - "3389:3389/tcp" # Remote Desktop Protocol (RDP)
+      - "3389:3389/udp"
+    volumes:
+      - /home/darkvirgoyt/virgox_win_storage:/storage
+    restart: unless-stopped
+    stop_grace_period: 2m
+    profiles: ["windows", "all"]

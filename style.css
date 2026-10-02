@@ -1,0 +1,207 @@
+/* ========================================================================== */
+/* ⚡ VirgoX Cloud Computer — $10,000 Ultra-Pro UI/UX Design System           */
+/* Developer: Prince · VirgoYT (@darkvirgoyt-beep)                             */
+/* ========================================================================== */
+
+:root {
+  --vx-bg-deep: #030408;
+  --vx-bg-surface: rgba(10, 14, 28, 0.75);
+  --vx-bg-glass: rgba(18, 24, 45, 0.65);
+  --vx-border: rgba(0, 229, 255, 0.25);
+  --vx-border-glow: rgba(0, 229, 255, 0.6);
+  --vx-cyan: #00e5ff;
+  --vx-blue: #2979ff;
+  --vx-purple: #7c4dff;
+  --vx-pink: #ff007f;
+  --vx-green: #00e676;
+  --vx-text: #f1f5f9;
+  --vx-text-dim: #94a3b8;
+  --vx-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+  --vx-glow: 0 0 25px rgba(0, 229, 255, 0.35);
+  --font-display: 'Rajdhani', sans-serif;
+  --font-mono: 'Fira Code', monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+}
+
+body, html {
+  width: 100%;
+  height: 100%;
+  background: var(--vx-bg-deep);
+  color: var(--vx-text);
+  font-family: var(--font-display);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Dynamic Background Grid & Glow */
+.vx-desktop-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at 50% 20%, rgba(41, 121, 255, 0.15), transparent 60%),
+              radial-gradient(circle at 80% 80%, rgba(124, 77, 255, 0.12), transparent 50%),
+              linear-gradient(135deg, #030408 0%, #0a0e1c 100%);
+  z-index: -2;
+}
+
+.vx-desktop-grid {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: linear-gradient(rgba(0, 229, 255, 0.03) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(0, 229, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Window Frame Glassmorphism */
+.vx-window {
+  position: absolute;
+  background: var(--vx-bg-surface);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--vx-border);
+  border-radius: 14px;
+  box-shadow: var(--vx-shadow), var(--vx-glow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.vx-window:hover {
+  border-color: var(--vx-border-glow);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.9), 0 0 35px rgba(0, 229, 255, 0.5);
+}
+
+.vx-window-header {
+  height: 42px;
+  background: rgba(10, 14, 28, 0.85);
+  border-bottom: 1px solid var(--vx-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  cursor: grab;
+}
+
+.vx-window-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.5px;
+  color: var(--vx-cyan);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vx-window-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.vx-ctrl-btn {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.vx-ctrl-btn:hover {
+  transform: scale(1.15);
+}
+
+.vx-ctrl-close { background: #ff5f56; }
+.vx-ctrl-minimize { background: #ffbd2e; }
+.vx-ctrl-maximize { background: #27c93f; }
+
+/* Taskbar & Dock */
+.vx-taskbar {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 64px;
+  background: rgba(10, 14, 28, 0.85);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  border: 1px solid var(--vx-border);
+  border-radius: 20px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 229, 255, 0.2);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 16px;
+  z-index: 99999;
+}
+
+.vx-dock-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.vx-dock-icon:hover {
+  background: rgba(0, 229, 255, 0.15);
+  border-color: var(--vx-cyan);
+  transform: translateY(-6px) scale(1.08);
+  box-shadow: 0 10px 25px rgba(0, 229, 255, 0.4);
+}
+
+.vx-dock-icon::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  width: 6px;
+  height: 6px;
+  background: var(--vx-cyan);
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.vx-dock-icon.active::after {
+  opacity: 1;
+  box-shadow: 0 0 8px var(--vx-cyan);
+}
+
+/* Cyber Button */
+.vx-btn {
+  background: linear-gradient(135deg, var(--vx-cyan), var(--vx-blue));
+  color: #030408;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.95rem;
+  padding: 10px 24px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(0, 229, 255, 0.4);
+  transition: all 0.3s ease;
+}
+
+.vx-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 30px rgba(0, 229, 255, 0.7);
+}

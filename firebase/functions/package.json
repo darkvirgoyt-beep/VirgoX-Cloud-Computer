@@ -1,0 +1,10 @@
+{
+  "name":"virgox-cli-auth-functions",
+  "private":true,
+  "engines":{"node":"22"},
+  "main":"index.js",
+  "dependencies":{
+    "firebase-admin":"latest",
+    "firebase-functions":"latest"
+  }
+}

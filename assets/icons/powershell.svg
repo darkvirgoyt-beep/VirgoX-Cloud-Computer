@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Terminal Window -->
+  <rect x="10" y="16" width="108" height="96" rx="8" fill="#012456" stroke="#0078d4" stroke-width="3"/>
+  <!-- Title bar -->
+  <rect x="10" y="16" width="108" height="22" rx="8" fill="#00183b"/>
+  <rect x="10" y="30" width="108" height="8" fill="#00183b"/>
+  <circle cx="24" cy="27" r="4" fill="#ff5f56"/>
+  <circle cx="36" cy="27" r="4" fill="#ffbd2e"/>
+  <circle cx="48" cy="27" r="4" fill="#27c93f"/>
+  <text x="60" y="31" fill="#60cdff" font-family="monospace" font-size="9" font-weight="bold">PowerShell</text>
+  <!-- PS symbol -->
+  <path d="M26 56 L44 68 L26 80" stroke="#ffffff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="50" y="78" width="24" height="5" fill="#ffffff"/>
+  <text x="24" y="104" fill="#40a9ff" font-family="monospace" font-size="12" font-weight="bold">PS &gt;</text>
+</svg>

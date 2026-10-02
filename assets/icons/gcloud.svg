@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="gcBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="24" fill="url(#gcBg)" stroke="#4285F4" stroke-width="3"/>
+  <g transform="translate(18, 22) scale(0.95)">
+    <path d="M48 20 C42 20 37 23 34 28 C30 25 24 26 21 30 C17 35 18 42 22 46 C16 47 12 53 14 59 C16 65 21 68 28 68 L70 68 C78 68 84 62 84 54 C84 47 79 41 72 40 C72 29 61 20 48 20 Z" fill="#ffffff" opacity="0.05"/>
+    <path d="M48 24 C58 24 67 31 68 41 L70 41 C76 41 80 46 80 52 C80 58 75 63 69 63 L28 63" fill="none" stroke="#4285F4" stroke-width="6" stroke-linecap="round"/>
+    <path d="M28 63 C23 63 19 59 19 54 C19 49 22 45 27 45 L30 45" fill="none" stroke="#EA4335" stroke-width="6" stroke-linecap="round"/>
+    <path d="M30 45 C28 41 29 36 33 33 C37 30 42 31 45 35" fill="none" stroke="#FBBC05" stroke-width="6" stroke-linecap="round"/>
+    <path d="M45 35 C46 30 50 26 56 26 C62 26 67 30 68 36" fill="none" stroke="#34A853" stroke-width="6" stroke-linecap="round"/>
+  </g>
+  <text x="64" y="104" fill="#ffffff" font-family="'Inter', sans-serif" font-size="14" font-weight="800" text-anchor="middle" letter-spacing="1">GCLOUD</text>
+</svg>

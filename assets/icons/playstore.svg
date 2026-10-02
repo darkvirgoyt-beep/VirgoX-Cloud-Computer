@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="gBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00C9FF"/>
+      <stop offset="100%" stop-color="#0072FF"/>
+    </linearGradient>
+    <linearGradient id="gYellow" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FFDD00"/>
+      <stop offset="100%" stop-color="#FF9900"/>
+    </linearGradient>
+    <linearGradient id="gRed" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF416C"/>
+      <stop offset="100%" stop-color="#FF4B2B"/>
+    </linearGradient>
+    <linearGradient id="gGreen" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00b09b"/>
+      <stop offset="100%" stop-color="#96c93d"/>
+    </linearGradient>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="58" fill="#141824" stroke="#00e5ff" stroke-width="2"/>
+  <!-- Play triangle segments -->
+  <path d="M28 22 C26.5 23.5 25.5 26 25.5 29.5 L25.5 98.5 C25.5 102 26.5 104.5 28 106 L72 64 Z" fill="url(#gBlue)"/>
+  <path d="M85 77 L72 64 L28 106 C31 108 35.5 108 39 106 L85 80 C88.5 78 88.5 75 85 77 Z" fill="url(#gRed)"/>
+  <path d="M85 51 L39 22 C35.5 20 31 20 28 22 L72 64 L85 51 Z" fill="url(#gGreen)"/>
+  <path d="M101 60 L85 51 L72 64 L85 77 L101 68 C104 66.5 104 62 101 60 Z" fill="url(#gYellow)"/>
+</svg>
