@@ -524,8 +524,8 @@
     const GITHUB_CLIENT_ID = 'Ov23li2jipwEXKXqH55s';
 
     function loginWithGitHub() {
-      const redirectUri = window.location.origin + '/';
-      const authUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=read:user,user:email&redirect_uri=${encodeURIComponent(redirectUri)}`;
+      // Use the callback URL registered in the GitHub OAuth app. A Vercel preview origin is dynamic and will be rejected by GitHub.
+      const authUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=read:user,user:email`;
       window.location.href = authUrl;
     }
 
