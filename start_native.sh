@@ -50,14 +50,16 @@ nohup env VIRGOX_RUNTIME=native VIRGOX_HOME="$HOME" python3 "$DIR/server.py" >"$
 echo $! > "$STATE/server.pid"
 
 echo "=== [5/5] Optional Cloudflare public tunnels ==="
-if command -v cloudflared >/dev/null 2>&1; then
+CONDFLARED_BIN="$(command -v cloudflared || true)"
+[ -x "$CONDFLARED_BIN" ] || CONDFLARED_BIN="$STATE/cloudflared"
+if [ -x "$CONDFLARED_BIN" ]; then
   pkill -f "cloudflared tunnel" 2>/dev/null || true
-  setsid cloudflared tunnel --protocol http2 --url http://127.0.0.1:3000 >"$STATE/cf_desktop.log" 2>&1 &
-  setsid cloudflared tunnel --protocol http2 --url http://127.0.0.1:7681 >"$STATE/cf_terminal.log" 2>&1 &
-  setsid cloudflared tunnel --protocol http2 --url http://127.0.0.1:8888 >"$STATE/cf_bridge.log" 2>&1 &
+  setsid "$CONDFLARED_BIN" tunnel --protocol http2 --url http://127.0.0.1:3000 >"$STATE/cf_desktop.log" 2>&1 &
+  setsid "$CONDFLARED_BIN" tunnel --protocol http2 --url http://127.0.0.1:7681 >"$STATE/cf_terminal.log" 2>&1 &
+  setsid "$CONDFLARED_BIN" tunnel --protocol http2 --url http://127.0.0.1:8888 >"$STATE/cf_bridge.log" 2>&1 &
   echo "[*] cloudflared started; URLs are in $STATE/cf_*.log"
 else
-  echo "[i] cloudflared not installed; local services are still available."
+  echo "[i] cloudflared not installed; place an ARM64 binary at $STATE/cloudflared for public URLs."
 fi
 
 echo
