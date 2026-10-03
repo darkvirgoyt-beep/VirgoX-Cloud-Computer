@@ -1,0 +1,7 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/device", "destination": "/device.html" },
+    { "source": "/install", "destination": "/install.sh" }
+  ]
+}
