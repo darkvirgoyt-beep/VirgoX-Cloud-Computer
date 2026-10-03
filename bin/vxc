@@ -1,0 +1,481 @@
+#!/usr/bin/env python3
+"""VirgoX Cloud Computer CLI — GitHub OAuth & Device Flow terminal client."""
+import argparse
+import json
+import os
+import pathlib
+import secrets
+import shutil
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import webbrowser
+
+CONFIG = pathlib.Path(os.environ.get("XDG_CONFIG_HOME", pathlib.Path.home() / ".config")) / "vxc" / "config.json"
+DEFAULT_SERVER = os.environ.get("VIRGOX_SERVER", "http://127.0.0.1:8888").rstrip("/")
+DEFAULT_AUTH_WEB = os.environ.get("VIRGOX_AUTH_WEB", "https://virgoxcloud.vercel.app").rstrip("/")
+GITHUB_CLIENT_ID = "Ov23li2jipwEXKXqH55s"
+VERSION = "0.6.0"
+
+USE_COLOR = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+RESET = "\033[0m"
+BOLD = "\033[1m"
+DIM = "\033[2m"
+CYAN = "\033[36m"
+GREEN = "\033[32m"
+YELLOW = "\033[33m"
+RED = "\033[31m"
+
+
+def c(text, color=""):
+    return f"{color}{text}{RESET}" if USE_COLOR and color else text
+
+
+def load():
+    try:
+        return json.loads(CONFIG.read_text())
+    except Exception:
+        return {}
+
+
+def save(data):
+    CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    CONFIG.write_text(json.dumps(data, indent=2))
+    os.chmod(CONFIG, 0o600)
+
+
+def api(server, path="", payload=None, query=None, token=None, timeout=15):
+    url = server.rstrip("/") + path
+    if query:
+        url += "?" + urllib.parse.urlencode(query)
+    data = json.dumps(payload).encode() if payload is not None else None
+    headers = {"Content-Type": "application/json"} if data else {}
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    req = urllib.request.Request(url, data=data, headers=headers)
+    with urllib.request.urlopen(req, timeout=timeout) as response:
+        raw = response.read().decode()
+        return json.loads(raw) if raw else {}
+
+
+def open_browser(url):
+    try:
+        if shutil.which("am"):
+            res = subprocess.run(
+                ["am", "start", "-a", "android.intent.action.VIEW", "-d", url],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            if res.returncode == 0:
+                return True
+    except Exception:
+        pass
+    try:
+        if shutil.which("termux-open-url"):
+            res = subprocess.run(
+                ["termux-open-url", url],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            if res.returncode == 0:
+                return True
+    except Exception:
+        pass
+    try:
+        return bool(webbrowser.open(url))
+    except Exception:
+        return False
+
+
+def logo():
+    print()
+    print(c("╭────────────────────────────────────────────╮", CYAN))
+    print(c("│", CYAN) + c("              VIRGOX CLOUD PC              ", BOLD) + c("│", CYAN))
+    print(c("│", CYAN) + c("          Secure computer from CLI          ", DIM) + c("│", CYAN))
+    print(c("╰────────────────────────────────────────────╯", CYAN))
+    print()
+
+
+def login(args):
+    cfg = load()
+    server = (args.server or cfg.get("server") or DEFAULT_SERVER).rstrip("/")
+    auth_web = (args.web or cfg.get("auth_web") or DEFAULT_AUTH_WEB).rstrip("/")
+
+    logo()
+    print(c("  Authentication", BOLD))
+    print(c("  ──────────────", DIM))
+    print(f"  Host       {server}")
+    print(f"  Auth       {auth_web}")
+
+    try:
+        # Step 1: Request GitHub device code
+        start_payload = {
+            "client_id": GITHUB_CLIENT_ID,
+            "scope": "read:user,user:email,repo"
+        }
+        req = urllib.request.Request(
+            "https://github.com/login/device/code",
+            data=json.dumps(start_payload).encode(),
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "User-Agent": "VirgoX-Cloud-PC"
+            }
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            start = json.loads(resp.read().decode())
+
+        device_code = start.get("device_code")
+        user_code = start.get("user_code")
+        interval = max(3, int(start.get("interval", 5)))
+        expires = int(start.get("expires_in", 900))
+
+        if not user_code or not device_code:
+            print(f"  {c('✗', RED)} Failed to initialize device authorization.", file=sys.stderr)
+            return 1
+
+        # Step 2: Construct the public Vercel authorization URL
+        verification_url = f"{auth_web}/device?code={user_code}"
+
+        print()
+        print(c("  🔐 Browser authorization", CYAN))
+        print()
+        print(c(f"  Code: {user_code}", BOLD))
+        print(f"  URL : {verification_url}")
+        print()
+        print(c("  Opening authorization page...", DIM))
+
+        opened = open_browser(verification_url)
+        if not opened:
+            print(c("  ↳ Open the URL above in your browser.", YELLOW))
+
+        print()
+        print(c("  Waiting for authorization ", DIM), end="", flush=True)
+        deadline = time.time() + expires
+        frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+        frame = 0
+
+        # Step 3: Poll GitHub device code endpoint until user authorizes
+        poll_payload = {
+            "client_id": GITHUB_CLIENT_ID,
+            "device_code": device_code,
+            "grant_type": "urn:ietf:params:oauth:grant-type:device_code"
+        }
+
+        while time.time() < deadline:
+            try:
+                poll_req = urllib.request.Request(
+                    "https://github.com/login/oauth/access_token",
+                    data=json.dumps(poll_payload).encode(),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                        "User-Agent": "VirgoX-Cloud-PC"
+                    }
+                )
+                with urllib.request.urlopen(poll_req, timeout=15) as poll_resp:
+                    res = json.loads(poll_resp.read().decode())
+
+                if "access_token" in res:
+                    access_token = res["access_token"]
+
+                    # Fetch user identity
+                    user_req = urllib.request.Request(
+                        "https://api.github.com/user",
+                        headers={
+                            "Authorization": "Bearer " + access_token,
+                            "Accept": "application/vnd.github+json",
+                            "User-Agent": "VirgoX-Cloud-PC"
+                        }
+                    )
+                    profile = {}
+                    try:
+                        with urllib.request.urlopen(user_req, timeout=15) as u_resp:
+                            profile = json.loads(u_resp.read().decode())
+                    except Exception:
+                        pass
+
+                    login_user = profile.get("login") or "user"
+                    email = profile.get("email") or ""
+                    name = profile.get("name") or login_user
+
+                    # If email is private, attempt fetching emails
+                    if not email:
+                        try:
+                            em_req = urllib.request.Request(
+                                "https://api.github.com/user/emails",
+                                headers={
+                                    "Authorization": "Bearer " + access_token,
+                                    "Accept": "application/vnd.github+json",
+                                    "User-Agent": "VirgoX-Cloud-PC"
+                                }
+                            )
+                            with urllib.request.urlopen(em_req, timeout=10) as em_resp:
+                                emails = json.loads(em_resp.read().decode())
+                                for em in emails:
+                                    if em.get("primary") and em.get("verified"):
+                                        email = em.get("email")
+                                        break
+                                if not email and emails:
+                                    email = emails[0].get("email")
+                        except Exception:
+                            pass
+
+                    if not email:
+                        email = f"{login_user}@users.noreply.github.com"
+
+                    is_owner = login_user.lower() in ("darkvirgoyt-beep", "darkvirgoyt") or email.lower() == "darkvirgoyt@gmail.com"
+                    role = "owner" if is_owner else "user"
+                    session_token = "vx_gh_" + secrets.token_hex(20)
+
+                    # Save local config session
+                    session_data = {
+                        "server": server,
+                        "auth_web": auth_web,
+                        "github_username": login_user,
+                        "github_token": access_token,
+                        "email": email,
+                        "name": name,
+                        "token": session_token,
+                        "role": role,
+                        "version": VERSION,
+                        "authenticated_at": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
+                    }
+                    save(session_data)
+
+                    # Inform local bridge server if online
+                    try:
+                        api(server, "/api/auth/sync_github", payload=session_data)
+                    except Exception:
+                        pass
+
+                    print("\r" + c("  ✓ Authorization complete.          ", GREEN))
+                    print()
+                    print(c("  ┌─ Signed in", GREEN))
+                    print(f"  │  Account : {name} (@{login_user})")
+                    print(f"  │  Email   : {email}")
+                    print(f"  │  GitHub  : Integration Active for AI")
+                    print(f"  │  Host    : {server}")
+                    print(f"  └─ Session : {CONFIG}")
+                    print()
+                    print(c("  VirgoX is ready.", BOLD))
+                    return 0
+
+                err = res.get("error")
+                if err == "authorization_pending":
+                    pass
+                elif err == "slow_down":
+                    interval += 3
+                elif err in ("expired_token", "access_denied", "unsupported_grant_type"):
+                    print(f"\n  {c('✗', RED)} Authorization failed: {res.get('error_description', err)}", file=sys.stderr)
+                    return 1
+
+            except (urllib.error.URLError, TimeoutError, ConnectionError):
+                pass
+            except Exception as exc:
+                print(f"\n  {c('✗', RED)} {exc}", file=sys.stderr)
+                return 1
+
+            if sys.stdout.isatty():
+                print("\b" + frames[frame % len(frames)], end="", flush=True)
+            else:
+                print(".", end="", flush=True)
+            frame += 1
+            time.sleep(interval)
+
+        print("\n  " + c("✗ Authorization timed out.", RED), file=sys.stderr)
+        return 1
+
+    except Exception as exc:
+        print(f"  {c('✗', RED)} Could not start browser authorization: {exc}", file=sys.stderr)
+        return 1
+
+
+def status(args):
+    cfg = load()
+    logo()
+    print(c("  Session", BOLD))
+    print(c("  ───────", DIM))
+
+    token = cfg.get("token") or cfg.get("github_token")
+    if not token:
+        print(f"  {c('●', RED)} Not logged in.")
+        print()
+        print("  Run: vxc auth login")
+        return 1
+
+    user = cfg.get("github_username") or cfg.get("name") or "User"
+    email = cfg.get("email") or "connected"
+    server = (cfg.get("server") or DEFAULT_SERVER).rstrip("/")
+    has_gh = bool(cfg.get("github_token"))
+
+    print(f"  {c('●', GREEN)} Connected")
+    print(f"  Account : {user}")
+    print(f"  Email   : {email}")
+    print(f"  GitHub  : {c('Active (AI Enabled)', GREEN) if has_gh else c('Inactive', YELLOW)}")
+    print(f"  Host    : {server}")
+    print(f"  Config  : {CONFIG}")
+    return 0
+
+
+def logout(args):
+    if CONFIG.exists():
+        CONFIG.unlink()
+        print(c("✓ Logged out of VirgoX.", GREEN))
+    else:
+        print("✓ Already logged out.")
+    return 0
+
+
+def _runtime_root():
+    explicit = os.environ.get("VIRGOX_ROOT", "")
+    for candidate in (
+        explicit,
+        str(pathlib.Path(__file__).resolve().parent.parent),
+        str(pathlib.Path.home() / ".virgox-cloud-computer"),
+    ):
+        if candidate and (pathlib.Path(candidate) / "start_native.sh").exists():
+            return pathlib.Path(candidate)
+    return None
+
+
+def _port_open(port, host="127.0.0.1", timeout=1.0):
+    import socket
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def run_pc(args):
+    root = _runtime_root()
+    if root is None:
+        print(c("  ✗ VirgoX runtime is not installed.", RED), file=sys.stderr)
+        return 1
+
+    state = pathlib.Path.home() / ".virgox-native"
+    state.mkdir(parents=True, exist_ok=True)
+
+    if _port_open(8888) and _port_open(3000):
+        print(c("✓ VirgoX Cloud PC is already running.", GREEN))
+        if args.open:
+            open_browser("http://127.0.0.1:3000/vnc.html?autoconnect=true")
+        return 0
+
+    log = state / "startup.log"
+    env = os.environ.copy()
+    env["VIRGOX_RUNTIME"] = "native"
+    env["VIRGOX_HOME"] = str(pathlib.Path.home())
+
+    try:
+        with log.open("ab") as fh:
+            subprocess.Popen(
+                ["bash", str(root / "start_native.sh")],
+                cwd=str(root),
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=fh,
+                stderr=fh,
+                start_new_session=True,
+            )
+    except Exception as exc:
+        print(c(f"  ✗ Could not start VirgoX: {exc}", RED), file=sys.stderr)
+        return 1
+
+    print(c("  Starting VirgoX Cloud PC...", CYAN), flush=True)
+    deadline = time.time() + max(5, int(args.timeout))
+    while time.time() < deadline:
+        if _port_open(8888) and _port_open(3000):
+            print(c("  ✓ VirgoX Cloud PC is running.", GREEN))
+            if args.open:
+                open_browser("http://127.0.0.1:3000/vnc.html?autoconnect=true")
+            return 0
+        time.sleep(0.5)
+
+    print(c("  ✗ VirgoX did not become ready in time.", RED), file=sys.stderr)
+    return 1
+
+
+def stop_pc(args):
+    state = pathlib.Path.home() / ".virgox-native"
+    stopped = False
+    for name in ("server.pid", "xvfb.pid"):
+        try:
+            os.kill(int((state / name).read_text().strip()), 15)
+            stopped = True
+        except Exception:
+            pass
+    for pattern in ("websockify.*3000", "x11vnc.*-rfbport 5900", "ttyd.*7681", "startxfce4"):
+        subprocess.run(["pkill", "-f", pattern], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    print(c("✓ VirgoX Cloud PC stopped." if stopped else "✓ VirgoX Cloud PC is not running.", GREEN))
+    return 0
+
+
+def status_pc(args):
+    desktop = _port_open(3000)
+    terminal = _port_open(7681)
+    bridge = _port_open(8888)
+    print(c("  VirgoX Cloud PC", BOLD))
+    print(c("  ───────────────", DIM))
+    print(f"  Desktop  : {c('ONLINE', GREEN) if desktop else c('OFFLINE', RED)}")
+    print(f"  Terminal : {c('ONLINE', GREEN) if terminal else c('OFFLINE', RED)}")
+    print(f"  Bridge   : {c('ONLINE', GREEN) if bridge else c('OFFLINE', RED)}")
+    return 0 if bridge else 1
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="vxc",
+        description="VirgoX Cloud Computer — secure terminal client",
+        epilog="Examples: vxc run --open | vxc pc status | vxc auth login",
+    )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
+    sub = parser.add_subparsers(dest="command")
+
+    run_parser = sub.add_parser("run", help="Start the native VirgoX Cloud PC in the background")
+    run_parser.add_argument("--open", action="store_true")
+    run_parser.add_argument("--timeout", type=int, default=30)
+    run_parser.set_defaults(func=run_pc)
+
+    pc = sub.add_parser("pc", help="Manage the local VirgoX Cloud PC")
+    pc_sub = pc.add_subparsers(dest="pc_command")
+
+    pc_status = pc_sub.add_parser("status")
+    pc_status.set_defaults(func=status_pc)
+
+    pc_stop = pc_sub.add_parser("stop")
+    pc_stop.set_defaults(func=stop_pc)
+
+    pc_restart = pc_sub.add_parser("restart")
+    pc_restart.set_defaults(func=lambda args: (stop_pc(args), run_pc(args))[1])
+    pc_restart.add_argument("--open", action="store_true")
+    pc_restart.add_argument("--timeout", type=int, default=30)
+
+    auth = sub.add_parser("auth", help="Manage VirgoX authentication")
+    auth_sub = auth.add_subparsers(dest="auth_command")
+
+    login_parser = auth_sub.add_parser("login", help="Sign in through GitHub browser authorization")
+    login_parser.add_argument("--server", help="VirgoX bridge URL")
+    login_parser.add_argument("--web", help="VirgoX web login URL")
+    login_parser.set_defaults(func=login)
+
+    status_parser = auth_sub.add_parser("status", help="Show current session status")
+    status_parser.set_defaults(func=status)
+
+    logout_parser = auth_sub.add_parser("logout", help="Remove the local session")
+    logout_parser.set_defaults(func=logout)
+
+    args = parser.parse_args()
+    if not getattr(args, "func", None):
+        logo()
+        parser.print_help()
+        return 0
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
